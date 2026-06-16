@@ -4,6 +4,8 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import LoadingScreen from "../../../components/LoadingScreen";
 
+const SNAPSHOT = new Date("2026-06-15T00:00:00");
+
 const HEAD = {
   "Accelerating": { bg: "var(--growing-bg)", fg: "var(--growing-ink)" },
   "Stable":       { bg: "var(--stable-bg)",  fg: "var(--stable-ink)" },
@@ -22,6 +24,11 @@ function titleCase(s) {
   if (!s) return "";
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
+function monthLabel(monthsAgo) {
+  const d = new Date(SNAPSHOT);
+  d.setDate(d.getDate() - 30 * monthsAgo);
+  return d.toLocaleString("en-US", { month: "short" });
+}
 
 function buildBriefing(acc, b, items, white) {
   const chan = titleCase(acc.channel);
@@ -35,8 +42,8 @@ function buildBriefing(acc, b, items, white) {
     s += ". ";
   }
   if (acc.headline === "Accelerating") s += `It's heating up — L90 volume is up ${Math.abs(pct)}% vs the prior quarter. `;
-  else if (acc.headline === "At-Risk") s += `It's at risk — L90 volume down ${Math.abs(pct)}% and shedding doors. `;
-  else if (acc.headline === "Decelerating") s += `But it's cooling — L90 volume is down ${Math.abs(pct)}% from the prior quarter${acc.placements_delta < 0 ? " and it lost a door" : ""}. `;
+  else if (acc.headline === "At-Risk") s += `It's at risk — L90 volume down ${Math.abs(pct)}% and shedding placements. `;
+  else if (acc.headline === "Decelerating") s += `But it's cooling — L90 volume is down ${Math.abs(pct)}% from the prior quarter${acc.placements_delta < 0 ? " and it lost a placement" : ""}. `;
   else if (acc.headline === "Stable") s += `Holding steady quarter over quarter. `;
   else if (acc.headline === "New") s += `A new account still ramping. `;
   else if (acc.headline === "Lapsed") s += `It's gone quiet — no orders in the last 90 days. `;
@@ -51,17 +58,43 @@ function buildBriefing(acc, b, items, white) {
 
 function Trend({ spark, color }) {
   if (!spark || spark.length < 2) return null;
-  const W = 360, H = 110, pL = 6, pR = 6, pT = 16, pB = 6;
-  const mx = Math.max(...spark), mn = Math.min(...spark), rng = mx - mn || 1, n = spark.length;
-  const X = (i) => pL + (i / (n - 1)) * (W - pL - pR);
-  const Y = (v) => pT + (1 - (v - mn) / rng) * (H - pT - pB);
+  const n = spark.length;
+  const W = 620, H = 150, padL = 34, padR = 12, padT = 16, padB = 22;
+  const mx = Math.max(...spark);
+  const mn = Math.min(...spark);
+  // nice-ish rounded top for the axis
+  const top = mx;
+  const X = (i) => padL + (i / (n - 1)) * (W - padL - padR);
+  const Y = (v) => padT + (1 - (top ? v / top : 0)) * (H - padT - padB);
   const line = spark.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
   const last = spark[n - 1];
+
+  // y gridlines at 0, mid, peak
+  const yTicks = [0, Math.round(top / 2), top];
+  // month labels: show ~every other to avoid clutter (newest at right)
+  const labelEvery = n > 8 ? 2 : 1;
+
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="12-month trend">
+      {yTicks.map((t, i) => (
+        <g key={i}>
+          <line x1={padL} y1={Y(t)} x2={W - padR} y2={Y(t)} stroke="var(--border)" strokeWidth="0.5" />
+          <text x={padL - 6} y={Y(t) + 3} textAnchor="end" fontSize="10" fill="var(--text-3)">{t}</text>
+        </g>
+      ))}
       <path d={line} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={X(n - 1)} cy={Y(last)} r="3" fill={color} />
-      <text x={X(n - 1)} y={Y(last) - 8} textAnchor="end" fontSize="11" fontWeight="500" fill="var(--text)">{last}</text>
+      <text x={X(n - 1) - 6} y={Y(last) - 6} textAnchor="end" fontSize="11" fontWeight="500" fill="var(--text)">{last}</text>
+      {spark.map((v, i) => {
+        // spark[0] is oldest (period 11), spark[n-1] is newest (period 0)
+        const monthsAgo = (n - 1) - i;
+        if (i % labelEvery !== 0 && i !== n - 1) return null;
+        return (
+          <text key={i} x={X(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="var(--text-3)">
+            {monthLabel(monthsAgo)}
+          </text>
+        );
+      })}
     </svg>
   );
 }
@@ -146,8 +179,7 @@ export default function AccountOverview() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 2px", marginTop: 2 }}>
           <span style={{ fontSize: 15, color: "var(--text-2)" }}>▦</span>
           <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.4 }}>
-            {bench.wt_vs_chan_pct >= 0 ? "Does " : "Does "}
-            <strong style={{ fontWeight: 500, color: "var(--text)" }}>{bench.wt_vs_chan_pct > 0 ? "+" : ""}{bench.wt_vs_chan_pct}%</strong>
+            Does <strong style={{ fontWeight: 500, color: "var(--text)" }}>{bench.wt_vs_chan_pct > 0 ? "+" : ""}{bench.wt_vs_chan_pct}%</strong>
             {" the volume of the median "}{titleCase(acc.channel)}{"-channel account "}
             ({acc.account_weight} vs {bench.chan_med_wt} cs) on{" "}
             <strong style={{ fontWeight: 500, color: "var(--text)" }}>{acc.live_placements} SKUs</strong>

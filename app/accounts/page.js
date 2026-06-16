@@ -5,19 +5,17 @@ import { supabase } from "../../lib/supabase";
 import LoadingScreen from "../../components/LoadingScreen";
 import GridView from "../../components/GridView";
 
-const BADGE = {
-  "Accelerating": { bg: "var(--growing-bg)", fg: "var(--growing-ink)" },
-  "Stable":       { bg: "var(--stable-bg)",  fg: "var(--stable-ink)" },
-  "Decelerating": { bg: "var(--watch-bg)",   fg: "var(--watch-ink)" },
-  "At-Risk":      { bg: "var(--atrisk-bg)",  fg: "var(--atrisk-ink)" },
-  "New":          { bg: "var(--new-bg)",     fg: "var(--new-ink)" },
-  "Lapsed":       { bg: "transparent",       fg: "var(--lapsed-ink)", bd: "0.5px solid var(--border-strong)" },
+// headline -> display label + colors + left-edge
+const HEAD = {
+  "Accelerating": { label: "Upside",    bg: "var(--growing-bg)", fg: "var(--growing-ink)", edge: "var(--growing-ink)" },
+  "Stable":       { label: "Steady",    bg: "var(--stable-bg)",  fg: "var(--stable-ink)",  edge: "var(--border-strong)" },
+  "Decelerating": { label: "Softening", bg: "var(--watch-bg)",   fg: "var(--watch-ink)",   edge: "var(--watch-ink)" },
+  "At-Risk":      { label: "At risk",   bg: "var(--atrisk-bg)",  fg: "var(--atrisk-ink)",  edge: "var(--atrisk-ink)" },
+  "New":          { label: "New",       bg: "var(--new-bg)",     fg: "var(--new-ink)",     edge: "var(--new-ink)" },
+  "Lapsed":       { label: "Lapsed",    bg: "transparent",       fg: "var(--lapsed-ink)",  edge: "var(--border-strong)" },
 };
-const SPARKC = {
-  "Accelerating": "var(--growing-ink)", "Stable": "var(--text-3)",
-  "Decelerating": "var(--watch-ink)", "At-Risk": "var(--atrisk-ink)",
-};
-const TYPES = ["All", "Accelerating", "Stable", "Decelerating", "At-Risk", "New", "Lapsed"];
+const TYPES = ["All", "Upside", "Steady", "Softening", "At risk", "New", "Lapsed"];
+const LABEL_TO_HEAD = { "Upside": "Accelerating", "Steady": "Stable", "Softening": "Decelerating", "At risk": "At-Risk", "New": "New", "Lapsed": "Lapsed" };
 
 function titleCase(s) {
   if (!s) return "";
@@ -28,24 +26,37 @@ function lastSold(iso) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleString("en-US", { month: "short" }) + " '" + String(d.getFullYear()).slice(2);
 }
+function plc(n) {
+  const a = Math.abs(n);
+  return `${a} placement${a === 1 ? "" : "s"}`;
+}
 
-function Spark({ vals, color }) {
-  if (!vals || vals.length < 2) return null;
-  const w = 120, h = 32, p = 3;
-  const mx = Math.max(...vals, 1), mn = Math.min(...vals), rng = mx - mn || 1;
-  const pts = vals.map((v, i) => {
-    const x = p + (i / (vals.length - 1)) * (w - 2 * p);
-    const y = h - p - ((v - mn) / rng) * (h - 2 * p);
-    return [x, y];
-  });
-  const d = pts.map((pt, i) => (i ? "L" : "M") + pt[0].toFixed(1) + " " + pt[1].toFixed(1)).join(" ");
-  const last = pts[pts.length - 1];
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
-      <path d={d} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={last[0]} cy={last[1]} r="2.4" fill={color} />
-    </svg>
-  );
+// up to two sharp facts per card
+function buildNote(r) {
+  const item = (s) => titleCase(s);
+  const facts = [];
+  const h = r.headline;
+
+  if (h === "At-Risk" || h === "Decelerating") {
+    if (r.lost_sku) facts.push(`lost ${item(r.lost_sku)}`);
+    if (r.placements_delta < 0) facts.push(`down ${plc(r.placements_delta)}`);
+    if (!facts.length) facts.push("running below pace");
+  } else if (h === "Accelerating") {
+    if (r.growing_count > 0) facts.push(`${r.growing_count} of ${r.active_count} SKUs growing`);
+    else facts.push(`accelerating across ${r.active_count} SKUs`);
+    if (r.placements_delta > 0) facts.push(`added ${plc(r.placements_delta)}`);
+  } else if (h === "Stable") {
+    if (r.growing_count > 0) facts.push(`holding · ${r.growing_count} of ${r.active_count} SKUs growing`);
+    else facts.push("holding steady");
+    if (r.lost_sku) facts.push(`watch ${item(r.lost_sku)}`);
+  } else if (h === "New") {
+    facts.push("ramping");
+    facts.push(`${r.live_placements} placement${r.live_placements === 1 ? "" : "s"}`);
+  } else if (h === "Lapsed") {
+    const ls = lastSold(r.last_invoice_date);
+    facts.push(ls ? `last sold ${ls}` : "no recent sales");
+  }
+  return facts.slice(0, 2).join(" · ");
 }
 
 const selStyle = {
@@ -67,7 +78,6 @@ export default function AccountsPage() {
   const [cityF, setCityF] = useState("All");
   const [chainF, setChainF] = useState("All");
 
-  // keep the view in sync if the URL changes (e.g. back navigation)
   useEffect(() => { setView(urlView); }, [urlView]);
 
   function switchView(v) {
@@ -108,8 +118,9 @@ export default function AccountsPage() {
 
   const filtered = useMemo(() => {
     if (!rows) return [];
+    const headFilter = type === "All" ? null : LABEL_TO_HEAD[type];
     return rows.filter((r) => {
-      if (type !== "All" && r.headline !== type) return false;
+      if (headFilter && r.headline !== headFilter) return false;
       if (stF !== "All" && r.state !== stF) return false;
       if (cityF !== "All" && r.city !== cityF) return false;
       if (chainF === "Independents" && r.chain) return false;
@@ -126,7 +137,7 @@ export default function AccountsPage() {
       <div className="topbar"><h1>Account intel</h1></div>
 
       <div className="seg">
-        <button className={view === "detail" ? "on" : ""} onClick={() => switchView("detail")}>Account detail</button>
+        <button className={view === "detail" ? "on" : ""} onClick={() => switchView("detail")}>Accounts</button>
         <button className={view === "grid" ? "on" : ""} onClick={() => switchView("grid")}>Grid</button>
       </div>
 
@@ -154,67 +165,36 @@ export default function AccountsPage() {
         <GridView accounts={filtered} />
       ) : (
         <>
-          <div className="count">{filtered.length} accounts · by annualized volume</div>
+          <div className="count">{filtered.length} accounts · by annual volume</div>
 
-          {filtered.map((r, i) => {
-            const b = BADGE[r.headline] || BADGE["Stable"];
-            const isLapsed = r.headline === "Lapsed";
-            const isNew = r.headline === "New";
-            const showSpark = !isLapsed && !isNew;
+          {filtered.map((r) => {
+            const h = HEAD[r.headline] || HEAD["Stable"];
             const pct = r.prior90_pct;
-            const dl = r.placements_delta;
+            const note = buildNote(r);
+            const up = pct > 0;
             return (
-              <a key={r.account_id} className="card" href={`/account/${r.account_id}`} style={{ display: "block" }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-3)", minWidth: 22, paddingTop: 1 }}>{i + 1}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                      <div style={{ fontSize: 15, fontWeight: 500, lineHeight: 1.2 }}>{r.account_name}</div>
-                      <span style={{ fontSize: 11, fontWeight: 500, padding: "2px 9px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", background: b.bg, color: b.fg, border: b.bd || "none" }}>{r.headline}</span>
+              <a key={r.account_id} href={`/account/${r.account_id}`}
+                 style={{ display: "block", background: "var(--surface)", border: "0.5px solid var(--border)",
+                          borderLeft: `3px solid ${h.edge}`, borderRadius: "var(--r-lg)", padding: "9px 12px", marginBottom: 6 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                      <span style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.1 }}>{r.account_name}</span>
+                      <span style={{ fontSize: 9, fontWeight: 500, padding: "1px 7px", borderRadius: 6, whiteSpace: "nowrap", background: h.bg, color: h.fg, border: r.headline === "Lapsed" ? "0.5px solid var(--border-strong)" : "none" }}>{h.label}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 1 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}>
                       {titleCase(r.channel)} · {r.chain || "Independent"} · {r.city}
                     </div>
-
-                    {showSpark && (
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 10 }}>
-                        <div>
-                          <Spark vals={r.spark} color={SPARKC[r.headline] || "var(--text-3)"} />
-                          <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>rolling 90 · 12 mo</div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          {pct == null ? null : (
-                            <span style={{ fontSize: 13, fontWeight: 500, color: pct > 0 ? "var(--up)" : pct < 0 ? "var(--down)" : "var(--flat)" }}>
-                              {pct > 0 ? "▲" : pct < 0 ? "▼" : "▬"} {Math.abs(pct)}%
-                            </span>
-                          )}
-                          {pct != null && <div style={{ fontSize: 10, color: "var(--text-3)" }}>vs prior 90</div>}
-                        </div>
-                      </div>
-                    )}
-
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 11, paddingTop: 9, borderTop: "0.5px solid var(--border)" }}>
-                      <div>
-                        <span style={{ fontSize: 17, fontWeight: 500 }}>{r.account_weight}</span>
-                        <span style={{ fontSize: 11, color: "var(--text-2)" }}> cs annual</span>
-                      </div>
-                      <div style={{ textAlign: "right", fontSize: 12 }}>
-                        {isLapsed ? (
-                          <span style={{ color: "var(--text-3)" }}>
-                            {lastSold(r.last_invoice_date) ? `last sold ${lastSold(r.last_invoice_date)}` : "no recent sales"}
-                          </span>
-                        ) : (
-                          <span>
-                            <span style={{ fontWeight: 500 }}>{r.live_placements} active</span>
-                            {dl !== 0 && (
-                              <span style={{ color: dl < 0 ? "var(--down)" : "var(--up)" }}> {dl > 0 ? "+" : ""}{dl} vs prev 90</span>
-                            )}
-                          </span>
-                        )}
-                      </div>
+                  </div>
+                  <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    <div><span style={{ fontSize: 16, fontWeight: 600 }}>{r.account_weight}</span><span style={{ fontSize: 10, color: "var(--text-3)" }}> cs/yr</span></div>
+                    <div style={{ fontSize: 11 }}>
+                      {pct != null && <span style={{ fontWeight: 600, color: up ? "var(--up)" : pct < 0 ? "var(--down)" : "var(--flat)" }}>{up ? "▲" : pct < 0 ? "▼" : "▬"} {Math.abs(pct)}%</span>}
+                      <span style={{ color: "var(--text-3)" }}> · {r.cases_per_month}/mo</span>
                     </div>
                   </div>
                 </div>
+                {note && <div style={{ fontSize: 11, color: h.fg, marginTop: 6, lineHeight: 1.3 }}>{note}</div>}
               </a>
             );
           })}
