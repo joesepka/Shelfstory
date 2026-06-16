@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import LoadingScreen from "../../components/LoadingScreen";
 import GridView from "../../components/GridView";
@@ -54,13 +55,25 @@ const selStyle = {
 };
 
 export default function AccountsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlView = searchParams.get("view") === "grid" ? "grid" : "detail";
+
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
-  const [view, setView] = useState("detail");
+  const [view, setView] = useState(urlView);
   const [type, setType] = useState("All");
   const [stF, setStF] = useState("All");
   const [cityF, setCityF] = useState("All");
   const [chainF, setChainF] = useState("All");
+
+  // keep the view in sync if the URL changes (e.g. back navigation)
+  useEffect(() => { setView(urlView); }, [urlView]);
+
+  function switchView(v) {
+    setView(v);
+    router.replace(v === "grid" ? "/accounts?view=grid" : "/accounts");
+  }
 
   useEffect(() => {
     (async () => {
@@ -113,8 +126,8 @@ export default function AccountsPage() {
       <div className="topbar"><h1>Account intel</h1></div>
 
       <div className="seg">
-        <button className={view === "detail" ? "on" : ""} onClick={() => setView("detail")}>Account detail</button>
-        <button className={view === "grid" ? "on" : ""} onClick={() => setView("grid")}>Grid</button>
+        <button className={view === "detail" ? "on" : ""} onClick={() => switchView("detail")}>Account detail</button>
+        <button className={view === "grid" ? "on" : ""} onClick={() => switchView("grid")}>Grid</button>
       </div>
 
       {view === "detail" && (

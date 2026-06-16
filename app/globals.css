@@ -7,17 +7,36 @@ a { color: inherit; text-decoration: none; }
 
 .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 16px 32px; }
 
+/* loading — book opens once, coral line climbs on loop */
 .loading-screen { position: fixed; inset: 0; background: var(--bg);
   display: flex; align-items: center; justify-content: center; z-index: 100; }
-.loading-bars { display: flex; gap: 6px; align-items: flex-end; height: 36px; }
-.loading-bars span { width: 8px; border-radius: 3px; background: var(--accent);
-  transform-origin: bottom; animation: lb 1s ease-in-out infinite; }
-.loading-bars span:nth-child(1){ height: 16px; animation-delay: 0s; }
-.loading-bars span:nth-child(2){ height: 30px; animation-delay: .15s; }
-.loading-bars span:nth-child(3){ height: 22px; animation-delay: .30s; }
-@keyframes lb { 0%,100%{ transform: scaleY(.45);} 50%{ transform: scaleY(1);} }
-@media (prefers-reduced-motion: reduce){ .loading-bars span{ animation: none; } }
+.ss-mark { width: 120px; height: 100px; }
+.ss-pg { stroke: var(--text-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  opacity: .55; vector-effect: non-scaling-stroke; transform-box: fill-box; transform: scaleX(0);
+  animation: ss-open .45s cubic-bezier(.2,.8,.3,1) forwards; }
+.ss-pg-l { transform-origin: right center; }
+.ss-pg-r { transform-origin: left center; }
+.ss-spine { stroke: var(--text-3); stroke-width: 1.5; opacity: .4; }
+.ss-line { stroke: var(--logo); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 96; animation: ss-draw 1.2s ease-in-out .45s infinite; }
+.ss-head { stroke: var(--logo); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 26; animation: ss-head 1.2s ease-in-out .45s infinite; }
+@keyframes ss-open { to { transform: scaleX(1); } }
+@keyframes ss-draw {
+  0% { stroke-dashoffset: 96; opacity: 0; } 6% { opacity: 1; }
+  34% { stroke-dashoffset: 0; } 80% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes ss-head {
+  0%, 30% { stroke-dashoffset: 26; opacity: 0; } 33% { opacity: 1; }
+  44% { stroke-dashoffset: 0; } 80% { opacity: 1; } 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ss-pg { transform: scaleX(1); animation: none; }
+  .ss-line, .ss-head { animation: none; stroke-dashoffset: 0; opacity: 1; }
+}
 
+/* top bar + toggle */
 .topbar { display:flex; align-items:center; justify-content:space-between; padding: 14px 0 10px; }
 .topbar h1 { font-size: 18px; font-weight: 600; }
 .seg { display:flex; background: var(--surface-2); border-radius: var(--r-md); padding: 3px; gap: 2px; }
