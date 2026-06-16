@@ -1,0 +1,31 @@
+:root {
+  /* ============ SKIN — edit this file to restyle the whole app ============ */
+  --bg: #F6F5F1;
+  --surface: #FFFFFF;
+  --surface-2: #F0EEE8;
+
+  --text:   #1E1B17;
+  --text-2: #6B655C;
+  --text-3: #9A938A;
+
+  --border: #E6E2DB;
+  --border-strong: #D6D1C8;
+
+  --accent:    #0E7C75;
+  --accent-ink:#0A4F4A;
+  --accent-bg: #E2F1EF;
+
+  --growing-bg:#E7F1DD; --growing-ink:#356B22;
+  --stable-bg: #EFEDE6; --stable-ink: #6B655C;
+  --watch-bg:  #FBEFD6; --watch-ink:  #946011;
+  --atrisk-bg: #FBE4E1; --atrisk-ink: #B23A2B;
+  --new-bg:    #E2EDF8; --new-ink:    #2C5E94;
+  --lapsed-ink:#8A837A;
+  --up:#356B22; --down:#B23A2B; --flat:#6B655C;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
+  --maxw:480px;
+}
