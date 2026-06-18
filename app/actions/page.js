@@ -271,7 +271,7 @@ function ActionsInner() {
   return (
     <div style={wrap}>
       <div style={{ padding: "14px 16px 6px", flexShrink: 0 }}>
-        <div onClick={() => go("/")} style={{ fontSize: 12.5, color: "#7A6FA0", cursor: "pointer", marginBottom: 6 }}>‹ Home</div>
+        
         <div style={{ fontSize: 24, fontWeight: 700, color: "#2B2B2B" }}>Actions to Take</div>
         <div style={{ fontSize: 12.5, color: "#9A968C", marginTop: 2 }}>{plays ? `${plays.length} play${plays.length === 1 ? "" : "s"} · ${scopeLabel}` : "Reading your book…"}</div>
       </div>
@@ -296,13 +296,7 @@ function ActionsInner() {
         )}
       </div>
 
-      {plays && (
-        <div style={{ display: "flex", gap: 8, padding: "2px 16px 12px", flexShrink: 0 }}>
-          <div style={statTile}><div style={statV}>{plays.length}</div><div style={statL}>plays</div></div>
-          <div style={statTile}><div style={statV}>{urgent.length}</div><div style={statL}>urgent</div></div>
-          <div style={statTile}><div style={statV}>{opp.length}</div><div style={statL}>opportunities</div></div>
-        </div>
-      )}
+   
 
       <div className="nobar" style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
         {!plays && <Splash fixed={false} />}

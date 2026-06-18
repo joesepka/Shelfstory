@@ -3,17 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "../lib/supabase";
 
 const T = {
-  bg: "#F2F0EA", surface: "#FFFFFF", ink: "#2B2B2B", muted: "#9A968C",
-  line: "#E6E3DB", primary: "#D8463A",
+  bg: "#F2F0EA", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
   font: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
 };
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
-const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
-const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
-const isNew = h => String(h || "").toLowerCase().trim() === "new";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
-const idsHref = arr => `/book?ids=${arr.slice(0, 40).join(",")}`;
+const pctile = (arr, p) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.floor((s.length - 1) * p)]; };
 
 function Splash({ onDone }) {
   const [progress, setProgress] = useState(0);
@@ -100,95 +96,35 @@ function greeting() {
   return "Good evening";
 }
 
-const TONE_DOT = { red: "#D9694A", blue: "#3E86C7", amber: "#E0A93E", green: "#2FA36F", ink: "#8A8678" };
-
-// lightweight versions of the Actions plays — same logic, one-line previews
-function buildPlays(rows) {
-  const out = [];
-
-  // win-back
-  const wb = rows.filter(r => (r.cur90 || 0) > 0 && r.last_order_w != null && r.last_order_w >= 2 && (r.cases_per_month || 0) >= 4 && !isNew(r.headline))
-    .sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0)).slice(0, 12);
-  if (wb.length >= 2) out.push({ tone: "red", tag: "Win-back", line: `${wb.length} steady buyers have gone quiet — worth a call before they lapse.`, href: idsHref(wb.map(r => r.account_id)) });
-
-  // risk cluster by chain
-  const byChain = {};
-  rows.filter(r => isDeclining(r.headline) && r.chain).forEach(r => { (byChain[r.chain] ||= []).push(r); });
-  let cluster = null;
-  for (const ch in byChain) { const lst = byChain[ch]; if (lst.length >= 4 && (!cluster || lst.length > cluster.lst.length)) cluster = { chain: ch, lst }; }
-  if (cluster) out.push({ tone: "red", tag: "Risk cluster", line: `${cluster.lst.length} ${titleCase(cluster.chain)} stores are softening together.`, href: idsHref(cluster.lst.map(r => r.account_id)) });
-
-  // new-account rescue
-  const nr = rows.filter(r => isNew(r.headline) && r.last_order_w != null && r.last_order_w >= 1);
-  if (nr.length >= 2) out.push({ tone: "blue", tag: "New accounts", line: `${nr.length} new accounts stalled after their first order.`, href: idsHref(nr.map(r => r.account_id)) });
-
-  // distribution leak
-  const lostBy = {};
-  rows.forEach(r => { if (r.lost_sku) (lostBy[r.lost_sku] ||= []).push(r); });
-  let topLost = null;
-  for (const sku in lostBy) if (!topLost || lostBy[sku].length > topLost.lst.length) topLost = { sku, lst: lostBy[sku] };
-  if (topLost && topLost.lst.length >= 3) {
-    const chCount = {};
-    topLost.lst.forEach(r => { if (r.channel_type) chCount[r.channel_type] = (chCount[r.channel_type] || 0) + 1; });
-    const domCh = Object.entries(chCount).sort((a, b) => b[1] - a[1])[0]?.[0];
-    out.push({ tone: "amber", tag: "Distribution", line: `${titleCase(topLost.sku)} is losing doors${domCh ? ` in ${domCh}` : ""} — ${topLost.lst.length} dropped it.`, href: idsHref(topLost.lst.map(r => r.account_id)) });
-  }
-
-  // hot market, thin coverage
-  const cityAgg = {};
-  rows.forEach(r => { if (!r.city) return; const e = cityAgg[`${r.city}|${r.state}`] ||= { city: r.city, st: r.state, cur: 0, prev: 0, n: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.n++; });
-  const citiesArr = Object.values(cityAgg).filter(c => c.n >= 2);
-  const medN = citiesArr.length ? citiesArr.map(c => c.n).sort((a, b) => a - b)[Math.floor(citiesArr.length / 2)] : 0;
-  const hot = citiesArr.map(c => ({ ...c, g: gpct(c.cur, c.prev) })).filter(c => c.g != null && c.g >= 15 && c.n < medN).sort((a, b) => b.g - a.g)[0];
-  if (hot) out.push({ tone: "green", tag: "Hot market", line: `${titleCase(hot.city)} is up ${hot.g}% but you only hold ${hot.n} door${hot.n === 1 ? "" : "s"}.`, href: `/perf/overview?st=${hot.st}&city=${encodeURIComponent(hot.city)}` });
-
-  // distributor watch
-  const distAgg = {};
-  let bookCur = 0;
-  rows.forEach(r => { bookCur += r.cur90 || 0; if (!r.distributor) return; const e = distAgg[r.distributor] ||= { name: r.distributor, cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; });
-  const dw = Object.values(distAgg).map(d => ({ ...d, share: bookCur ? Math.round(100 * d.cur / bookCur) : 0, g: gpct(d.cur, d.prev) }))
-    .filter(d => d.share >= 10 && d.g != null && d.g < 0).sort((a, b) => a.g - b.g)[0];
-  if (dw) out.push({ tone: "ink", tag: "Distributor", line: `${titleCase(dw.name)} moves ${dw.share}% of your book and it's down ${Math.abs(dw.g)}%.`, href: `/book?distributor=${encodeURIComponent(dw.name)}` });
-
-  return out;
-}
-
-function NavCard({ href, title, sub, ready }) {
-  const inner = (
-    <div style={{
-      background: "#E9E4D8", border: "0.5px solid #DCD6C6", borderRadius: 18, padding: "18px 18px", marginTop: 12,
-      boxShadow: "0 1px 3px rgba(0,0,0,.05)", cursor: ready ? "pointer" : "default",
-      opacity: ready ? 1 : 0.72,
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{title}</div>
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: ready ? "#7A766B" : T.muted, whiteSpace: "nowrap" }}>
-          {ready ? "open ›" : "coming soon"}
-        </div>
-      </div>
-      <div style={{ fontSize: 13, color: "#7E7A6E", marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
-    </div>
-  );
-  return ready ? <a href={href} style={{ textDecoration: "none" }}>{inner}</a> : inner;
-}
-
-function PlayRow({ play }) {
+function NavCard({ href, title, sub }) {
   return (
-    <a href={play.href} style={{ display: "flex", gap: 9, alignItems: "flex-start", marginBottom: 11, textDecoration: "none" }}>
-      <span style={{ width: 7, height: 7, borderRadius: 4, background: TONE_DOT[play.tone] || "#9A968C", marginTop: 6, flexShrink: 0 }} />
-      <span style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.42, flex: 1 }}>
-        <b style={{ color: TONE_DOT[play.tone] || T.ink, fontWeight: 700 }}>{play.tag}:</b> {play.line}
-      </span>
-      <span style={{ fontSize: 12, color: "#A39E90", marginTop: 2, flexShrink: 0 }}>›</span>
+    <a href={href} style={{ textDecoration: "none" }}>
+      <div style={{
+        background: "#FFFFFF", border: "0.5px solid #E4DFD3", borderRadius: 18, padding: "18px 18px", marginTop: 12,
+        boxShadow: "0 2px 8px rgba(0,0,0,.08)", cursor: "pointer",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{title}</div>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>open ›</div>
+        </div>
+        <div style={{ fontSize: 13, color: "#7E7A6E", marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
+      </div>
     </a>
   );
+}
+
+const UP = "#3E8E68", DOWN = "#C0524A", NUM = "#5C584E";
+function moveWord(pct) {
+  if (pct == null) return null;
+  if (pct > 0) return { w: "up", c: UP };
+  if (pct < 0) return { w: "down", c: DOWN };
+  return { w: "flat", c: "#8A8678" };
 }
 
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
-  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -197,7 +133,7 @@ export default function Home() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,account_name,chain,city,state,distributor,channel_type,headline,account_weight,cur90,prev90,prior90_pct,cases_per_month,placements_delta,lost_sku,last_order_w")
+            .select("account_id,city,state,channel_type,account_weight,cur90,prev90,live_placements,live_prev")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
@@ -212,69 +148,90 @@ export default function Home() {
 
   const s = useMemo(() => {
     if (!rows) return null;
-    let cur = 0, prev = 0, nNew = 0, nRisk = 0, nHealthy = 0;
+    let annual = 0, cur = 0, prev = 0, placeNow = 0, placePrev = 0, activeNow = 0;
+    const stAgg = {}, chAgg = {}, cityAgg = {};
     for (const r of rows) {
+      annual += r.account_weight || 0;
       cur += r.cur90 || 0; prev += r.prev90 || 0;
-      if (isNew(r.headline)) nNew++; else if (isDeclining(r.headline)) nRisk++; else nHealthy++;
+      placeNow += r.live_placements || 0; placePrev += r.live_prev || 0;
+      if ((r.cur90 || 0) > 0) activeNow++;
+      if (r.state) { const e = stAgg[r.state] ||= { cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
+      if (r.channel_type) { const e = chAgg[r.channel_type] ||= { cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
+      if (r.city) { const k = `${r.city}|${r.state}`; const e = cityAgg[k] ||= { city: r.city, st: r.state, cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
     }
-    const pct = prev > 0 ? Math.round(100 * (cur - prev) / prev) : null;
-    return { cur, pct, nNew, nRisk, nHealthy, plays: buildPlays(rows) };
+    const volPct = gpct(cur, prev);
+    const placePct = gpct(placeNow, placePrev);
+
+    // strongest state by absolute case gain
+    let topState = null;
+    for (const k in stAgg) { const e = stAgg[k]; const d = e.cur - e.prev; const g = gpct(e.cur, e.prev); if (g != null && (!topState || d > topState.d)) topState = { name: k, d, g }; }
+
+    // hotspot city — must clear the 80th pct of city volume (kills tiny-town noise), then fastest %
+    const cityVols = Object.values(cityAgg).map(c => c.cur).filter(v => v > 0);
+    const volFloor = Math.max(pctile(cityVols, 0.8), 150);
+    let topCity = null;
+    for (const k in cityAgg) { const e = cityAgg[k]; const g = gpct(e.cur, e.prev); if (g != null && e.cur >= volFloor && (!topCity || g > topCity.g)) topCity = { name: e.city, g }; }
+
+    // hotspot channel — fastest growing channel
+    let topCh = null;
+    for (const k in chAgg) { const e = chAgg[k]; const g = gpct(e.cur, e.prev); if (g != null && (!topCh || g > topCh.g)) topCh = { name: k, g }; }
+
+    let hotspot = null;
+    if (topCity && topCh) hotspot = topCity.g >= topCh.g ? { kind: "city", ...topCity } : { kind: "channel", ...topCh };
+    else hotspot = topCity ? { kind: "city", ...topCity } : topCh ? { kind: "channel", ...topCh } : null;
+
+    return { annual, cur, volPct, placePct, activeNow, topState, hotspot };
   }, [rows]);
 
-  const plays = s?.plays || [];
-  const visible = showAll ? plays : plays.slice(0, 2);
-  const hiddenCount = Math.max(0, plays.length - 2);
+  const closers = ["Worth a poke when you dig in.", "Might be worth a closer look.", "Keep half an eye on it.", "Good place to start when you've got a minute."];
+  const closer = closers[new Date().getDate() % closers.length];
 
   return (
     <>
       {showSplash && <Splash onDone={() => setShowSplash(false)} />}
 
       <main style={{ position: "relative", minHeight: "100vh", background: T.bg, padding: 24, fontFamily: T.font, maxWidth: 480, margin: "0 auto" }}>
-        <div style={{ position: "absolute", top: 16, right: 20, fontFamily: "Georgia, serif", fontSize: 13, color: "#C4BFB2", letterSpacing: 0.5 }}>ShelfStory</div>
+        <h1 style={{ fontSize: 27, color: T.ink, marginTop: 16, marginBottom: 4, fontWeight: 700 }}>{greeting()}, Joe.</h1>
+        <p style={{ fontSize: 14.5, color: T.muted, marginTop: 0 }}>Here’s the lay of the land.</p>
 
-        <h1 style={{ fontSize: 27, color: T.ink, marginTop: 44, marginBottom: 4, fontWeight: 700 }}>{greeting()}, Joe.</h1>
-        <p style={{ fontSize: 15, color: T.muted, marginTop: 0 }}>Here’s where your book stands today.</p>
-
-        <div style={{ background: T.surface, borderRadius: 18, padding: "16px 18px", marginTop: 18, boxShadow: "0 1px 4px rgba(0,0,0,.07)" }}>
+        <div style={{ marginTop: 14, padding: "2px 2px" }}>
           {!s && !err && <div style={{ fontSize: 13.5, color: T.muted }}>Reading your book…</div>}
           {err && <div style={{ fontSize: 13.5, color: T.primary }}>Couldn’t load your book. {err}</div>}
-          {s && (
-            <>
-              <div style={{ fontSize: 14.5, color: T.ink, lineHeight: 1.5 }}>
-                Your book moved <b>{s.cur.toLocaleString()} cases</b> over the last 90 days
-                {s.pct != null && <>, <b style={{ color: s.pct >= 0 ? "#1F7A52" : T.primary }}>{s.pct >= 0 ? "+" : ""}{s.pct}%</b> vs the prior quarter</>}.
+          {s && (() => {
+            const vm = moveWord(s.volPct), pm = moveWord(s.placePct);
+            const B = ({ children }) => <b style={{ color: NUM, fontWeight: 700 }}>{children}</b>;
+            const M = ({ m }) => m ? <b style={{ color: m.c, fontWeight: 700 }}>{m.w} {Math.abs(s.volPct)}%</b> : null;
+            return (
+              <div style={{ fontSize: 14, color: "#827D70", lineHeight: 1.7 }}>
+                <p style={{ margin: 0 }}>
+                  You’re pacing about <B>{Math.round(s.annual).toLocaleString()}</B> cases a year. The last 90 days moved <B>{s.cur.toLocaleString()}</B> of them
+                  {vm && <>, <b style={{ color: vm.c, fontWeight: 700 }}>{vm.w} {Math.abs(s.volPct)}%</b> on the prior stretch</>}, across <B>{s.activeNow.toLocaleString()}</B> active accounts
+                  {pm && <> — placements <b style={{ color: pm.c, fontWeight: 700 }}>{pm.w} {Math.abs(s.placePct)}%</b></>}.
+                </p>
+                <p style={{ margin: "9px 0 0" }}>
+                  {s.topState && (
+                    s.topState.g >= 0
+                      ? <><B>{STNAME[s.topState.name] || s.topState.name}</B> is pulling the most weight right now ({s.topState.g >= 0 ? "+" : ""}{s.topState.g}%).</>
+                      : <><B>{STNAME[s.topState.name] || s.topState.name}</B> is holding up best of the bunch ({s.topState.g}%).</>
+                  )}
+                  {s.hotspot && (
+                    s.hotspot.kind === "city"
+                      ? <> <B>{titleCase(s.hotspot.name)}</B>’s the standout, up <b style={{ color: UP, fontWeight: 700 }}>{s.hotspot.g}%</b>.</>
+                      : <> The <B>{titleCase(s.hotspot.name)}</B> channel is where the heat is, up <b style={{ color: UP, fontWeight: 700 }}>{s.hotspot.g}%</b>.</>
+                  )}
+                  {" "}{closer}
+                </p>
               </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#1F7A52", background: "#E2F1E9", padding: "3px 9px", borderRadius: 11 }}>{s.nHealthy.toLocaleString()} healthy</span>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#1A5E8A", background: "#E2EDF8", padding: "3px 9px", borderRadius: 11 }}>{s.nNew.toLocaleString()} new</span>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: "#A8302A", background: "#F6E1DD", padding: "3px 9px", borderRadius: 11 }}>{s.nRisk.toLocaleString()} at-risk</span>
-              </div>
-
-              <div style={{ height: 1, background: T.line, margin: "14px 0 12px" }} />
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5 }}>TOP PLAYS TODAY</div>
-                <a href="/actions" style={{ fontSize: 11.5, fontWeight: 600, color: "#7A766B", textDecoration: "none" }}>see all ›</a>
-              </div>
-
-              {plays.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>No plays meet the threshold right now.</div>}
-              {visible.map((p, i) => <PlayRow key={i} play={p} />)}
-
-              {hiddenCount > 0 && (
-                <button onClick={() => setShowAll(v => !v)}
-                  style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: T.primary, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
-                  {showAll ? "Show less ▴" : `Show ${hiddenCount} more play${hiddenCount === 1 ? "" : "s"} ▾`}
-                </button>
-              )}
-            </>
-          )}
+            );
+          })()}
         </div>
 
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5, marginTop: 26 }}>WHERE TO?</div>
-        <NavCard href="/book" ready title="Accounts"
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5, marginTop: 28 }}>WHERE TO?</div>
+        <NavCard href="/book" title="Accounts"
           sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
-        <NavCard href="/perf" ready title="Performance Overview"
+        <NavCard href="/perf" title="Performance Overview"
           sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
-        <NavCard href="/actions" ready title="Actions to Take"
+        <NavCard href="/actions" title="Actions to Take"
           sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
 
         <div style={{ height: 28 }} />

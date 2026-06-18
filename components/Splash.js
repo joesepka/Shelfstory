@@ -1,15 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const T = { bg: "#F2F0EA", ink: "#2B2B2B", line: "#E6E3DB", primary: "#D8463A" };
-
-// Loops continuously while mounted — shows for exactly as long as it's on screen.
-// Pass `fixed` (default true) for a full-screen overlay; pass fixed={false} to fill a container.
+// Light-grey ShelfStory mark — book + arrow draw-in, loops continuously while mounted.
+// `fixed` (default true) = full overlay; fixed={false} fills its container.
 export default function Splash({ fixed = true }) {
   const [progress, setProgress] = useState(0);
   useEffect(() => {
     let raf, start = Date.now();
-    const dur = 1300;
+    const dur = 1500;
     const tick = () => {
       let p = (Date.now() - start) / dur;
       if (p >= 1) { start = Date.now(); p = 0; }
@@ -62,25 +60,18 @@ export default function Splash({ fixed = true }) {
     : { position: "absolute", inset: 0 };
 
   return (
-    <div style={{
-      ...outer, background: T.bg,
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-    }}>
-      <svg viewBox="0 0 340 260" style={{ width: 220, height: "auto" }}>
-        <path d={L} stroke={T.ink} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.5} />
-        <path d={R} stroke={T.ink} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.5} />
+    <div style={{ ...outer, background: "#F2F0EA", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }} aria-label="Loading">
+        <path d={L} stroke="#B5B0A2" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />
+        <path d={R} stroke="#B5B0A2" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />
         {drawnPts.length > 1 && (
-          <path d={linePath} stroke={T.primary} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={linePath} stroke="#9A968C" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
         )}
         {pts.slice(0, fullSeg + 1).map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={2.6} fill={T.primary} />
+          <circle key={i} cx={p.x} cy={p.y} r={2.6} fill="#9A968C" />
         ))}
-        {arrow && <path d={arrow} stroke={T.primary} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+        {arrow && <path d={arrow} stroke="#9A968C" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
       </svg>
-      <div style={{ fontFamily: "Georgia, serif", fontSize: 24, color: T.ink, letterSpacing: 1, marginTop: 16 }}>ShelfStory</div>
-      <div style={{ width: 130, height: 4, background: T.line, borderRadius: 2, marginTop: 20, overflow: "hidden" }}>
-        <div style={{ width: `${progress * 100}%`, height: "100%", background: T.primary, borderRadius: 2 }} />
-      </div>
     </div>
   );
 }

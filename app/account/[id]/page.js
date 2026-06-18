@@ -148,8 +148,7 @@ export default function AccountOverview() {
   return (
     <div className="wrap">
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 0 10px" }}>
-        <button onClick={() => router.back()} aria-label="Back"
-          style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 22, color: "var(--text-2)", lineHeight: 1, padding: 0, marginTop: 2 }}>‹</button>
+        
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.15 }}>{acc.account_name}</div>
           <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 1 }}>
