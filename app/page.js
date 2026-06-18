@@ -247,8 +247,8 @@ export default function Home() {
           sub="Find accounts by area, see exactly what's happening at each, and work your list — account, grid, or tree." />
         <NavCard href="/perf" ready title="Performance Overview"
           sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
-        <NavCard ready={false} title="Actions to Take"
-          sub="Your highest-priority moves — win-backs, at-risk saves, and whitespace to sell in." />
+        <NavCard href="/actions" ready title="Actions to Take"
+          sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
 
         <div style={{ height: 28 }} />
       </main>

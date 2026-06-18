@@ -128,7 +128,7 @@ function GridMatrix({ accounts }) {
     fontSize: 9, fontWeight: 600, color: "#6B665A", lineHeight: 1.1, textAlign: "center" };
   const rowHead = { position: "sticky", left: 0, zIndex: 4, width: ACCT_W, minWidth: ACCT_W, height: ROW_H,
     background: "#FFFFFF", boxShadow: "2px 0 4px rgba(0,0,0,.04)", padding: "5px 10px", verticalAlign: "middle",
-    borderBottom: "1px solid #ECE9E0" };
+    textAlign: "left", borderBottom: "1px solid #ECE9E0" };
 
   return (
     <div className="nobar" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" }}>
@@ -155,7 +155,7 @@ function GridMatrix({ accounts }) {
                       <span style={{ fontSize: 12, fontWeight: 600, color: "#2B2B2B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.account_name}</span>
                       {lab && <span style={{ fontSize: 8, fontWeight: 700, color: lab.c, background: lab.bg, padding: "1px 5px", borderRadius: 8, whiteSpace: "nowrap", flexShrink: 0 }}>{lab.t}</span>}
                     </div>
-                    <div style={{ fontSize: 9.5, color: "#A39E90", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: 9.5, color: "#A39E90", marginTop: 2, textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {a.chain || "Independent"} · {a.city}
                     </div>
                   </a>
@@ -288,6 +288,14 @@ function BookInner() {
   const searchParams = useSearchParams();
   const urlView = searchParams.get("view");
 
+  // incoming filters from links (Actions / Performance / Home)
+  const linkIds = useMemo(() => { const v = searchParams.get("ids"); return v ? v.split(",").filter(Boolean) : null; }, [searchParams]);
+  const linkCity = searchParams.get("city");
+  const linkState = searchParams.get("state");
+  const linkChain = searchParams.get("chain");
+  const linkDist = searchParams.get("distributor");
+  const linkHealth = searchParams.get("health"); // new | healthy | atrisk
+
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [view, setView] = useState(VIEWS.includes(urlView) ? urlView : "account");
@@ -297,6 +305,8 @@ function BookInner() {
   const [premF, setPremF] = useState("All");
   const [distF, setDistF] = useState("All");
   const [healthFilter, setHealthFilter] = useState(null);
+  // link-driven scoping (separate from the dropdown filters)
+  const [linkScope, setLinkScope] = useState(null);
 
   useEffect(() => {
     const v = searchParams.get("view");
@@ -304,9 +314,34 @@ function BookInner() {
     if (!v && view !== "account") setView("account");
   }, [searchParams]); // eslint-disable-line
 
+  // apply incoming link params once on mount / when they change
+  useEffect(() => {
+    if (linkState && linkState !== "All") setStF(linkState);
+    if (linkCity) setCityF(linkCity);
+    if (linkChain) setChainF(linkChain);
+    if (linkDist) setDistF(linkDist);
+    if (linkHealth && ["new", "healthy", "atrisk"].includes(linkHealth)) setHealthFilter(linkHealth);
+    if (linkIds && linkIds.length) {
+      setLinkScope({ kind: "ids", ids: new Set(linkIds), n: linkIds.length });
+    } else if (linkCity) {
+      setLinkScope({ kind: "city", label: titleCase(linkCity) });
+    } else if (linkChain) {
+      setLinkScope({ kind: "chain", label: titleCase(linkChain) });
+    } else if (linkDist) {
+      setLinkScope({ kind: "distributor", label: titleCase(linkDist) });
+    } else setLinkScope(null);
+  }, [linkIds, linkCity, linkState, linkChain, linkDist, linkHealth]);
+
+  function clearLink() {
+    setLinkScope(null);
+    setStF("All"); setCityF("All"); setChainF("All"); setDistF("All"); setHealthFilter(null);
+    router.replace(view === "account" ? "/book" : `/book?view=${view}`, { scroll: false });
+  }
+
   function changeView(k) {
     setView(k);
-    router.replace(k === "account" ? "/book" : `/book?view=${k}`, { scroll: false });
+    const base = k === "account" ? "/book" : `/book?view=${k}`;
+    router.replace(base, { scroll: false });
   }
 
   useEffect(() => {
@@ -347,13 +382,14 @@ function BookInner() {
   const geo = useMemo(() => {
     if (!rows) return null;
     let f = rows;
+    if (linkScope?.kind === "ids") f = f.filter(r => linkScope.ids.has(r.account_id));
     if (stF !== "All") f = f.filter(r => r.state === stF);
     if (cityF !== "All") f = f.filter(r => r.city === cityF);
     if (chainF !== "All") f = f.filter(r => r.chain === chainF);
     if (premF !== "All") f = f.filter(r => premF === "ON" ? isOn(r) : !isOn(r));
     if (distF !== "All") f = f.filter(r => r.distributor === distF);
     return f;
-  }, [rows, stF, cityF, chainF, premF, distF]);
+  }, [rows, stF, cityF, chainF, premF, distF, linkScope]);
 
   const bal = useMemo(() => {
     if (!geo) return null;
@@ -361,7 +397,6 @@ function BookInner() {
     for (const r of geo) {
       const k = groupOf(r.headline);
       g[k].n++;
-      // weight by 52-week volume; project NEW accounts at 3x last-90 (4 quarters, slight haircut)
       g[k].vol += isNew(r.headline) ? (r.cur90 || 0) * 3 : (r.account_weight || 0);
     }
     const tot = g.healthy.vol + g.new.vol + g.atrisk.vol || 1;
@@ -386,6 +421,16 @@ function BookInner() {
   return (
     <div style={wrap}>
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
+
+      {/* link-scope banner */}
+      {linkScope && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "#EDE7F2", borderRadius: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "#5B4E7A" }}>
+            Filtered{linkScope.kind === "ids" ? ` to ${linkScope.n} flagged account${linkScope.n === 1 ? "" : "s"}` : ` to ${linkScope.label}`} from your action list
+          </span>
+          <button onClick={clearLink} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 16, border: "none", background: "#fff", color: "#7A6FA0", cursor: "pointer", fontFamily: "inherit" }}>clear ✕</button>
+        </div>
+      )}
 
       {/* one scrollable filter row */}
       <div className="nobar" style={{ display: "flex", gap: 6, padding: "12px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
@@ -423,7 +468,7 @@ function BookInner() {
         ))}
       </div>
 
-      {/* health bar: weighted by 52-week volume; labels + acct counts above, % inside */}
+      {/* health bar */}
       {bal && (
         <div style={{ padding: "0 12px 10px", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 10.5, color: "#6B665A" }}>
