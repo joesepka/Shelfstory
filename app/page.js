@@ -5,11 +5,10 @@ import { supabase } from "../lib/supabase";
 const T = {
   bg: "#F2F0EA", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
   font: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
+  serif: "Georgia, 'Times New Roman', serif",
 };
-const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
-const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
-const pctile = (arr, p) => { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); return s[Math.floor((s.length - 1) * p)]; };
+const UP = "#5C9A7B", DOWN = "#C07A72", FLAT = "#A5A092";
 
 function Splash({ onDone }) {
   const [progress, setProgress] = useState(0);
@@ -81,7 +80,7 @@ function Splash({ onDone }) {
         ))}
         {arrow && <path d={arrow} stroke={T.primary} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
       </svg>
-      <div style={{ fontFamily: "Georgia, serif", fontSize: 26, color: T.ink, letterSpacing: 1, marginTop: 18 }}>ShelfStory</div>
+      <div style={{ fontFamily: T.serif, fontSize: 26, color: T.ink, letterSpacing: 1, marginTop: 18 }}>ShelfStory</div>
       <div style={{ width: 130, height: 4, background: T.line, borderRadius: 2, marginTop: 22, overflow: "hidden" }}>
         <div style={{ width: `${progress * 100}%`, height: "100%", background: T.primary, borderRadius: 2 }} />
       </div>
@@ -96,29 +95,21 @@ function greeting() {
   return "Good evening";
 }
 
-function NavCard({ href, title, sub }) {
+function Stat({ label, value, unit, pct }) {
+  const c = pct == null ? FLAT : pct > 0 ? UP : pct < 0 ? DOWN : FLAT;
+  const arrow = pct == null ? "" : pct > 0 ? "▲" : pct < 0 ? "▼" : "▬";
   return (
-    <a href={href} style={{ textDecoration: "none" }}>
-      <div style={{
-        background: "#FFFFFF", border: "0.5px solid #E4DFD3", borderRadius: 18, padding: "18px 18px", marginTop: 12,
-        boxShadow: "0 2px 8px rgba(0,0,0,.08)", cursor: "pointer",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{title}</div>
-          <div style={{ fontSize: 11.5, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>open ›</div>
-        </div>
-        <div style={{ fontSize: 13, color: "#7E7A6E", marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
+    <div style={{ flex: 1, minWidth: 0, padding: "0 4px", borderLeft: "1px solid #E0DCD0" }}>
+      <div style={{ fontSize: 8.5, letterSpacing: 0.3, color: T.muted, lineHeight: 1.2, height: 22 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 2, marginTop: 3 }}>
+        <span style={{ fontFamily: T.serif, fontSize: 17, fontWeight: 600, color: "#4A463C", lineHeight: 1 }}>{value}</span>
+        {unit && <span style={{ fontSize: 9, color: T.muted }}>{unit}</span>}
       </div>
-    </a>
+      <div style={{ fontSize: 9.5, fontWeight: 600, color: c, marginTop: 5 }}>
+        {arrow} {pct == null ? "—" : `${Math.abs(pct)}%`}
+      </div>
+    </div>
   );
-}
-
-const UP = "#3E8E68", DOWN = "#C0524A", NUM = "#5C584E";
-function moveWord(pct) {
-  if (pct == null) return null;
-  if (pct > 0) return { w: "up", c: UP };
-  if (pct < 0) return { w: "down", c: DOWN };
-  return { w: "flat", c: "#8A8678" };
 }
 
 export default function Home() {
@@ -133,7 +124,7 @@ export default function Home() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,city,state,channel_type,account_weight,cur90,prev90,live_placements,live_prev")
+            .select("account_id,cur90,prev90,live_placements,live_prev")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
@@ -148,43 +139,22 @@ export default function Home() {
 
   const s = useMemo(() => {
     if (!rows) return null;
-    let annual = 0, cur = 0, prev = 0, placeNow = 0, placePrev = 0, activeNow = 0;
-    const stAgg = {}, chAgg = {}, cityAgg = {};
+    let cur = 0, prev = 0, placeNow = 0, placePrev = 0, acctNow = 0, acctPrev = 0;
     for (const r of rows) {
-      annual += r.account_weight || 0;
       cur += r.cur90 || 0; prev += r.prev90 || 0;
       placeNow += r.live_placements || 0; placePrev += r.live_prev || 0;
-      if ((r.cur90 || 0) > 0) activeNow++;
-      if (r.state) { const e = stAgg[r.state] ||= { cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
-      if (r.channel_type) { const e = chAgg[r.channel_type] ||= { cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
-      if (r.city) { const k = `${r.city}|${r.state}`; const e = cityAgg[k] ||= { city: r.city, st: r.state, cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
+      if ((r.cur90 || 0) > 0) acctNow++;
+      if ((r.prev90 || 0) > 0) acctPrev++;
     }
-    const volPct = gpct(cur, prev);
-    const placePct = gpct(placeNow, placePrev);
-
-    // strongest state by absolute case gain
-    let topState = null;
-    for (const k in stAgg) { const e = stAgg[k]; const d = e.cur - e.prev; const g = gpct(e.cur, e.prev); if (g != null && (!topState || d > topState.d)) topState = { name: k, d, g }; }
-
-    // hotspot city — must clear the 80th pct of city volume (kills tiny-town noise), then fastest %
-    const cityVols = Object.values(cityAgg).map(c => c.cur).filter(v => v > 0);
-    const volFloor = Math.max(pctile(cityVols, 0.8), 150);
-    let topCity = null;
-    for (const k in cityAgg) { const e = cityAgg[k]; const g = gpct(e.cur, e.prev); if (g != null && e.cur >= volFloor && (!topCity || g > topCity.g)) topCity = { name: e.city, g }; }
-
-    // hotspot channel — fastest growing channel
-    let topCh = null;
-    for (const k in chAgg) { const e = chAgg[k]; const g = gpct(e.cur, e.prev); if (g != null && (!topCh || g > topCh.g)) topCh = { name: k, g }; }
-
-    let hotspot = null;
-    if (topCity && topCh) hotspot = topCity.g >= topCh.g ? { kind: "city", ...topCity } : { kind: "channel", ...topCh };
-    else hotspot = topCity ? { kind: "city", ...topCity } : topCh ? { kind: "channel", ...topCh } : null;
-
-    return { annual, cur, volPct, placePct, activeNow, topState, hotspot };
+    const rosNow = acctNow ? cur / acctNow : 0;
+    const rosPrev = acctPrev ? prev / acctPrev : 0;
+    return {
+      cur, curPct: gpct(cur, prev),
+      acctNow, acctPct: gpct(acctNow, acctPrev),
+      placeNow, placePct: gpct(placeNow, placePrev),
+      rosNow, rosPct: rosPrev > 0 ? Math.round(100 * (rosNow - rosPrev) / rosPrev) : null,
+    };
   }, [rows]);
-
-  const closers = ["Worth a poke when you dig in.", "Might be worth a closer look.", "Keep half an eye on it.", "Good place to start when you've got a minute."];
-  const closer = closers[new Date().getDate() % closers.length];
 
   return (
     <>
@@ -194,48 +164,48 @@ export default function Home() {
         <h1 style={{ fontSize: 27, color: T.ink, marginTop: 16, marginBottom: 4, fontWeight: 700 }}>{greeting()}, Joe.</h1>
         <p style={{ fontSize: 14.5, color: T.muted, marginTop: 0 }}>Here’s the lay of the land.</p>
 
-        <div style={{ marginTop: 14, padding: "2px 2px" }}>
-          {!s && !err && <div style={{ fontSize: 13.5, color: T.muted }}>Reading your book…</div>}
-          {err && <div style={{ fontSize: 13.5, color: T.primary }}>Couldn’t load your book. {err}</div>}
-          {s && (() => {
-            const vm = moveWord(s.volPct), pm = moveWord(s.placePct);
-            const B = ({ children }) => <b style={{ color: NUM, fontWeight: 700 }}>{children}</b>;
-            const M = ({ m }) => m ? <b style={{ color: m.c, fontWeight: 700 }}>{m.w} {Math.abs(s.volPct)}%</b> : null;
-            return (
-              <div style={{ fontSize: 14, color: "#827D70", lineHeight: 1.7 }}>
-                <p style={{ margin: 0 }}>
-                  You’re pacing about <B>{Math.round(s.annual).toLocaleString()}</B> cases a year. The last 90 days moved <B>{s.cur.toLocaleString()}</B> of them
-                  {vm && <>, <b style={{ color: vm.c, fontWeight: 700 }}>{vm.w} {Math.abs(s.volPct)}%</b> on the prior stretch</>}, across <B>{s.activeNow.toLocaleString()}</B> active accounts
-                  {pm && <> — placements <b style={{ color: pm.c, fontWeight: 700 }}>{pm.w} {Math.abs(s.placePct)}%</b></>}.
-                </p>
-                <p style={{ margin: "9px 0 0" }}>
-                  {s.topState && (
-                    s.topState.g >= 0
-                      ? <><B>{STNAME[s.topState.name] || s.topState.name}</B> is pulling the most weight right now ({s.topState.g >= 0 ? "+" : ""}{s.topState.g}%).</>
-                      : <><B>{STNAME[s.topState.name] || s.topState.name}</B> is holding up best of the bunch ({s.topState.g}%).</>
-                  )}
-                  {s.hotspot && (
-                    s.hotspot.kind === "city"
-                      ? <> <B>{titleCase(s.hotspot.name)}</B>’s the standout, up <b style={{ color: UP, fontWeight: 700 }}>{s.hotspot.g}%</b>.</>
-                      : <> The <B>{titleCase(s.hotspot.name)}</B> channel is where the heat is, up <b style={{ color: UP, fontWeight: 700 }}>{s.hotspot.g}%</b>.</>
-                  )}
-                  {" "}{closer}
-                </p>
-              </div>
-            );
-          })()}
+        <div style={{ marginTop: 18, minHeight: 56 }}>
+          {!s && !err && <div style={{ fontSize: 13, color: T.muted }}>Reading your book…</div>}
+          {err && <div style={{ fontSize: 13, color: T.primary }}>Couldn’t load your book. {err}</div>}
+          {s && (
+            <div style={{ display: "flex", marginLeft: -4 }}>
+              <Stat label="90D Cases" value={s.cur.toLocaleString()} pct={s.curPct} />
+              <Stat label="Active Accts" value={s.acctNow.toLocaleString()} pct={s.acctPct} />
+              <Stat label="Placements" value={s.placeNow.toLocaleString()} pct={s.placePct} />
+              <Stat label="ROS / Acct" value={s.rosNow.toFixed(1)} unit="cs" pct={s.rosPct} />
+            </div>
+          )}
+          {s && <div style={{ fontSize: 9, color: "#BCB7A9", marginTop: 9, marginLeft: 0 }}>vs prior 90 days</div>}
         </div>
 
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5, marginTop: 28 }}>WHERE TO?</div>
-        <NavCard href="/book" title="Accounts"
-          sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
-        <NavCard href="/perf" title="Performance Overview"
-          sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
-        <NavCard href="/actions" title="Actions to Take"
-          sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
+        <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5, marginTop: 26 }}>WHERE TO?</div>
+        <a href="/book" style={{ textDecoration: "none" }}>
+          <NavCardInner title="Accounts" sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
+        </a>
+        <a href="/perf" style={{ textDecoration: "none" }}>
+          <NavCardInner title="Performance Overview" sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
+        </a>
+        <a href="/actions" style={{ textDecoration: "none" }}>
+          <NavCardInner title="Actions to Take" sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
+        </a>
 
         <div style={{ height: 28 }} />
       </main>
     </>
+  );
+}
+
+function NavCardInner({ title, sub }) {
+  return (
+    <div style={{
+      background: "#FFFFFF", border: "0.5px solid #E4DFD3", borderRadius: 18, padding: "18px 18px", marginTop: 12,
+      boxShadow: "0 2px 8px rgba(0,0,0,.08)", cursor: "pointer",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{title}</div>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: T.primary, whiteSpace: "nowrap" }}>open ›</div>
+      </div>
+      <div style={{ fontSize: 13, color: "#7E7A6E", marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
+    </div>
   );
 }

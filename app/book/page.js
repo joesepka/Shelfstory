@@ -172,8 +172,7 @@ function GridMatrix({ accounts }) {
                   <a href={`/account/${a.account_id}`} style={{ textDecoration: "none", display: "block" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <span style={{ fontSize: 9, fontWeight: 700, color: "#C2BCAE", flexShrink: 0 }}>#{i + 1}</span>
-                      <span style={{ fontSize: 11.5, fontWeight: 600, color: "#2B2B2B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.account_name}</span>
-                      {lab && <span style={{ fontSize: 7.5, fontWeight: 700, color: lab.c, background: lab.bg, padding: "1px 4px", borderRadius: 7, whiteSpace: "nowrap", flexShrink: 0 }}>{lab.t}</span>}
+                      <span style={{ fontSize: 12, fontWeight: 600, color: "#2B2B2B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.account_name}</span>
                     </div>
                     <div style={{ fontSize: 9, color: "#A39E90", marginTop: 2, textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {a.chain || "Independent"} · {a.city}
