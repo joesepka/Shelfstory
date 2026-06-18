@@ -60,37 +60,43 @@ function Trend({ spark, color }) {
   if (!spark || spark.length < 2) return null;
   const n = spark.length;
   const W = 620, H = 150, padL = 34, padR = 12, padT = 16, padB = 22;
-  const mx = Math.max(...spark);
-  const mn = Math.min(...spark);
-  // nice-ish rounded top for the axis
-  const top = mx;
-  const X = (i) => padL + (i / (n - 1)) * (W - padL - padR);
-  const Y = (v) => padT + (1 - (top ? v / top : 0)) * (H - padT - padB);
-  const line = spark.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(v).toFixed(1)).join(" ");
+  const top = Math.max(...spark) || 1;
+  const X = (i) => padL + (i / n) * (W - padL - padR);            // left edge of each slot
+  const slot = (W - padL - padR) / n;
+  const barW = slot * 0.62;
+  const gap = (slot - barW) / 2;
+  const Y = (v) => padT + (1 - v / top) * (H - padT - padB);
+  const base = H - padB;
   const last = spark[n - 1];
 
-  // y gridlines at 0, mid, peak
   const yTicks = [0, Math.round(top / 2), top];
-  // month labels: show ~every other to avoid clutter (newest at right)
   const labelEvery = n > 8 ? 2 : 1;
 
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="12-month trend">
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="rolling-90 cases, last 12 periods">
       {yTicks.map((t, i) => (
         <g key={i}>
           <line x1={padL} y1={Y(t)} x2={W - padR} y2={Y(t)} stroke="var(--border)" strokeWidth="0.5" />
           <text x={padL - 6} y={Y(t) + 3} textAnchor="end" fontSize="10" fill="var(--text-3)">{t}</text>
         </g>
       ))}
-      <path d={line} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
-      <circle cx={X(n - 1)} cy={Y(last)} r="3" fill={color} />
-      <text x={X(n - 1) - 6} y={Y(last) - 6} textAnchor="end" fontSize="11" fontWeight="500" fill="var(--text)">{last}</text>
+      {spark.map((v, i) => {
+        const x = X(i) + gap;
+        const y = Y(v);
+        const h = Math.max(v > 0 ? 2 : 0, base - y);
+        const newest = i === n - 1;
+        return (
+          <rect key={i} x={x.toFixed(1)} y={(base - h).toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)}
+            rx="2" fill={color} opacity={newest ? 1 : 0.42} />
+        );
+      })}
+      <text x={X(n - 1) + gap + barW / 2} y={Y(last) - 5} textAnchor="middle" fontSize="11" fontWeight="500" fill="var(--text)">{last}</text>
       {spark.map((v, i) => {
         // spark[0] is oldest (period 11), spark[n-1] is newest (period 0)
         const monthsAgo = (n - 1) - i;
         if (i % labelEvery !== 0 && i !== n - 1) return null;
         return (
-          <text key={i} x={X(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="var(--text-3)">
+          <text key={i} x={X(i) + slot / 2} y={H - 6} textAnchor="middle" fontSize="9" fill="var(--text-3)">
             {monthLabel(monthsAgo)}
           </text>
         );
