@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import Splash from "../../components/Splash";
+
 
 function label(hd) {
   switch (String(hd || "").toLowerCase().trim()) {
@@ -76,13 +78,27 @@ function cellTone(cs) {
     default: return { bg: "#FFFFFF", fg: "#6B665A" };
   }
 }
-const ACCT_W = 170, ITEM_W = 60, ROW_H = 50, HEAD_H = 50;
+const ITEM_W = 64, ROW_H = 50, HEAD_H = 50;
+// account column width is computed at render time (≤ 1/3 of viewport) inside GridMatrix
 
 function GridMatrix({ accounts }) {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState(null);
+  const [acctW, setAcctW] = useState(150);
   const ids = useMemo(() => accounts.map(a => a.account_id), [accounts]);
   const idKey = ids.join(",");
+
+  // size the frozen account column to at most 1/3 of the viewport (min 116, max 190)
+  useEffect(() => {
+    const calc = () => {
+      const vw = typeof window !== "undefined" ? window.innerWidth : 390;
+      const cap = Math.min(520, vw); // book maxWidth is 520
+      setAcctW(Math.round(Math.max(116, Math.min(190, cap / 3))));
+    };
+    calc();
+    window.addEventListener("resize", calc);
+    return () => window.removeEventListener("resize", calc);
+  }, []);
 
   useEffect(() => {
     if (!ids.length) { setItems([]); return; }
@@ -120,24 +136,28 @@ function GridMatrix({ accounts }) {
   if (items === null) return <div style={{ color: "#B5B0A2", fontSize: 13, padding: 16 }}>Building grid…</div>;
   if (!cols.length) return <div style={{ color: "#9A968C", fontSize: 13, padding: 16 }}>No items in this selection.</div>;
 
-  const corner = { position: "sticky", top: 0, left: 0, zIndex: 6, width: ACCT_W, minWidth: ACCT_W, height: HEAD_H,
-    background: "#EFEDE6", boxShadow: "2px 2px 4px rgba(0,0,0,.05)", padding: "0 10px", textAlign: "left",
-    fontSize: 10, fontWeight: 600, color: "#9A968C", verticalAlign: "middle" };
+  const ACCT_W = acctW;
+
+  const corner = { position: "sticky", top: 0, left: 0, zIndex: 6, width: ACCT_W, minWidth: ACCT_W, maxWidth: ACCT_W, height: HEAD_H,
+    background: "#EFEDE6", boxShadow: "2px 2px 4px rgba(0,0,0,.05)", padding: "0 9px", textAlign: "left",
+    fontSize: 9.5, fontWeight: 600, color: "#9A968C", verticalAlign: "middle" };
   const headCell = { position: "sticky", top: 0, zIndex: 5, width: ITEM_W, minWidth: ITEM_W, height: HEAD_H,
     background: "#EFEDE6", boxShadow: "0 2px 4px rgba(0,0,0,.05)", padding: "3px 4px", verticalAlign: "middle",
     fontSize: 9, fontWeight: 600, color: "#6B665A", lineHeight: 1.1, textAlign: "center" };
-  const rowHead = { position: "sticky", left: 0, zIndex: 4, width: ACCT_W, minWidth: ACCT_W, height: ROW_H,
-    background: "#FFFFFF", boxShadow: "2px 0 4px rgba(0,0,0,.04)", padding: "5px 10px", verticalAlign: "middle",
+  const rowHead = { position: "sticky", left: 0, zIndex: 4, width: ACCT_W, minWidth: ACCT_W, maxWidth: ACCT_W, height: ROW_H,
+    background: "#FFFFFF", boxShadow: "2px 0 4px rgba(0,0,0,.04)", padding: "5px 9px", verticalAlign: "middle",
     textAlign: "left", borderBottom: "1px solid #ECE9E0" };
 
   return (
-    <div className="nobar" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch" }}>
+    <div className="nobar gridsnap" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch",
+      scrollSnapType: "x proximity", scrollPaddingLeft: ACCT_W }}>
+      <style>{`.gridsnap td.snapcol, .gridsnap th.snapcol { scroll-snap-align: start; }`}</style>
       <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
         <thead>
           <tr>
             <th style={corner}>{accounts.length} accts · 90d cs</th>
             {cols.map(c => (
-              <th key={c.key} style={headCell}>
+              <th key={c.key} className="snapcol" style={headCell}>
                 <div style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.name}</div>
               </th>
             ))}
@@ -150,23 +170,23 @@ function GridMatrix({ accounts }) {
               <tr key={a.account_id}>
                 <th style={rowHead}>
                   <a href={`/account/${a.account_id}`} style={{ textDecoration: "none", display: "block" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <span style={{ fontSize: 9, fontWeight: 700, color: "#C2BCAE", flexShrink: 0 }}>#{i + 1}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#2B2B2B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.account_name}</span>
-                      {lab && <span style={{ fontSize: 8, fontWeight: 700, color: lab.c, background: lab.bg, padding: "1px 5px", borderRadius: 8, whiteSpace: "nowrap", flexShrink: 0 }}>{lab.t}</span>}
+                      <span style={{ fontSize: 11.5, fontWeight: 600, color: "#2B2B2B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.account_name}</span>
+                      {lab && <span style={{ fontSize: 7.5, fontWeight: 700, color: lab.c, background: lab.bg, padding: "1px 4px", borderRadius: 7, whiteSpace: "nowrap", flexShrink: 0 }}>{lab.t}</span>}
                     </div>
-                    <div style={{ fontSize: 9.5, color: "#A39E90", marginTop: 2, textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div style={{ fontSize: 9, color: "#A39E90", marginTop: 2, textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                       {a.chain || "Independent"} · {a.city}
                     </div>
                   </a>
                 </th>
                 {cols.map(c => {
                   const it = byAcct[a.account_id]?.[c.key];
-                  if (!it) return <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#FAF9F5", borderBottom: "1px solid #ECE9E0", borderLeft: "1px solid #F1EFE8" }} />;
+                  if (!it) return <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#FAF9F5", borderBottom: "1px solid #ECE9E0", borderLeft: "1px solid #F1EFE8" }} />;
                   const tone = cellTone(it.cell_state);
                   const lost = it.cell_state === "lost_recent";
                   return (
-                    <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid #ECE9E0", borderLeft: "1px solid #F1EFE8", textAlign: "center", verticalAlign: "middle" }}>
+                    <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid #ECE9E0", borderLeft: "1px solid #F1EFE8", textAlign: "center", verticalAlign: "middle" }}>
                       <a href={`/account/${a.account_id}/item/${c.key}`} style={{ textDecoration: "none", display: "block" }}>
                         {lost
                           ? <span style={{ fontSize: 13, fontWeight: 700, color: "#B03A2A" }}>✕</span>
@@ -518,7 +538,7 @@ function BookInner() {
 
       <div className="nobar" style={{ flex: 1, overflow: fullBleed ? "hidden" : "auto", minHeight: 0,
         padding: view === "grid" ? "0 0 0 12px" : view === "tree" ? "0" : "0 12px 40px", WebkitOverflowScrolling: "touch" }}>
-        {!rows && <div style={{ color: "#B5B0A2", fontSize: 13, padding: 10 }}>Loading…</div>}
+        {!rows && <Splash fixed={false} />}
 
         {view === "grid" && rows && <GridMatrix accounts={shown} />}
         {view === "tree" && rows && <TreeMap accounts={shownTree} />}

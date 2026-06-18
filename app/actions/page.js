@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import Splash from "../../components/Splash";
+
 
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
 const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
@@ -303,7 +305,7 @@ function ActionsInner() {
       )}
 
       <div className="nobar" style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
-        {!plays && <div style={{ color: "#B5B0A2", fontSize: 13, padding: 16 }}>Finding your highest-leverage moves…</div>}
+        {!plays && <Splash fixed={false} />}
         {plays && plays.length === 0 && <div style={{ color: "#9A968C", fontSize: 13, padding: 16 }}>No plays meet the threshold in this scope — try widening the filters.</div>}
         {urgent.length > 0 && <Sec label="URGENT — DON'T LET THESE SLIP" />}
         {render(urgent)}

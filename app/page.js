@@ -12,7 +12,8 @@ const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "laps
 const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-const csDelta = d => `${d >= 0 ? "+" : ""}${Math.round(d).toLocaleString()} cs`;
+const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
+const idsHref = arr => `/book?ids=${arr.slice(0, 40).join(",")}`;
 
 function Splash({ onDone }) {
   const [progress, setProgress] = useState(0);
@@ -99,11 +100,64 @@ function greeting() {
   return "Good evening";
 }
 
+const TONE_DOT = { red: "#D9694A", blue: "#3E86C7", amber: "#E0A93E", green: "#2FA36F", ink: "#8A8678" };
+
+// lightweight versions of the Actions plays — same logic, one-line previews
+function buildPlays(rows) {
+  const out = [];
+
+  // win-back
+  const wb = rows.filter(r => (r.cur90 || 0) > 0 && r.last_order_w != null && r.last_order_w >= 2 && (r.cases_per_month || 0) >= 4 && !isNew(r.headline))
+    .sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0)).slice(0, 12);
+  if (wb.length >= 2) out.push({ tone: "red", tag: "Win-back", line: `${wb.length} steady buyers have gone quiet — worth a call before they lapse.`, href: idsHref(wb.map(r => r.account_id)) });
+
+  // risk cluster by chain
+  const byChain = {};
+  rows.filter(r => isDeclining(r.headline) && r.chain).forEach(r => { (byChain[r.chain] ||= []).push(r); });
+  let cluster = null;
+  for (const ch in byChain) { const lst = byChain[ch]; if (lst.length >= 4 && (!cluster || lst.length > cluster.lst.length)) cluster = { chain: ch, lst }; }
+  if (cluster) out.push({ tone: "red", tag: "Risk cluster", line: `${cluster.lst.length} ${titleCase(cluster.chain)} stores are softening together.`, href: idsHref(cluster.lst.map(r => r.account_id)) });
+
+  // new-account rescue
+  const nr = rows.filter(r => isNew(r.headline) && r.last_order_w != null && r.last_order_w >= 1);
+  if (nr.length >= 2) out.push({ tone: "blue", tag: "New accounts", line: `${nr.length} new accounts stalled after their first order.`, href: idsHref(nr.map(r => r.account_id)) });
+
+  // distribution leak
+  const lostBy = {};
+  rows.forEach(r => { if (r.lost_sku) (lostBy[r.lost_sku] ||= []).push(r); });
+  let topLost = null;
+  for (const sku in lostBy) if (!topLost || lostBy[sku].length > topLost.lst.length) topLost = { sku, lst: lostBy[sku] };
+  if (topLost && topLost.lst.length >= 3) {
+    const chCount = {};
+    topLost.lst.forEach(r => { if (r.channel_type) chCount[r.channel_type] = (chCount[r.channel_type] || 0) + 1; });
+    const domCh = Object.entries(chCount).sort((a, b) => b[1] - a[1])[0]?.[0];
+    out.push({ tone: "amber", tag: "Distribution", line: `${titleCase(topLost.sku)} is losing doors${domCh ? ` in ${domCh}` : ""} — ${topLost.lst.length} dropped it.`, href: idsHref(topLost.lst.map(r => r.account_id)) });
+  }
+
+  // hot market, thin coverage
+  const cityAgg = {};
+  rows.forEach(r => { if (!r.city) return; const e = cityAgg[`${r.city}|${r.state}`] ||= { city: r.city, st: r.state, cur: 0, prev: 0, n: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.n++; });
+  const citiesArr = Object.values(cityAgg).filter(c => c.n >= 2);
+  const medN = citiesArr.length ? citiesArr.map(c => c.n).sort((a, b) => a - b)[Math.floor(citiesArr.length / 2)] : 0;
+  const hot = citiesArr.map(c => ({ ...c, g: gpct(c.cur, c.prev) })).filter(c => c.g != null && c.g >= 15 && c.n < medN).sort((a, b) => b.g - a.g)[0];
+  if (hot) out.push({ tone: "green", tag: "Hot market", line: `${titleCase(hot.city)} is up ${hot.g}% but you only hold ${hot.n} door${hot.n === 1 ? "" : "s"}.`, href: `/perf/overview?st=${hot.st}&city=${encodeURIComponent(hot.city)}` });
+
+  // distributor watch
+  const distAgg = {};
+  let bookCur = 0;
+  rows.forEach(r => { bookCur += r.cur90 || 0; if (!r.distributor) return; const e = distAgg[r.distributor] ||= { name: r.distributor, cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; });
+  const dw = Object.values(distAgg).map(d => ({ ...d, share: bookCur ? Math.round(100 * d.cur / bookCur) : 0, g: gpct(d.cur, d.prev) }))
+    .filter(d => d.share >= 10 && d.g != null && d.g < 0).sort((a, b) => a.g - b.g)[0];
+  if (dw) out.push({ tone: "ink", tag: "Distributor", line: `${titleCase(dw.name)} moves ${dw.share}% of your book and it's down ${Math.abs(dw.g)}%.`, href: `/book?distributor=${encodeURIComponent(dw.name)}` });
+
+  return out;
+}
+
 function NavCard({ href, title, sub, ready }) {
   const inner = (
     <div style={{
-      background: T.surface, borderRadius: 18, padding: "18px 18px", marginTop: 14,
-      boxShadow: "0 1px 4px rgba(0,0,0,.07)", cursor: ready ? "pointer" : "default",
+      background: "#E9E4D8", border: "0.5px solid #DCD6C6", borderRadius: 18, padding: "18px 18px", marginTop: 12,
+      boxShadow: "0 1px 3px rgba(0,0,0,.05)", cursor: ready ? "pointer" : "default",
       opacity: ready ? 1 : 0.72,
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
@@ -112,19 +166,21 @@ function NavCard({ href, title, sub, ready }) {
           {ready ? "open ›" : "coming soon"}
         </div>
       </div>
-      <div style={{ fontSize: 13, color: T.muted, marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
+      <div style={{ fontSize: 13, color: "#7E7A6E", marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
     </div>
   );
   return ready ? <a href={href} style={{ textDecoration: "none" }}>{inner}</a> : inner;
 }
 
-function NeedRow({ tone, children }) {
-  const c = tone === "up" ? "#1F9D72" : tone === "down" ? "#D9694A" : "#C9962E";
+function PlayRow({ play }) {
   return (
-    <div style={{ display: "flex", gap: 9, alignItems: "flex-start", marginBottom: 11 }}>
-      <span style={{ width: 7, height: 7, borderRadius: 4, background: c, marginTop: 6, flexShrink: 0 }} />
-      <span style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.42 }}>{children}</span>
-    </div>
+    <a href={play.href} style={{ display: "flex", gap: 9, alignItems: "flex-start", marginBottom: 11, textDecoration: "none" }}>
+      <span style={{ width: 7, height: 7, borderRadius: 4, background: TONE_DOT[play.tone] || "#9A968C", marginTop: 6, flexShrink: 0 }} />
+      <span style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.42, flex: 1 }}>
+        <b style={{ color: TONE_DOT[play.tone] || T.ink, fontWeight: 700 }}>{play.tag}:</b> {play.line}
+      </span>
+      <span style={{ fontSize: 12, color: "#A39E90", marginTop: 2, flexShrink: 0 }}>›</span>
+    </a>
   );
 }
 
@@ -132,6 +188,7 @@ export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -140,7 +197,7 @@ export default function Home() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,state,city,channel_type,headline,cur90,prev90,lost_sku")
+            .select("account_id,account_name,chain,city,state,distributor,channel_type,headline,account_weight,cur90,prev90,prior90_pct,cases_per_month,placements_delta,lost_sku,last_order_w")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
@@ -156,32 +213,17 @@ export default function Home() {
   const s = useMemo(() => {
     if (!rows) return null;
     let cur = 0, prev = 0, nNew = 0, nRisk = 0, nHealthy = 0;
-    const stAgg = {}, chAgg = {}, lost = {};
     for (const r of rows) {
       cur += r.cur90 || 0; prev += r.prev90 || 0;
-      const hd = r.headline;
-      if (isNew(hd)) nNew++; else if (isDeclining(hd)) nRisk++; else nHealthy++;
-      if (r.state) {
-        const e = stAgg[r.state] || (stAgg[r.state] = { cur: 0, prev: 0, cities: {} });
-        e.cur += r.cur90 || 0; e.prev += r.prev90 || 0;
-        if (r.city) { const c = e.cities[r.city] || (e.cities[r.city] = { cur: 0, prev: 0 }); c.cur += r.cur90 || 0; c.prev += r.prev90 || 0; }
-      }
-      if (r.channel_type) { const e = chAgg[r.channel_type] || (chAgg[r.channel_type] = { cur: 0, prev: 0 }); e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
-      if (r.lost_sku) lost[r.lost_sku] = (lost[r.lost_sku] || 0) + 1;
+      if (isNew(r.headline)) nNew++; else if (isDeclining(r.headline)) nRisk++; else nHealthy++;
     }
     const pct = prev > 0 ? Math.round(100 * (cur - prev) / prev) : null;
-
-    let topState = null;
-    for (const k in stAgg) { const e = stAgg[k]; const d = e.cur - e.prev; if (!topState || Math.abs(d) > Math.abs(topState.d)) topState = { name: k, d, cur: e.cur, prev: e.prev, cities: e.cities }; }
-    let topCity = null;
-    if (topState) for (const c in topState.cities) { const e = topState.cities[c]; const d = e.cur - e.prev; if (!topCity || Math.abs(d) > Math.abs(topCity.d)) topCity = { name: c, d }; }
-    let topCh = null;
-    for (const k in chAgg) { const e = chAgg[k]; const d = e.cur - e.prev; if (!topCh || Math.abs(d) > Math.abs(topCh.d)) topCh = { name: k, d, cur: e.cur, prev: e.prev }; }
-    let topLost = null;
-    for (const k in lost) if (!topLost || lost[k] > topLost.n) topLost = { name: k, n: lost[k] };
-
-    return { total: rows.length, cur, pct, nNew, nRisk, nHealthy, topState, topCity, topCh, topLost };
+    return { cur, pct, nNew, nRisk, nHealthy, plays: buildPlays(rows) };
   }, [rows]);
+
+  const plays = s?.plays || [];
+  const visible = showAll ? plays : plays.slice(0, 2);
+  const hiddenCount = Math.max(0, plays.length - 2);
 
   return (
     <>
@@ -193,7 +235,6 @@ export default function Home() {
         <h1 style={{ fontSize: 27, color: T.ink, marginTop: 44, marginBottom: 4, fontWeight: 700 }}>{greeting()}, Joe.</h1>
         <p style={{ fontSize: 15, color: T.muted, marginTop: 0 }}>Here’s where your book stands today.</p>
 
-        {/* L90 headline + Need to Know */}
         <div style={{ background: T.surface, borderRadius: 18, padding: "16px 18px", marginTop: 18, boxShadow: "0 1px 4px rgba(0,0,0,.07)" }}>
           {!s && !err && <div style={{ fontSize: 13.5, color: T.muted }}>Reading your book…</div>}
           {err && <div style={{ fontSize: 13.5, color: T.primary }}>Couldn’t load your book. {err}</div>}
@@ -208,43 +249,29 @@ export default function Home() {
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: "#1A5E8A", background: "#E2EDF8", padding: "3px 9px", borderRadius: 11 }}>{s.nNew.toLocaleString()} new</span>
                 <span style={{ fontSize: 11.5, fontWeight: 600, color: "#A8302A", background: "#F6E1DD", padding: "3px 9px", borderRadius: 11 }}>{s.nRisk.toLocaleString()} at-risk</span>
               </div>
+
               <div style={{ height: 1, background: T.line, margin: "14px 0 12px" }} />
-              <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5, marginBottom: 10 }}>NEED TO KNOW</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5 }}>TOP PLAYS TODAY</div>
+                <a href="/actions" style={{ fontSize: 11.5, fontWeight: 600, color: "#7A766B", textDecoration: "none" }}>see all ›</a>
+              </div>
 
-              {s.topState && (() => {
-                const up = s.topState.d >= 0;
-                const stPct = s.topState.prev > 0 ? Math.round(100 * s.topState.d / s.topState.prev) : null;
-                return (
-                  <NeedRow tone={up ? "up" : "down"}>
-                    <b>{STNAME[s.topState.name] || s.topState.name}</b> is {up ? "up" : "down"} {stPct != null ? `${Math.abs(stPct)}%` : ""} ({csDelta(s.topState.d)})
-                    {s.topCity && <>, {up ? "led by" : "dragged by"} <b>{titleCase(s.topCity.name)}</b> ({csDelta(s.topCity.d)})</>}.
-                  </NeedRow>
-                );
-              })()}
+              {plays.length === 0 && <div style={{ fontSize: 13, color: T.muted }}>No plays meet the threshold right now.</div>}
+              {visible.map((p, i) => <PlayRow key={i} play={p} />)}
 
-              {s.topCh && (() => {
-                const up = s.topCh.d >= 0;
-                const chPct = s.topCh.prev > 0 ? Math.round(100 * s.topCh.d / s.topCh.prev) : null;
-                return (
-                  <NeedRow tone={up ? "up" : "down"}>
-                    <b>{titleCase(s.topCh.name)}</b> is {up ? "on fire" : "cooling off"} — {up ? "up" : "down"} {chPct != null ? `${Math.abs(chPct)}% ` : ""}({csDelta(s.topCh.d)}) across the channel over the last 90 days.
-                  </NeedRow>
-                );
-              })()}
-
-              {s.topLost && (
-                <NeedRow tone="flat">
-                  <b>{titleCase(s.topLost.name)}</b> is losing distribution — pulled from <b>{s.topLost.n.toLocaleString()}</b> account{s.topLost.n === 1 ? "" : "s"} in the last 90 days. Worth a look before it spreads.
-                </NeedRow>
+              {hiddenCount > 0 && (
+                <button onClick={() => setShowAll(v => !v)}
+                  style={{ marginTop: 2, fontSize: 12, fontWeight: 600, color: T.primary, background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+                  {showAll ? "Show less ▴" : `Show ${hiddenCount} more play${hiddenCount === 1 ? "" : "s"} ▾`}
+                </button>
               )}
             </>
           )}
         </div>
 
-        {/* nav */}
         <div style={{ fontSize: 11, fontWeight: 700, color: T.muted, letterSpacing: 0.5, marginTop: 26 }}>WHERE TO?</div>
         <NavCard href="/book" ready title="Accounts"
-          sub="Find accounts by area, see exactly what's happening at each, and work your list — account, grid, or tree." />
+          sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
         <NavCard href="/perf" ready title="Performance Overview"
           sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
         <NavCard href="/actions" ready title="Actions to Take"

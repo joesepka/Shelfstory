@@ -59,18 +59,17 @@ function buildBriefing(acc, b, items, white) {
 function Trend({ spark, color }) {
   if (!spark || spark.length < 2) return null;
   const n = spark.length;
-  const W = 620, H = 150, padL = 34, padR = 12, padT = 16, padB = 22;
+  const W = 620, H = 156, padL = 34, padR = 12, padT = 16, padB = 26;
   const top = Math.max(...spark) || 1;
-  const X = (i) => padL + (i / n) * (W - padL - padR);            // left edge of each slot
   const slot = (W - padL - padR) / n;
-  const barW = slot * 0.62;
+  const barW = slot * 0.64;
   const gap = (slot - barW) / 2;
+  const X = (i) => padL + i * slot;
   const Y = (v) => padT + (1 - v / top) * (H - padT - padB);
   const base = H - padB;
   const last = spark[n - 1];
 
   const yTicks = [0, Math.round(top / 2), top];
-  const labelEvery = n > 8 ? 2 : 1;
 
   return (
     <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="rolling-90 cases, last 12 periods">
@@ -94,9 +93,8 @@ function Trend({ spark, color }) {
       {spark.map((v, i) => {
         // spark[0] is oldest (period 11), spark[n-1] is newest (period 0)
         const monthsAgo = (n - 1) - i;
-        if (i % labelEvery !== 0 && i !== n - 1) return null;
         return (
-          <text key={i} x={X(i) + slot / 2} y={H - 6} textAnchor="middle" fontSize="9" fill="var(--text-3)">
+          <text key={i} x={X(i) + slot / 2} y={H - 8} textAnchor="middle" fontSize="8.5" fill="var(--text-3)">
             {monthLabel(monthsAgo)}
           </text>
         );
