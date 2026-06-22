@@ -1,24 +1,48 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 
 const T = {
-  bg: "#F2F0EA", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
+  bg: "#FFFFFF", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
   font: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
   serif: "Georgia, 'Times New Roman', serif",
 };
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
 const UP = "#5C9A7B", DOWN = "#C07A72", FLAT = "#A5A092";
 
-// splash logo palette (matches theme.css) — all green
+// logo + splash palette (green)
 const BOOK = "#3F6E4A";   // --accent-deep (book strokes)
 const TREND = "#5E9277";  // --accent (climbing line / arrow / dots / progress)
+
+// cloud tint (decorative, fixed light blue)
+const CLOUD = "#6FA8D6";
+
+// data-as-of label — bump this when you reload the book
+const DATA_UPDATED = "June 15th, 2026";
 
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
 const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
 const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+
+// small top-right wordmark: open book + rising trendline
+function HeaderLogo() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+      <svg viewBox="0 0 64 48" style={{ width: 30, height: "auto" }} aria-hidden="true">
+        {/* book — two facing pages + spine */}
+        <path d="M32 40 q-9 -4 -22 -2 v-22 q13 -2 22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
+        <path d="M32 40 q9 -4 22 -2 v-22 q-13 -2 -22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
+        {/* rising trendline inside the book */}
+        <polyline points="15,30 23,27 31,22 41,14" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M37 14 L41 14 L41 18" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>ShelfStory</span>
+    </div>
+  );
+}
 
 function Splash({ onDone }) {
   const [progress, setProgress] = useState(0);
@@ -105,13 +129,13 @@ function greeting() {
   return "Good evening";
 }
 
-function Stat({ label, value, unit, pct }) {
+function Stat({ label, value, unit, pct, divider }) {
   const c = pct == null ? FLAT : pct > 0 ? UP : pct < 0 ? DOWN : FLAT;
   const arrow = pct == null ? "" : pct > 0 ? "▲" : pct < 0 ? "▼" : "▬";
   return (
-    <div style={{ flex: 1, minWidth: 0, padding: "0 4px", borderLeft: "1px solid var(--border-strong)" }}>
+    <div style={{ flex: 1, minWidth: 0, textAlign: "center", borderLeft: divider ? "1px solid var(--border-strong)" : "none" }}>
       <div style={{ fontSize: 8.5, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, height: 22, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 2, marginTop: 3 }}>
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 2, marginTop: 3 }}>
         <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{value}</span>
         {unit && <span style={{ fontSize: 9, color: "var(--text-3)" }}>{unit}</span>}
       </div>
@@ -125,7 +149,6 @@ function Stat({ label, value, unit, pct }) {
 // bolded anchor — the place / SKU / number your eye should catch
 function A({ children }) { return <strong style={{ fontWeight: 700, color: "var(--text)" }}>{children}</strong>; }
 
-// builds the 2-paragraph brief from account-level rows
 function buildBrief(rows) {
   if (!rows || !rows.length) return null;
 
@@ -183,24 +206,44 @@ function buildBrief(rows) {
   return { p1, p2 };
 }
 
-// drifting background clouds — very light, themed, behind everything
-function Clouds() {
+// drifting blue layered clouds — behind everything
+function Clouds({ poofing }) {
+  const paths = {
+    a: "M18 92 Q10 92 10 84 Q8 72 22 72 Q24 56 44 58 Q48 38 74 42 Q82 24 108 30 Q120 14 142 24 Q158 16 172 30 Q196 26 200 46 Q224 44 226 62 Q252 60 256 76 Q284 74 288 88 Q300 90 300 92 L300 96 Q160 100 18 96 Z",
+    b: "M16 80 Q8 80 8 72 Q8 60 22 62 Q24 46 44 48 Q50 30 74 36 Q84 20 106 28 Q122 18 138 30 Q160 26 164 46 Q188 44 190 62 Q214 60 218 76 Q232 78 232 80 L232 84 Q130 88 16 84 Z",
+    c: "M20 100 Q10 100 10 90 Q8 76 26 78 Q28 58 50 60 Q56 38 84 44 Q94 22 122 30 Q138 14 162 26 Q180 16 198 30 Q224 26 230 48 Q258 46 262 66 Q292 64 296 82 Q326 80 330 96 Q344 98 344 100 L344 104 Q180 110 20 104 Z",
+    d: "M14 80 Q8 80 8 72 Q8 60 20 62 Q22 46 42 48 Q48 30 70 36 Q80 20 100 28 Q116 18 132 30 Q152 26 156 46 Q178 44 182 62 Q204 62 204 78 Q214 80 214 82 L214 84 Q120 88 14 84 Z",
+    e: "M18 90 Q10 90 10 82 Q8 68 24 70 Q26 52 46 54 Q52 34 78 40 Q88 22 112 30 Q128 14 150 26 Q168 18 184 32 Q208 28 212 48 Q238 46 242 66 Q270 64 274 82 Q294 84 294 90 L294 94 Q160 98 18 94 Z",
+  };
+  const clouds = [
+    { id: "cA", d: paths.a, vb: "0 0 320 110", w: 300, top: 96 },
+    { id: "cB", d: paths.b, vb: "0 0 260 100", w: 200, top: 190 },
+    { id: "cC", d: paths.c, vb: "0 0 360 120", w: 340, top: 300 },
+    { id: "cD", d: paths.d, vb: "0 0 220 100", w: 160, top: 412 },
+    { id: "cE", d: paths.e, vb: "0 0 300 110", w: 280, top: 470 },
+    { id: "cF", d: paths.b, vb: "0 0 260 100", w: 210, top: 560 },
+  ];
   return (
-    <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}>
-      <span className="cloud c1" />
-      <span className="cloud c2" />
-      <span className="cloud c3" />
-      <span className="cloud c4" />
+    <div className={"cloudLayer" + (poofing ? " poofing" : "")} aria-hidden="true"
+      style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none", transition: "opacity .55s ease", opacity: poofing ? 0 : 1 }}>
+      {clouds.map(c => (
+        <svg key={c.id} className={"cl " + c.id} viewBox={c.vb}
+          style={{ position: "absolute", width: c.w, top: c.top, left: -(c.w + 40) }}>
+          <path d={c.d} fill={CLOUD} />
+        </svg>
+      ))}
     </div>
   );
 }
 
 export default function Home() {
+  const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
   const [briefOpen, setBriefOpen] = useState(false);
+  const [poofing, setPoofing] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -245,38 +288,35 @@ export default function Home() {
 
   const brief = useMemo(() => buildBrief(rows), [rows]);
 
+  // tap a nav card → clouds poof → route after the animation
+  function navTo(href) {
+    if (poofing) return;
+    setPoofing(true);
+    setTimeout(() => router.push(href), 500);
+  }
+
   return (
     <>
       {showSplash && <Splash onDone={() => setShowSplash(false)} />}
 
       <main style={{ position: "relative", minHeight: "100vh", background: "var(--bg)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
-        <Clouds />
+        <Clouds poofing={poofing} />
 
         <div style={{ position: "relative", zIndex: 1 }}>
-          <h1 style={{ fontFamily: "var(--font-serif)", fontSize: 26, color: "var(--text)", marginTop: 16, marginBottom: 4, fontWeight: 600, letterSpacing: "-0.3px" }}>{greet}, Joe.</h1>
-          <p style={{ fontSize: 14.5, color: "var(--text-3)", marginTop: 0 }}>Here’s the lay of the land.</p>
-
-          <div style={{ marginTop: 18, minHeight: 56 }}>
-            {!s && !err && <div style={{ fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
-            {err && <div style={{ fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
-            {s && (
-              <div style={{ position: "relative", padding: "4px 6px 6px" }}>
-                <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
-                <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
-                <div style={{ display: "flex", marginLeft: -4 }}>
-                  <Stat label="90D Cases" value={s.cur.toLocaleString()} pct={s.curPct} />
-                  <Stat label="Active Accts" value={s.acctNow.toLocaleString()} pct={s.acctPct} />
-                  <Stat label="ROS / Acct" value={s.rosNow.toFixed(1)} unit="cs" pct={s.rosPct} />
-                </div>
-              </div>
-            )}
-            {s && <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 9, marginLeft: 0 }}>vs prior 90 days</div>}
+          {/* top row: greeting + logo */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginTop: 12 }}>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontFamily: "var(--font-sans)", fontSize: 26, color: "var(--text)", margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.3px" }}>{greet}, Joe.</h1>
+              <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
+            </div>
+            <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
           </div>
 
-          {/* collapsible brief — opens to plain prose, no box */}
+          {/* collapsible brief — now above the stat box; bobs to draw the eye, stops when open */}
           {s && brief && (
             <div style={{ marginTop: 16 }}>
               <div onClick={() => setBriefOpen(o => !o)}
+                className={briefOpen ? "" : "bob"}
                 style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: 0.2 }}>
                 <span style={{ display: "inline-block", transform: briefOpen ? "rotate(90deg)" : "none", transition: "transform .18s" }}>▸</span>
                 {briefOpen ? "Hide your brief" : "Expand to see your brief"}
@@ -290,16 +330,27 @@ export default function Home() {
             </div>
           )}
 
+          <div style={{ marginTop: 18, minHeight: 64 }}>
+            {!s && !err && <div style={{ fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
+            {err && <div style={{ fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
+            {s && (
+              <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
+                <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
+                <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
+                <div style={{ display: "flex" }}>
+                  <Stat label="90D Cases" value={s.cur.toLocaleString()} pct={s.curPct} />
+                  <Stat label="Active Accts" value={s.acctNow.toLocaleString()} pct={s.acctPct} divider />
+                  <Stat label="ROS / Acct" value={s.rosNow.toFixed(1)} unit="cs" pct={s.rosPct} divider />
+                </div>
+              </div>
+            )}
+            {s && <div style={{ textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 8 }}>vs prior 90 days</div>}
+          </div>
+
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 26 }}>WHERE TO?</div>
-          <a href="/book" style={{ textDecoration: "none" }}>
-            <NavCardInner title="Accounts" sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
-          </a>
-          <a href="/perf" style={{ textDecoration: "none" }}>
-            <NavCardInner title="Performance Overview" sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
-          </a>
-          <a href="/actions" style={{ textDecoration: "none" }}>
-            <NavCardInner title="Actions to Take" sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
-          </a>
+          <NavCard onClick={() => navTo("/book")} title="Accounts" sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
+          <NavCard onClick={() => navTo("/perf")} title="Performance Overview" sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
+          <NavCard onClick={() => navTo("/actions")} title="Actions to Take" sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
 
           <div style={{ height: 28 }} />
         </div>
@@ -307,30 +358,34 @@ export default function Home() {
 
       <style>{`
         @keyframes briefIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
-        .cloud{position:absolute;border-radius:50%;filter:blur(42px);opacity:.4;will-change:transform;}
-        .cloud.c1{width:230px;height:230px;top:-60px;right:-70px;background:var(--accent-soft);animation:drift1 38s ease-in-out infinite;}
-        .cloud.c2{width:200px;height:200px;top:34%;left:-90px;background:var(--pop-cool-soft);animation:drift2 46s ease-in-out infinite;}
-        .cloud.c3{width:180px;height:180px;bottom:8%;right:-60px;background:var(--pop-warm-soft);animation:drift3 42s ease-in-out infinite;}
-        .cloud.c4{width:160px;height:160px;bottom:-50px;left:24%;background:var(--accent-soft);animation:drift4 52s ease-in-out infinite;}
-        @keyframes drift1{0%,100%{transform:translate(0,0)}50%{transform:translate(-26px,22px)}}
-        @keyframes drift2{0%,100%{transform:translate(0,0)}50%{transform:translate(30px,-18px)}}
-        @keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(-20px,-24px)}}
-        @keyframes drift4{0%,100%{transform:translate(0,0)}50%{transform:translate(24px,16px)}}
-        @media (prefers-reduced-motion: reduce){.cloud{animation:none !important;}}
+        .cloudLayer .cl{opacity:.13;will-change:transform;}
+        .cloudLayer .cA{animation:driftAcross 72s linear infinite;animation-delay:-10s;}
+        .cloudLayer .cB{animation:driftAcross 60s linear infinite;animation-delay:-34s;}
+        .cloudLayer .cC{animation:driftAcross 84s linear infinite;animation-delay:-22s;}
+        .cloudLayer .cD{animation:driftAcross 56s linear infinite;animation-delay:-6s;}
+        .cloudLayer .cE{animation:driftAcross 78s linear infinite;animation-delay:-46s;}
+        .cloudLayer .cF{animation:driftAcross 64s linear infinite;animation-delay:-28s;}
+        @keyframes driftAcross{from{transform:translateX(0);}to{transform:translateX(560px);}}
+        .cloudLayer.poofing .cl{animation:poof .6s ease-out forwards !important;}
+        @keyframes poof{0%{transform:scale(1);opacity:.13}35%{transform:scale(1.4);opacity:.2}100%{transform:scale(2.2);opacity:0}}
+        @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+        .bob{animation:bob 2.6s ease-in-out infinite;}
+        .navcard .openchip{display:inline-block;}
+        @media (prefers-reduced-motion: reduce){.cl,.bob{animation:none !important;}}
       `}</style>
     </>
   );
 }
 
-function NavCardInner({ title, sub }) {
+function NavCard({ title, sub, onClick }) {
   return (
-    <div style={{
-      background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 18, padding: "18px 18px", marginTop: 12,
+    <div className="navcard" onClick={onClick} style={{
+      background: "rgba(255,255,255,0.58)", border: "0.5px solid var(--border)", borderRadius: 18, padding: "18px 18px", marginTop: 12,
       boxShadow: "var(--shadow)", cursor: "pointer",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>{title}</div>
-        <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent-deep)", whiteSpace: "nowrap" }}>open ›</div>
+        <div className="openchip" style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent-deep)", whiteSpace: "nowrap" }}>open ›</div>
       </div>
       <div style={{ fontSize: 13, color: "var(--text-2)", marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
     </div>

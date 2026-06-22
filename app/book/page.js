@@ -87,7 +87,7 @@ function cellTone(cs) {
     default: return { bg: "var(--surface)", fg: "var(--text-2)" };
   }
 }
-const ITEM_W = 64, ROW_H = 50, HEAD_H = 50;
+const ITEM_W = 64, ROW_H = 50, HEAD_H = 50, TOTAL_W = 56;
 // account column width is computed at render time (≤ 1/3 of viewport) inside GridMatrix
 
 // a cell counts as "has placement" if it exists and pulled >0 in the last 90 days;
@@ -179,6 +179,9 @@ function GridMatrix({ accounts }) {
   const corner = { position: "sticky", top: 0, left: 0, zIndex: 6, width: ACCT_W, minWidth: ACCT_W, maxWidth: ACCT_W, height: HEAD_H,
     background: "#E8EDE0", boxShadow: "2px 2px 4px rgba(45,60,40,.05)", padding: "0 9px", textAlign: "left",
     fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", verticalAlign: "middle" };
+  const totalHead = { position: "sticky", top: 0, zIndex: 5, width: TOTAL_W, minWidth: TOTAL_W, height: HEAD_H,
+    background: "#EDEFE9", boxShadow: "0 2px 4px rgba(45,60,40,.05)", padding: "3px 4px", verticalAlign: "middle",
+    fontSize: 9, fontWeight: 600, color: "var(--text-3)", lineHeight: 1.1, textAlign: "center" };
   const headCell = { position: "sticky", top: 0, zIndex: 5, width: ITEM_W, minWidth: ITEM_W, height: HEAD_H,
     background: "#E8EDE0", boxShadow: "0 2px 4px rgba(45,60,40,.05)", padding: "3px 4px", verticalAlign: "middle",
     fontSize: 9, fontWeight: 600, color: "var(--text-2)", lineHeight: 1.1, textAlign: "center" };
@@ -206,12 +209,13 @@ function GridMatrix({ accounts }) {
       )}
 
       <div className="nobar gridsnap" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch",
-        scrollSnapType: "x proximity", scrollPaddingLeft: ACCT_W }}>
-        <style>{`.gridsnap td.snapcol, .gridsnap th.snapcol { scroll-snap-align: start; }`}</style>
+        scrollSnapType: "x proximity", scrollPaddingLeft: ACCT_W, overscrollBehavior: "contain" }}>
+        <style>{`.gridsnap td.snapcol, .gridsnap th.snapcol { scroll-snap-align: start; } .gridsnap td.nosnap, .gridsnap th.nosnap { scroll-snap-align: none; }`}</style>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
           <thead>
             <tr>
               <th style={corner}>{fAccounts.length} accts · 90d cs</th>
+              <th className="nosnap" style={totalHead}>90D<br/>total</th>
               {cols.map(c => {
                 const active = filterOf(c.key);
                 const open = menuKey === c.key;
@@ -244,6 +248,7 @@ function GridMatrix({ accounts }) {
           <tbody>
             {fAccounts.map((a, i) => {
               const lab = label(a.headline);
+              const tot90 = Math.round(a.cur90 || 0);
               return (
                 <tr key={a.account_id}>
                   <th style={rowHead}>
@@ -257,6 +262,9 @@ function GridMatrix({ accounts }) {
                       </div>
                     </a>
                   </th>
+                  <td className="nosnap" style={{ width: TOTAL_W, minWidth: TOTAL_W, height: ROW_H, background: "#F6F7F2", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-3)", fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{tot90.toLocaleString()}</span>
+                  </td>
                   {cols.map(c => {
                     const it = byAcct[a.account_id]?.[c.key];
                     if (!it) return <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#F4F7EF", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8" }} />;
@@ -276,7 +284,7 @@ function GridMatrix({ accounts }) {
               );
             })}
             {fAccounts.length === 0 && (
-              <tr><td colSpan={cols.length + 1} style={{ padding: 16, fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>No accounts match these item filters.</td></tr>
+              <tr><td colSpan={cols.length + 2} style={{ padding: 16, fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>No accounts match these item filters.</td></tr>
             )}
           </tbody>
         </table>
@@ -582,7 +590,7 @@ function BookInner() {
         {[["account", "Account"], ["grid", "Grid"], ["tree", "Tree"]].map(([k, t]) => (
           <button key={k} onClick={() => changeView(k)}
             style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: "7px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit",
-              background: view === k ? "var(--accent)" : "var(--surface-2)", color: view === k ? "var(--accent-ink)" : "var(--text-2)" }}>
+              background: view === k ? "var(--text-2)" : "var(--surface-2)", color: view === k ? "#fff" : "var(--text-2)" }}>
             {t}
           </button>
         ))}
@@ -640,7 +648,7 @@ function BookInner() {
           <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--watch-bg)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />softening</span>
           <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />steady</span>
           <span><span style={{ color: "var(--atrisk-ink)", fontWeight: 700, marginRight: 2 }}>✕</span>lost</span>
-          <span style={{ marginLeft: "auto" }}>tap a column ▾ to filter · cols by L52 vol · cells 90d cs</span>
+          <span style={{ marginLeft: "auto" }}>tap a column ▾ to filter · grey = 90D total · cells 90d cs</span>
         </div>
       )}
 
