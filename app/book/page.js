@@ -88,27 +88,22 @@ function cellTone(cs) {
   }
 }
 const ITEM_W = 64, ROW_H = 50, HEAD_H = 50, TOTAL_W = 56;
-// account column width is computed at render time (≤ 1/3 of viewport) inside GridMatrix
 
-// a cell counts as "has placement" if it exists and pulled >0 in the last 90 days;
-// everything else (absent, l90<=0, lost_recent) is a gap.
 function hasPlacement(it) { return !!it && (it.l90 || 0) > 0; }
 
 function GridMatrix({ accounts }) {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState(null);
   const [acctW, setAcctW] = useState(150);
-  // item-column filters: [{ key, name, mode: "gaps" | "placed" }]
   const [colFilters, setColFilters] = useState([]);
-  const [menuKey, setMenuKey] = useState(null); // which header menu is open
+  const [menuKey, setMenuKey] = useState(null);
   const ids = useMemo(() => accounts.map(a => a.account_id), [accounts]);
   const idKey = ids.join(",");
 
-  // size the frozen account column to at most 1/3 of the viewport (min 116, max 190)
   useEffect(() => {
     const calc = () => {
       const vw = typeof window !== "undefined" ? window.innerWidth : 390;
-      const cap = Math.min(520, vw); // book maxWidth is 520
+      const cap = Math.min(520, vw);
       setAcctW(Math.round(Math.max(116, Math.min(190, cap / 3))));
     };
     calc();
@@ -148,20 +143,19 @@ function GridMatrix({ accounts }) {
     return { cols, byAcct };
   }, [items]);
 
-  // apply the stacked item-column filters (AND) to the account rows
   const fAccounts = useMemo(() => {
     if (!colFilters.length) return accounts;
     return accounts.filter(a => colFilters.every(f => {
       const placed = hasPlacement(byAcct[a.account_id]?.[f.key]);
-      return f.mode === "placed" ? placed : !placed; // "gaps" = NOT placed
+      return f.mode === "placed" ? placed : !placed;
     }));
   }, [accounts, colFilters, byAcct]);
 
   function applyFilter(key, name, mode) {
     setColFilters(prev => {
-      const others = prev.filter(f => f.key !== key);     // one mode per column
+      const others = prev.filter(f => f.key !== key);
       const existing = prev.find(f => f.key === key);
-      if (existing && existing.mode === mode) return others; // tap same = toggle off
+      if (existing && existing.mode === mode) return others;
       return [...others, { key, name, mode }];
     });
     setMenuKey(null);
@@ -191,7 +185,6 @@ function GridMatrix({ accounts }) {
 
   return (
     <>
-      {/* active item-filter bar */}
       {colFilters.length > 0 && (
         <div className="nobar" style={{ display: "flex", alignItems: "center", gap: 6, overflowX: "auto", padding: "0 0 8px", flexShrink: 0 }}>
           {colFilters.map(f => (
@@ -297,7 +290,7 @@ const menuBtn = on => ({ display: "block", width: "100%", textAlign: "left", bor
   background: on ? "var(--accent-soft)" : "transparent" });
 const menuSub = { display: "block", fontSize: 8.5, fontWeight: 500, color: "var(--text-3)", marginTop: 1 };
 
-// ---------- TREE (scrolling taper, fading, names) ----------
+// ---------- TREE ----------
 function treeHeat(p) {
   if (p == null) return "#9AA593";
   if (p >= 15) return "#2E7D54";
@@ -401,13 +394,12 @@ function BookInner() {
   const searchParams = useSearchParams();
   const urlView = searchParams.get("view");
 
-  // incoming filters from links (Actions / Performance / Home)
   const linkIds = useMemo(() => { const v = searchParams.get("ids"); return v ? v.split(",").filter(Boolean) : null; }, [searchParams]);
   const linkCity = searchParams.get("city");
   const linkState = searchParams.get("state");
   const linkChain = searchParams.get("chain");
   const linkDist = searchParams.get("distributor");
-  const linkHealth = searchParams.get("health"); // new | healthy | atrisk
+  const linkHealth = searchParams.get("health"); // new | healthy | atrisk | lapsed
 
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
@@ -419,7 +411,6 @@ function BookInner() {
   const [premF, setPremF] = useState("All");
   const [distF, setDistF] = useState("All");
   const [healthFilter, setHealthFilter] = useState(null);
-  // link-driven scoping (separate from the dropdown filters)
   const [linkScope, setLinkScope] = useState(null);
 
   useEffect(() => {
@@ -428,13 +419,12 @@ function BookInner() {
     if (!v && view !== "account") setView("account");
   }, [searchParams]); // eslint-disable-line
 
-  // apply incoming link params once on mount / when they change
   useEffect(() => {
     if (linkState && linkState !== "All") setStF(linkState);
     if (linkCity) setCityF(linkCity);
     if (linkChain) setChainF(linkChain);
     if (linkDist) setDistF(linkDist);
-    if (linkHealth && ["new", "healthy", "atrisk"].includes(linkHealth)) setHealthFilter(linkHealth);
+    if (linkHealth && ["new", "healthy", "atrisk", "lapsed"].includes(linkHealth)) setHealthFilter(linkHealth);
     if (linkIds && linkIds.length) {
       setLinkScope({ kind: "ids", ids: new Set(linkIds), n: linkIds.length });
     } else if (linkCity) {
@@ -519,7 +509,8 @@ function BookInner() {
 
   const shownFull = useMemo(() => {
     let f = geo || [];
-    if (healthFilter) f = f.filter(r => groupOf(r.headline) === healthFilter);
+    if (healthFilter === "lapsed") f = f.filter(r => isLapsed(r.headline));
+    else if (healthFilter) f = f.filter(r => groupOf(r.headline) === healthFilter);
     const t = q.trim().toLowerCase();
     if (t) f = f.filter(r => String(r.account_name || "").toLowerCase().includes(t));
     return f;
@@ -538,7 +529,6 @@ function BookInner() {
     <div style={wrap}>
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
 
-      {/* link-scope banner */}
       {linkScope && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "var(--pop-cool-soft)", borderRadius: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: "var(--pop-cool-deep)" }}>
@@ -548,7 +538,6 @@ function BookInner() {
         </div>
       )}
 
-      {/* search (account name) */}
       <div style={{ padding: "10px 12px 2px", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 11, padding: "9px 12px", boxShadow: "var(--shadow-sm)" }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9AA593" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
@@ -560,7 +549,6 @@ function BookInner() {
         </div>
       </div>
 
-      {/* one scrollable filter row */}
       <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
         <select style={scrollSel} value={stF} onChange={e => { setStF(e.target.value); setCityF("All"); setChainF("All"); }}>
           {states.map(s => <option key={s} value={s}>{s === "All" ? "State" : s}</option>)}
@@ -585,7 +573,6 @@ function BookInner() {
         </button>
       </div>
 
-      {/* view toggle */}
       <div style={{ display: "flex", gap: 4, padding: "0 12px 8px", flexShrink: 0 }}>
         {[["account", "Account"], ["grid", "Grid"], ["tree", "Tree"]].map(([k, t]) => (
           <button key={k} onClick={() => changeView(k)}
@@ -596,7 +583,6 @@ function BookInner() {
         ))}
       </div>
 
-      {/* health bar — collapsed, still the selector */}
       {bal && (
         <div style={{ padding: "0 12px 10px", flexShrink: 0 }}>
           <div style={{ display: "flex", height: 15, borderRadius: 6, overflow: "hidden", marginBottom: 7, boxShadow: "0 1px 2px rgba(45,60,40,.06)" }}>
@@ -672,7 +658,6 @@ function BookInner() {
           return (
             <a key={r.account_id} href={`/account/${r.account_id}`}
               style={{ position: "relative", display: "block", background: lapsed ? "var(--lapsed-card-bg)" : "var(--surface)", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)" }}>
-              {/* status corner brackets */}
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${bc}`, borderLeft: `2px solid ${bc}`, borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${bc}`, borderRight: `1.5px solid ${bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
 

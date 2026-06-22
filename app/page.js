@@ -351,6 +351,7 @@ export default function Home() {
           <NavCard onClick={() => navTo("/book")} title="Accounts" sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
           <NavCard onClick={() => navTo("/perf")} title="Performance Overview" sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
           <NavCard onClick={() => navTo("/actions")} title="Actions to Take" sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
+          <NavCard onClick={() => navTo("/dist")} title="Distributor Review" sub="A full review for any distributor — pulse, account health, items, channels, and an executive summary you can export to PDF." />
 
           <div style={{ height: 28 }} />
         </div>
