@@ -7,7 +7,7 @@ function gpct(cur, prev) { return prev > 0 ? Math.round(100 * (cur - prev) / pre
 function fmtPct(g) { if (g == null || g === 999) return "new"; return (g > 0 ? "+" : "") + g + "%"; }
 function isNew(h) { return String(h || "").toLowerCase().trim() === "new"; }
 function vol(a) { return isNew(a.headline) ? (a.cur90 || 0) * 3 : (a.account_weight || 0); }
-function band(g) { if (g == null) return "#9A8F7A"; if (g >= 5) return "#2FA36F"; if (g > -5) return "#9A8F7A"; if (g > -15) return "#E0A93E"; return "#D2685A"; }
+function band(g) { if (g == null) return "#9AA593"; if (g >= 5) return "#4A9068"; if (g > -5) return "#9AA593"; if (g > -15) return "#C2922E"; return "#C56A4A"; }
 function hexA(hex, a) { const h = hex.replace("#", ""); const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return `rgba(${r},${g},${b},${a})`; }
 function accStr(an) { return an ? ` · ${an > 0 ? "+" : ""}${an} accts` : ""; }
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
@@ -158,7 +158,7 @@ function PerfInner() {
     return `${lead} at ${sz} cs L52W${trend ? `, ${trend}` : ""}.${mv}`;
   }
 
-  if (err) return <div style={wrap}><p style={{ color: "#B03A2A", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
+  if (err) return <div style={wrap}><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   return (
     <div style={wrap}>
@@ -166,42 +166,42 @@ function PerfInner() {
         @keyframes pfIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}`}</style>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 8px", flexShrink: 0 }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", fontSize: 12, color: "#9A968C", flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center", fontSize: 12, color: "var(--text-3)", flex: 1, minWidth: 0 }}>
           <span style={crumbC} onClick={() => { setScope({}); setViewOverride(null); }}>All</span>
           {scope.st && <><span>›</span><span>{STNAME[scope.st] || scope.st}</span></>}
           {scope.channel && <><span>›</span><span>{scope.channel}</span></>}
         </div>
         {hasFilter && (
           <button onClick={() => { setScope({}); setViewOverride(null); }}
-            style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, padding: "6px 13px", borderRadius: 20, border: "1.5px solid #D8463A", background: "#fff", color: "#D8463A", cursor: "pointer", fontFamily: "inherit" }}>↺ Reset</button>
+            style={{ flexShrink: 0, fontSize: 12, fontWeight: 700, padding: "6px 13px", borderRadius: 20, border: "1.5px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit" }}>↺ Reset</button>
         )}
       </div>
 
       <div style={{ display: "flex", gap: 4, padding: "0 14px 8px", flexShrink: 0 }}>
         {[["territory", scope.st ? "Cities" : "Territory"], ["channel", "Channel"], ["chain", "Chain"]].map(([k, t]) => (
-          <button key={k} onClick={() => setView(k)} style={{ flex: 1, fontSize: 12.5, fontWeight: 600, padding: "8px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit", background: view === k ? "#2B2B2B" : "#E6E3DB", color: view === k ? "#fff" : "#7E7B73" }}>{t}</button>
+          <button key={k} onClick={() => setView(k)} style={{ flex: 1, fontSize: 12.5, fontWeight: 600, padding: "8px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit", background: view === k ? "var(--accent)" : "var(--surface-2)", color: view === k ? "var(--accent-ink)" : "var(--text-2)" }}>{t}</button>
         ))}
       </div>
 
       <div style={{ padding: "0 14px 9px", flexShrink: 0 }}>
         <button onClick={() => router.push(ovURL())}
-          style={{ width: "100%", fontSize: 13, fontWeight: 600, padding: "10px 0", borderRadius: 10, cursor: "pointer", border: "1.5px dashed #C2BCAE", background: "transparent", color: "#5C584E", fontFamily: "inherit" }}>
+          style={{ width: "100%", fontSize: 13, fontWeight: 600, padding: "10px 0", borderRadius: 10, cursor: "pointer", border: "1.5px dashed var(--border-strong)", background: "transparent", color: "var(--text-2)", fontFamily: "inherit" }}>
           Generate Market Report — {scopeName()} →
         </button>
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#2B2B2B", padding: "2px 14px 5px", flexShrink: 0 }}>
-        {vtitle()} <span style={{ fontWeight: 400, color: "#9A968C", fontSize: 11 }}>· size = L52W volume · color = 90-day growth</span>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", padding: "2px 14px 5px", flexShrink: 0 }}>
+        {vtitle()} <span style={{ fontWeight: 400, color: "var(--text-3)", fontSize: 11 }}>· size = L52W volume · color = 90-day growth</span>
       </div>
-      <div style={{ display: "flex", gap: 11, flexWrap: "wrap", padding: "0 14px 8px", fontSize: 9.5, color: "#9A968C", flexShrink: 0 }}>
-        {[["#2FA36F", "material growth"], ["#9A8F7A", "flat"], ["#E0A93E", "moderate decline"], ["#D2685A", "material decline"]].map(([c, t]) => (
+      <div style={{ display: "flex", gap: 11, flexWrap: "wrap", padding: "0 14px 8px", fontSize: 9.5, color: "var(--text-3)", flexShrink: 0 }}>
+        {[["#4A9068", "material growth"], ["#9AA593", "flat"], ["#C2922E", "moderate decline"], ["#C56A4A", "material decline"]].map(([c, t]) => (
           <span key={t}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: c, marginRight: 3, verticalAlign: "middle" }} />{t}</span>
         ))}
       </div>
 
       <div key={scopeSig + view} className="nobar" style={{ flex: 1, overflowY: "auto", padding: "0 14px 28px", animation: pop ? "none" : "pfIn .26s ease", WebkitOverflowScrolling: "touch" }}>
-        {!rows && <div style={{ color: "#B5B0A2", fontSize: 13, padding: 10 }}>Loading…</div>}
-        {rows && !boxes.length && <div style={{ color: "#9A968C", fontSize: 13, padding: 10 }}>Nothing in this scope.</div>}
+        {!rows && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 10 }}>Loading…</div>}
+        {rows && !boxes.length && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 10 }}>Nothing in this scope.</div>}
 
         {taperRows.map((row, ri) => (
           <div key={ri} style={{ display: "flex", gap: 5, marginBottom: 5 }}>
@@ -259,7 +259,7 @@ function PerfInner() {
             {Array.from({ length: row.c - row.boxes.length }).map((_, k) => <div key={"sp" + k} style={{ flex: 1, minWidth: 0 }} />)}
           </div>
         ))}
-        {more > 0 && <div style={{ textAlign: "center", fontSize: 11, color: "#B0AB9D", padding: "8px 0 4px" }}>+{more} smaller {unitWord()}s not shown</div>}
+        {more > 0 && <div style={{ textAlign: "center", fontSize: 11, color: "var(--text-3)", padding: "8px 0 4px" }}>+{more} smaller {unitWord()}s not shown</div>}
       </div>
     </div>
   );
@@ -269,8 +269,8 @@ export default function PerfPage() {
   return (<Suspense fallback={<div style={wrap} />}><PerfInner /></Suspense>);
 }
 
-const wrap = { background: "#F2F0EA", height: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" };
-const crumbC = { cursor: "pointer", color: "#7A6FA0" };
+const wrap = { background: "var(--bg)", height: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", fontFamily: "var(--font-sans)" };
+const crumbC = { cursor: "pointer", color: "var(--accent-deep)" };
 const tNm = { fontWeight: 600, color: "#fff", fontSize: 14, lineHeight: 1.05, textShadow: "0 1px 2px rgba(0,0,0,.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const tMv = { fontSize: 10.5, color: "#fff", opacity: .96, textShadow: "0 1px 2px rgba(0,0,0,.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 };
 const tV = { fontWeight: 700, color: "#fff", fontSize: 16, textShadow: "0 1px 2px rgba(0,0,0,.45)", lineHeight: 1 };

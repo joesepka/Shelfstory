@@ -7,12 +7,12 @@ import LoadingScreen from "../../../components/LoadingScreen";
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
 
 const HEAD = {
-  "Accelerating": { bg: "var(--growing-bg)", fg: "var(--growing-ink)" },
-  "Stable":       { bg: "var(--stable-bg)",  fg: "var(--stable-ink)" },
-  "Decelerating": { bg: "var(--watch-bg)",   fg: "var(--watch-ink)" },
-  "At-Risk":      { bg: "var(--atrisk-bg)",  fg: "var(--atrisk-ink)" },
-  "New":          { bg: "var(--new-bg)",     fg: "var(--new-ink)" },
-  "Lapsed":       { bg: "transparent",       fg: "var(--lapsed-ink)" },
+  "Accelerating": { bg: "var(--growing-bg)", fg: "var(--growing-ink)", bc: "var(--accent)" },
+  "Stable":       { bg: "var(--stable-bg)",  fg: "var(--stable-ink)",  bc: "var(--text-3)" },
+  "Decelerating": { bg: "var(--watch-bg)",   fg: "var(--watch-ink)",   bc: "var(--pop-warm)" },
+  "At-Risk":      { bg: "var(--atrisk-bg)",  fg: "var(--atrisk-ink)",  bc: "var(--pop-warm)" },
+  "New":          { bg: "var(--new-bg)",     fg: "var(--new-ink)",     bc: "var(--pop-cool)" },
+  "Lapsed":       { bg: "transparent",       fg: "var(--lapsed-ink)",  bc: "var(--pop-warm)" },
 };
 const SK = {
   growth:      ["var(--growing-bg)", "var(--growing-ink)", "accelerating"],
@@ -148,32 +148,33 @@ export default function AccountOverview() {
   return (
     <div className="wrap">
       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 0 10px" }}>
-        
+
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.15 }}>{acc.account_name}</div>
-          <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 1 }}>
-            {titleCase(acc.channel)} · {acc.chain || "Independent"} · {acc.city}{acc.state ? `, ${acc.state}` : ""}
+          <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.15, color: "var(--text)" }}>{acc.account_name}</div>
+          <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>
+            {acc.city}{acc.state ? `, ${acc.state}` : ""} · {titleCase(acc.channel)} · {acc.chain || "Independent"}
           </div>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", background: head.bg, color: head.fg }}>{acc.headline}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", background: head.bg, color: head.fg }}>{acc.headline}</span>
       </div>
 
       {bench && (
         <div style={{ display: "flex", gap: 6, paddingBottom: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 7, background: "var(--new-bg)", color: "var(--new-ink)" }}>Top {bench.pct_overall}% overall</span>
-          <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 9px", borderRadius: 7, background: "var(--surface-2)", color: "var(--text-2)" }}>Top {bench.pct_channel}% in {titleCase(acc.channel)}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 7, background: "var(--new-bg)", color: "var(--new-ink)" }}>Top {bench.pct_overall}% overall</span>
+          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 7, background: "var(--surface-2)", color: "var(--text-2)" }}>Top {bench.pct_channel}% in {titleCase(acc.channel)}</span>
         </div>
       )}
 
       <div style={{ display: "flex", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
         {[
-          ["annualized", <>{acc.account_weight} <span style={{ fontSize: 11, color: "var(--text-2)" }}>cs</span></>],
-          ["L90 cases", <>{acc.cur90} {pct != null && <span style={{ fontSize: 11, color: pct < 0 ? "var(--down)" : pct > 0 ? "var(--up)" : "var(--flat)" }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : ""}{Math.abs(pct)}%</span>}</>],
-          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>],
-        ].map(([label, val], i) => (
+          ["annualized", <>{acc.account_weight} <span style={{ fontSize: 11, color: "var(--text-2)" }}>cs</span></>, null],
+          ["L90 cases", <>{acc.cur90} {pct != null && <span style={{ fontSize: 11, color: pct < 0 ? "var(--down)" : pct > 0 ? "var(--up)" : "var(--text-3)" }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : ""}{Math.abs(pct)}%</span>}</>, "vs prior 90D"],
+          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, null],
+        ].map(([label, val, note], i) => (
           <div key={i} style={{ flex: 1, padding: "10px 12px", borderRight: i < 2 ? "0.5px solid var(--border)" : "none" }}>
             <div style={{ fontSize: 11, color: "var(--text-3)" }}>{label}</div>
-            <div style={{ fontSize: 16, fontWeight: 500 }}>{val}</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text)" }}>{val}</div>
+            {note && <div style={{ fontSize: 8.5, color: "var(--text-3)", marginTop: 2 }}>{note}</div>}
           </div>
         ))}
       </div>
@@ -182,10 +183,10 @@ export default function AccountOverview() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 2px", marginTop: 2 }}>
           <span style={{ fontSize: 15, color: "var(--text-2)" }}>▦</span>
           <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.4 }}>
-            Does <strong style={{ fontWeight: 500, color: "var(--text)" }}>{bench.wt_vs_chan_pct > 0 ? "+" : ""}{bench.wt_vs_chan_pct}%</strong>
+            Does <strong style={{ fontWeight: 600, color: "var(--text)" }}>{bench.wt_vs_chan_pct > 0 ? "+" : ""}{bench.wt_vs_chan_pct}%</strong>
             {" the volume of the median "}{titleCase(acc.channel)}{"-channel account "}
             ({acc.account_weight} vs {bench.chan_med_wt} cs) on{" "}
-            <strong style={{ fontWeight: 500, color: "var(--text)" }}>{acc.live_placements} SKUs</strong>
+            <strong style={{ fontWeight: 600, color: "var(--text)" }}>{acc.live_placements} SKUs</strong>
             {" vs the channel's typical "}{bench.chan_med_sk}.
           </div>
         </div>
@@ -194,21 +195,23 @@ export default function AccountOverview() {
       <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 2px 2px" }}>rolling-90 cases · last 12 months</div>
       <Trend spark={acc.spark} color={head.fg} />
 
-      <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: "12px 13px", margin: "10px 0 16px" }}>
-        <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-2)", marginBottom: 5 }}>Pre-call briefing</div>
-        <div style={{ fontSize: 13, lineHeight: 1.5 }}>{buildBriefing(acc, bench, items, white)}</div>
+      <div style={{ position: "relative", background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: "12px 13px", margin: "10px 0 16px" }}>
+        <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
+        <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${head.bc}`, borderRight: `1.5px solid ${head.bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", marginBottom: 5, letterSpacing: "0.3px", textTransform: "uppercase" }}>Pre-call briefing</div>
+        <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--text)" }}>{buildBriefing(acc, bench, items, white)}</div>
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-3)", marginBottom: 6 }}>WHAT&apos;S ON THE SHELF</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, letterSpacing: "0.3px" }}>WHAT&apos;S ON THE SHELF</div>
       {skus.map((k, i) => {
         const [bg, fg, lbl] = SK[k.cell_state] || SK.stable;
         return (
           <a key={i} href={`/account/${id}/item/${k.product_key}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 2px", borderBottom: "0.5px solid var(--border)" }}>
-            <span style={{ fontSize: 13 }}>{k.item_name}</span>
+            <span style={{ fontSize: 13, color: "var(--text)" }}>{k.item_name}</span>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 7, background: bg, color: fg }}>{lbl}</span>
-              <span style={{ fontSize: 13, fontWeight: 500, minWidth: 34, textAlign: "right" }}>
-                {k.cell_state === "lost_recent" ? <span style={{ color: "var(--atrisk-ink)" }}>X</span> : `${k.l90} cs`}
+              <span style={{ fontSize: 13, fontWeight: 600, minWidth: 34, textAlign: "right", color: "var(--text)" }}>
+                {k.cell_state === "lost_recent" ? <span style={{ color: "var(--atrisk-ink)", fontWeight: 700 }}>✕</span> : `${k.l90} cs`}
               </span>
             </span>
           </a>
@@ -217,10 +220,10 @@ export default function AccountOverview() {
 
       {white.length > 0 && (
         <>
-          <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text-3)", margin: "16px 0 6px" }}>WHITESPACE · sells nearby, not carried here</div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "16px 0 6px", letterSpacing: "0.3px" }}>WHITESPACE · sells nearby, not carried here</div>
           {white.map((w, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 2px", borderBottom: "0.5px solid var(--border)" }}>
-              <span style={{ fontSize: 13 }}>{w.item_name}</span>
+              <span style={{ fontSize: 13, color: "var(--text)" }}>{w.item_name}</span>
               <span style={{ fontSize: 11, color: "var(--text-3)" }}>#{w.market_rank} in market</span>
             </div>
           ))}

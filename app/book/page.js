@@ -7,20 +7,29 @@ import Splash from "../../components/Splash";
 
 function label(hd) {
   switch (String(hd || "").toLowerCase().trim()) {
-    case "accelerating": return { t: "Accelerating", c: "#0C6E50", bg: "#CFEADF" };
-    case "at-risk": case "atrisk": case "at risk": return { t: "At risk", c: "#A8302A", bg: "#F4D2CC" };
-    case "decelerating": return { t: "Softening", c: "#9A5A1E", bg: "#F6E0C6" };
-    case "new": return { t: "New", c: "#1A5E8A", bg: "#D2E6F2" };
-    case "lapsed": return { t: "Lapsed", c: "#7E7B73", bg: "#E6E3DB" };
+    case "accelerating": return { t: "Accelerating", c: "var(--growing-ink)", bg: "var(--growing-bg)" };
+    case "at-risk": case "atrisk": case "at risk": return { t: "At risk", c: "var(--atrisk-ink)", bg: "var(--atrisk-bg)" };
+    case "decelerating": return { t: "Softening", c: "var(--watch-ink)", bg: "var(--watch-bg)" };
+    case "new": return { t: "New", c: "var(--new-ink)", bg: "var(--new-bg)" };
+    case "lapsed": return { t: "Lapsed", c: "var(--lapsed-ink)", bg: "var(--stable-bg)" };
     default: return null;
   }
 }
 const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
 function isDeclining(hd) { return DECLINING.has(String(hd || "").toLowerCase().trim()); }
 function isNew(hd) { return String(hd || "").toLowerCase().trim() === "new"; }
+function isLapsed(hd) { return String(hd || "").toLowerCase().trim() === "lapsed"; }
 function groupOf(hd) { return isNew(hd) ? "new" : isDeclining(hd) ? "atrisk" : "healthy"; }
 function titleCase(s) { return String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()); }
-function pctColor(p) { if (p == null) return "#9A968C"; if (p > 1) return "#0C6E50"; if (p < -1) return "#B03A2A"; return "#8A8678"; }
+function pctColor(p) { if (p == null) return "var(--text-3)"; if (p > 1) return "var(--up)"; if (p < -1) return "var(--down)"; return "var(--text-3)"; }
+// bracket accent color by status (green growing · orange risk · blue new · muted steady)
+function bracketColor(hd) {
+  const h = String(hd || "").toLowerCase().trim();
+  if (h === "accelerating") return "var(--accent)";
+  if (h === "new") return "var(--pop-cool)";
+  if (DECLINING.has(h)) return "var(--pop-warm)";
+  return "var(--text-3)";
+}
 function lastSold(iso) {
   if (!iso) return null;
   const d = new Date(iso + "T00:00:00");
@@ -64,7 +73,7 @@ function Spark({ data }) {
   }).join(" ");
   return (
     <svg width={w} height={h} style={{ display: "block" }} aria-hidden="true">
-      <polyline points={pts} fill="none" stroke="#C4BFB2" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" opacity="0.8" />
+      <polyline points={pts} fill="none" stroke="#C6CFBC" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" opacity="0.85" />
     </svg>
   );
 }
@@ -72,19 +81,26 @@ function Spark({ data }) {
 // ---------- GRID ----------
 function cellTone(cs) {
   switch (cs) {
-    case "growth": return { bg: "#CFEADF", fg: "#0C6E50" };
-    case "decline": return { bg: "#F6E0C6", fg: "#9A5A1E" };
-    case "lost_recent": return { bg: "#F4D2CC", fg: "#B03A2A" };
-    default: return { bg: "#FFFFFF", fg: "#6B665A" };
+    case "growth": return { bg: "var(--growing-bg)", fg: "var(--growing-ink)" };
+    case "decline": return { bg: "var(--watch-bg)", fg: "var(--watch-ink)" };
+    case "lost_recent": return { bg: "var(--atrisk-bg)", fg: "var(--atrisk-ink)" };
+    default: return { bg: "var(--surface)", fg: "var(--text-2)" };
   }
 }
 const ITEM_W = 64, ROW_H = 50, HEAD_H = 50;
 // account column width is computed at render time (≤ 1/3 of viewport) inside GridMatrix
 
+// a cell counts as "has placement" if it exists and pulled >0 in the last 90 days;
+// everything else (absent, l90<=0, lost_recent) is a gap.
+function hasPlacement(it) { return !!it && (it.l90 || 0) > 0; }
+
 function GridMatrix({ accounts }) {
   const [items, setItems] = useState(null);
   const [err, setErr] = useState(null);
   const [acctW, setAcctW] = useState(150);
+  // item-column filters: [{ key, name, mode: "gaps" | "placed" }]
+  const [colFilters, setColFilters] = useState([]);
+  const [menuKey, setMenuKey] = useState(null); // which header menu is open
   const ids = useMemo(() => accounts.map(a => a.account_id), [accounts]);
   const idKey = ids.join(",");
 
@@ -132,87 +148,157 @@ function GridMatrix({ accounts }) {
     return { cols, byAcct };
   }, [items]);
 
-  if (err) return <div style={{ color: "#B03A2A", fontSize: 13, padding: 16 }}>Couldn’t load items. {err}</div>;
-  if (items === null) return <div style={{ color: "#B5B0A2", fontSize: 13, padding: 16 }}>Building grid…</div>;
-  if (!cols.length) return <div style={{ color: "#9A968C", fontSize: 13, padding: 16 }}>No items in this selection.</div>;
+  // apply the stacked item-column filters (AND) to the account rows
+  const fAccounts = useMemo(() => {
+    if (!colFilters.length) return accounts;
+    return accounts.filter(a => colFilters.every(f => {
+      const placed = hasPlacement(byAcct[a.account_id]?.[f.key]);
+      return f.mode === "placed" ? placed : !placed; // "gaps" = NOT placed
+    }));
+  }, [accounts, colFilters, byAcct]);
+
+  function applyFilter(key, name, mode) {
+    setColFilters(prev => {
+      const others = prev.filter(f => f.key !== key);     // one mode per column
+      const existing = prev.find(f => f.key === key);
+      if (existing && existing.mode === mode) return others; // tap same = toggle off
+      return [...others, { key, name, mode }];
+    });
+    setMenuKey(null);
+  }
+  function removeFilter(key) { setColFilters(prev => prev.filter(f => f.key !== key)); }
+  function clearFilters() { setColFilters([]); }
+  const filterOf = key => colFilters.find(f => f.key === key);
+
+  if (err) return <div style={{ color: "var(--down)", fontSize: 13, padding: 16 }}>Couldn’t load items. {err}</div>;
+  if (items === null) return <div style={{ color: "var(--text-3)", fontSize: 13, padding: 16 }}>Building grid…</div>;
+  if (!cols.length) return <div style={{ color: "var(--text-3)", fontSize: 13, padding: 16 }}>No items in this selection.</div>;
 
   const ACCT_W = acctW;
 
   const corner = { position: "sticky", top: 0, left: 0, zIndex: 6, width: ACCT_W, minWidth: ACCT_W, maxWidth: ACCT_W, height: HEAD_H,
-    background: "#EFEDE6", boxShadow: "2px 2px 4px rgba(0,0,0,.05)", padding: "0 9px", textAlign: "left",
-    fontSize: 9.5, fontWeight: 600, color: "#9A968C", verticalAlign: "middle" };
+    background: "#E8EDE0", boxShadow: "2px 2px 4px rgba(45,60,40,.05)", padding: "0 9px", textAlign: "left",
+    fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", verticalAlign: "middle" };
   const headCell = { position: "sticky", top: 0, zIndex: 5, width: ITEM_W, minWidth: ITEM_W, height: HEAD_H,
-    background: "#EFEDE6", boxShadow: "0 2px 4px rgba(0,0,0,.05)", padding: "3px 4px", verticalAlign: "middle",
-    fontSize: 9, fontWeight: 600, color: "#6B665A", lineHeight: 1.1, textAlign: "center" };
+    background: "#E8EDE0", boxShadow: "0 2px 4px rgba(45,60,40,.05)", padding: "3px 4px", verticalAlign: "middle",
+    fontSize: 9, fontWeight: 600, color: "var(--text-2)", lineHeight: 1.1, textAlign: "center" };
   const rowHead = { position: "sticky", left: 0, zIndex: 4, width: ACCT_W, minWidth: ACCT_W, maxWidth: ACCT_W, height: ROW_H,
-    background: "#FFFFFF", boxShadow: "2px 0 4px rgba(0,0,0,.04)", padding: "5px 9px", verticalAlign: "middle",
-    textAlign: "left", borderBottom: "1px solid #ECE9E0" };
+    background: "var(--surface)", boxShadow: "2px 0 4px rgba(45,60,40,.04)", padding: "5px 9px", verticalAlign: "middle",
+    textAlign: "left", borderBottom: "1px solid var(--border)" };
 
   return (
-    <div className="nobar gridsnap" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch",
-      scrollSnapType: "x proximity", scrollPaddingLeft: ACCT_W }}>
-      <style>{`.gridsnap td.snapcol, .gridsnap th.snapcol { scroll-snap-align: start; }`}</style>
-      <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
-        <thead>
-          <tr>
-            <th style={corner}>{accounts.length} accts · 90d cs</th>
-            {cols.map(c => (
-              <th key={c.key} className="snapcol" style={headCell}>
-                <div style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.name}</div>
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {accounts.map((a, i) => {
-            const lab = label(a.headline);
-            return (
-              <tr key={a.account_id}>
-                <th style={rowHead}>
-                  <a href={`/account/${a.account_id}`} style={{ textDecoration: "none", display: "block" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: "#C2BCAE", flexShrink: 0 }}>#{i + 1}</span>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: "#2B2B2B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.account_name}</span>
+    <>
+      {/* active item-filter bar */}
+      {colFilters.length > 0 && (
+        <div className="nobar" style={{ display: "flex", alignItems: "center", gap: 6, overflowX: "auto", padding: "0 0 8px", flexShrink: 0 }}>
+          {colFilters.map(f => (
+            <span key={f.key} style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10.5, fontWeight: 700,
+              padding: "4px 6px 4px 9px", borderRadius: 20, whiteSpace: "nowrap",
+              color: f.mode === "gaps" ? "var(--pop-warm-deep)" : "var(--accent-deep)",
+              background: f.mode === "gaps" ? "var(--pop-warm-soft)" : "var(--accent-soft)" }}>
+              {titleCase(f.name)} · {f.mode === "gaps" ? "gaps" : "placed"}
+              <span onClick={() => removeFilter(f.key)} style={{ cursor: "pointer", opacity: .7, fontWeight: 700 }}>✕</span>
+            </span>
+          ))}
+          <span onClick={clearFilters} style={{ flexShrink: 0, fontSize: 10.5, fontWeight: 700, color: "var(--accent-deep)", textDecoration: "underline", cursor: "pointer", whiteSpace: "nowrap" }}>Clear all</span>
+          <span style={{ flexShrink: 0, fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>· {fAccounts.length} of {accounts.length}</span>
+        </div>
+      )}
+
+      <div className="nobar gridsnap" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch",
+        scrollSnapType: "x proximity", scrollPaddingLeft: ACCT_W }}>
+        <style>{`.gridsnap td.snapcol, .gridsnap th.snapcol { scroll-snap-align: start; }`}</style>
+        <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
+          <thead>
+            <tr>
+              <th style={corner}>{fAccounts.length} accts · 90d cs</th>
+              {cols.map(c => {
+                const active = filterOf(c.key);
+                const open = menuKey === c.key;
+                return (
+                  <th key={c.key} className="snapcol" style={{ ...headCell, position: "sticky", cursor: "pointer",
+                    background: active ? (active.mode === "gaps" ? "var(--pop-warm-soft)" : "var(--accent-soft)") : headCell.background,
+                    color: active ? (active.mode === "gaps" ? "var(--pop-warm-deep)" : "var(--accent-deep)") : headCell.color }}
+                    onClick={() => setMenuKey(open ? null : c.key)}>
+                    <div style={{ position: "relative" }}>
+                      <div style={{ display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.name}</div>
+                      <span style={{ fontSize: 7, opacity: .65 }}>▾</span>
+                      {open && (
+                        <div onClick={e => e.stopPropagation()} style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", marginTop: 3, zIndex: 30,
+                          background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 9, boxShadow: "var(--shadow-pop)", width: 132, overflow: "hidden", textAlign: "left" }}>
+                          <div style={{ fontSize: 8, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: .4, padding: "7px 10px 3px" }}>{titleCase(c.name)}</div>
+                          <button onClick={() => applyFilter(c.key, c.name, "gaps")} style={menuBtn(active?.mode === "gaps")}>
+                            Show gaps<span style={menuSub}>no 90-day cases</span>
+                          </button>
+                          <button onClick={() => applyFilter(c.key, c.name, "placed")} style={menuBtn(active?.mode === "placed")}>
+                            Has placement<span style={menuSub}>pulling now</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ fontSize: 9, color: "#A39E90", marginTop: 2, textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {a.chain || "Independent"} · {a.city}
-                    </div>
-                  </a>
-                </th>
-                {cols.map(c => {
-                  const it = byAcct[a.account_id]?.[c.key];
-                  if (!it) return <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#FAF9F5", borderBottom: "1px solid #ECE9E0", borderLeft: "1px solid #F1EFE8" }} />;
-                  const tone = cellTone(it.cell_state);
-                  const lost = it.cell_state === "lost_recent";
-                  return (
-                    <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid #ECE9E0", borderLeft: "1px solid #F1EFE8", textAlign: "center", verticalAlign: "middle" }}>
-                      <a href={`/account/${a.account_id}/item/${c.key}`} style={{ textDecoration: "none", display: "block" }}>
-                        {lost
-                          ? <span style={{ fontSize: 13, fontWeight: 700, color: "#B03A2A" }}>✕</span>
-                          : <span style={{ fontSize: 12, fontWeight: 600, color: tone.fg }}>{Math.round(it.l90 || 0)}</span>}
-                      </a>
-                    </td>
-                  );
-                })}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {fAccounts.map((a, i) => {
+              const lab = label(a.headline);
+              return (
+                <tr key={a.account_id}>
+                  <th style={rowHead}>
+                    <a href={`/account/${a.account_id}`} style={{ textDecoration: "none", display: "block" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)", flexShrink: 0 }}>#{i + 1}</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.account_name}</span>
+                      </div>
+                      <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 2, textAlign: "left", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {a.city} · {a.chain || "Independent"}
+                      </div>
+                    </a>
+                  </th>
+                  {cols.map(c => {
+                    const it = byAcct[a.account_id]?.[c.key];
+                    if (!it) return <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#F4F7EF", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8" }} />;
+                    const tone = cellTone(it.cell_state);
+                    const lost = it.cell_state === "lost_recent";
+                    return (
+                      <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
+                        <a href={`/account/${a.account_id}/item/${c.key}`} style={{ textDecoration: "none", display: "block" }}>
+                          {lost
+                            ? <span style={{ fontSize: 13, fontWeight: 700, color: "var(--atrisk-ink)" }}>✕</span>
+                            : <span style={{ fontSize: 12, fontWeight: 600, color: tone.fg }}>{Math.round(it.l90 || 0)}</span>}
+                        </a>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+            {fAccounts.length === 0 && (
+              <tr><td colSpan={cols.length + 1} style={{ padding: 16, fontSize: 12, color: "var(--text-3)", textAlign: "center" }}>No accounts match these item filters.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
   );
 }
+const menuBtn = on => ({ display: "block", width: "100%", textAlign: "left", border: "none", cursor: "pointer", fontFamily: "inherit",
+  fontSize: 11.5, fontWeight: 600, padding: "8px 10px", color: on ? "var(--accent-deep)" : "var(--text)",
+  background: on ? "var(--accent-soft)" : "transparent" });
+const menuSub = { display: "block", fontSize: 8.5, fontWeight: 500, color: "var(--text-3)", marginTop: 1 };
 
 // ---------- TREE (scrolling taper, fading, names) ----------
 function treeHeat(p) {
-  if (p == null) return "#9A8F7A";
-  if (p >= 15) return "#138A47";
-  if (p >= 6) return "#3F9E5A";
-  if (p >= 2) return "#6FA84F";
-  if (p > -2) return "#9A8F7A";
-  if (p >= -8) return "#C98A3A";
-  if (p >= -20) return "#C0612E";
-  return "#C0392B";
+  if (p == null) return "#9AA593";
+  if (p >= 15) return "#2E7D54";
+  if (p >= 6) return "#4A9068";
+  if (p >= 2) return "#6AA06A";
+  if (p > -2) return "#9AA593";
+  if (p >= -8) return "#C2922E";
+  if (p >= -20) return "#C56A4A";
+  return "#B0573A";
 }
 function hexA(hex, a) {
   const h = hex.replace("#", "");
@@ -296,8 +382,8 @@ function TreeMap({ accounts }) {
 
 const CAP = 200, TREE_CAP = 500;
 const scrollSel = {
-  fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid #D6D2C6",
-  background: "#FFFFFF", color: "#4A463C", fontFamily: "inherit", minWidth: 96, flexShrink: 0,
+  fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid var(--border-strong)",
+  background: "var(--surface)", color: "var(--text-2)", fontFamily: "inherit", minWidth: 96, flexShrink: 0,
   appearance: "none", WebkitAppearance: "none",
 };
 const VIEWS = ["account", "grid", "tree"];
@@ -318,6 +404,7 @@ function BookInner() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [view, setView] = useState(VIEWS.includes(urlView) ? urlView : "account");
+  const [q, setQ] = useState("");
   const [stF, setStF] = useState("All");
   const [cityF, setCityF] = useState("All");
   const [chainF, setChainF] = useState("All");
@@ -423,17 +510,19 @@ function BookInner() {
   }, [geo]);
 
   const shownFull = useMemo(() => {
-    if (!geo) return [];
-    if (!healthFilter) return geo;
-    return geo.filter(r => groupOf(r.headline) === healthFilter);
-  }, [geo, healthFilter]);
+    let f = geo || [];
+    if (healthFilter) f = f.filter(r => groupOf(r.headline) === healthFilter);
+    const t = q.trim().toLowerCase();
+    if (t) f = f.filter(r => String(r.account_name || "").toLowerCase().includes(t));
+    return f;
+  }, [geo, healthFilter, q]);
 
   const shown = useMemo(() => shownFull.slice(0, CAP), [shownFull]);
   const shownTree = useMemo(() => shownFull.slice(0, TREE_CAP), [shownFull]);
 
   function toggleHealth(which) { setHealthFilter(h => h === which ? null : which); }
 
-  if (err) return <div style={wrap}><p style={{ color: "#B03A2A", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
+  if (err) return <div style={wrap}><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   const fullBleed = view === "grid" || view === "tree";
 
@@ -443,16 +532,28 @@ function BookInner() {
 
       {/* link-scope banner */}
       {linkScope && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "#EDE7F2", borderRadius: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 12, color: "#5B4E7A" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "var(--pop-cool-soft)", borderRadius: 10, flexShrink: 0 }}>
+          <span style={{ fontSize: 12, color: "var(--pop-cool-deep)" }}>
             Filtered{linkScope.kind === "ids" ? ` to ${linkScope.n} flagged account${linkScope.n === 1 ? "" : "s"}` : ` to ${linkScope.label}`} from your action list
           </span>
-          <button onClick={clearLink} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 16, border: "none", background: "#fff", color: "#7A6FA0", cursor: "pointer", fontFamily: "inherit" }}>clear ✕</button>
+          <button onClick={clearLink} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 16, border: "none", background: "var(--surface)", color: "var(--pop-cool-deep)", cursor: "pointer", fontFamily: "inherit" }}>clear ✕</button>
         </div>
       )}
 
+      {/* search (account name) */}
+      <div style={{ padding: "10px 12px 2px", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 11, padding: "9px 12px", boxShadow: "var(--shadow-sm)" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9AA593" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+          </svg>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search accounts by name…"
+            style={{ border: "none", background: "none", outline: "none", fontFamily: "inherit", fontSize: 13, color: "var(--text)", width: "100%" }} />
+          {q && <span onClick={() => setQ("")} style={{ cursor: "pointer", color: "var(--text-3)", fontWeight: 700, fontSize: 13 }}>✕</span>}
+        </div>
+      </div>
+
       {/* one scrollable filter row */}
-      <div className="nobar" style={{ display: "flex", gap: 6, padding: "12px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
+      <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
         <select style={scrollSel} value={stF} onChange={e => { setStF(e.target.value); setCityF("All"); setChainF("All"); }}>
           {states.map(s => <option key={s} value={s}>{s === "All" ? "State" : s}</option>)}
         </select>
@@ -471,7 +572,7 @@ function BookInner() {
           {dists.map(d => <option key={d} value={d}>{d === "All" ? "Distributor" : d}</option>)}
         </select>
         <button disabled title="Coming soon"
-          style={{ fontSize: 11.5, padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap", border: "0.5px solid #D6D2C6", background: "#F0EEE7", color: "#B5B0A2", fontFamily: "inherit", cursor: "not-allowed", flexShrink: 0 }}>
+          style={{ fontSize: 11.5, padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap", border: "0.5px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--text-3)", fontFamily: "inherit", cursor: "not-allowed", flexShrink: 0 }}>
           ◎ Near me
         </button>
       </div>
@@ -481,44 +582,52 @@ function BookInner() {
         {[["account", "Account"], ["grid", "Grid"], ["tree", "Tree"]].map(([k, t]) => (
           <button key={k} onClick={() => changeView(k)}
             style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: "7px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit",
-              background: view === k ? "#2B2B2B" : "#E6E3DB", color: view === k ? "#fff" : "#7E7B73" }}>
+              background: view === k ? "var(--accent)" : "var(--surface-2)", color: view === k ? "var(--accent-ink)" : "var(--text-2)" }}>
             {t}
           </button>
         ))}
       </div>
 
-      {/* health bar */}
+      {/* health bar — collapsed, still the selector */}
       {bal && (
         <div style={{ padding: "0 12px 10px", flexShrink: 0 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, fontSize: 10.5, color: "#6B665A" }}>
-            <span><span style={{ color: "#3E86C7", fontWeight: 700 }}>●</span> New <b style={{ color: "#2B2B2B" }}>{bal.new.n.toLocaleString()}</b> accts</span>
-            <span><span style={{ color: "#1F9D72", fontWeight: 700 }}>●</span> Healthy <b style={{ color: "#2B2B2B" }}>{bal.healthy.n.toLocaleString()}</b> accts</span>
-            <span><span style={{ color: "#D9694A", fontWeight: 700 }}>●</span> At Risk/Lapsed <b style={{ color: "#2B2B2B" }}>{bal.atrisk.n.toLocaleString()}</b> accts</span>
-          </div>
-          <div style={{ display: "flex", height: 24, borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+          <div style={{ display: "flex", height: 15, borderRadius: 6, overflow: "hidden", marginBottom: 7, boxShadow: "0 1px 2px rgba(45,60,40,.06)" }}>
             <div onClick={() => toggleHealth("new")}
-              style={{ width: `${bal.np}%`, background: "#3E86C7", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 34, overflow: "hidden",
-                opacity: healthFilter && healthFilter !== "new" ? 0.34 : 1, transition: "opacity .15s" }}>
-              <span style={{ color: "#fff", fontSize: 10.5, fontWeight: 700 }}>{bal.np}%</span>
+              style={{ width: `${bal.np}%`, background: "var(--pop-cool)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 30, overflow: "hidden",
+                opacity: healthFilter && healthFilter !== "new" ? 0.32 : 1,
+                boxShadow: healthFilter === "new" ? "inset 0 0 0 2px rgba(255,255,255,.72)" : "none", transition: "opacity .15s" }}>
+              <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.np}%</span>
             </div>
             <div onClick={() => toggleHealth("healthy")}
-              style={{ width: `${bal.hp}%`, background: "#1F9D72", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 34, overflow: "hidden",
-                opacity: healthFilter && healthFilter !== "healthy" ? 0.34 : 1, transition: "opacity .15s" }}>
-              <span style={{ color: "#fff", fontSize: 10.5, fontWeight: 700 }}>{bal.hp}%</span>
+              style={{ width: `${bal.hp}%`, background: "var(--accent)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 30, overflow: "hidden",
+                opacity: healthFilter && healthFilter !== "healthy" ? 0.32 : 1,
+                boxShadow: healthFilter === "healthy" ? "inset 0 0 0 2px rgba(255,255,255,.72)" : "none", transition: "opacity .15s" }}>
+              <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.hp}%</span>
             </div>
             <div onClick={() => toggleHealth("atrisk")}
-              style={{ width: `${bal.rp}%`, background: "#D9694A", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 34, overflow: "hidden",
-                opacity: healthFilter && healthFilter !== "atrisk" ? 0.34 : 1, transition: "opacity .15s" }}>
-              <span style={{ color: "#fff", fontSize: 10.5, fontWeight: 700 }}>{bal.rp}%</span>
+              style={{ width: `${bal.rp}%`, background: "var(--pop-warm)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 30, overflow: "hidden",
+                opacity: healthFilter && healthFilter !== "atrisk" ? 0.32 : 1,
+                boxShadow: healthFilter === "atrisk" ? "inset 0 0 0 2px rgba(255,255,255,.72)" : "none", transition: "opacity .15s" }}>
+              <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.rp}%</span>
             </div>
           </div>
-          <div style={{ fontSize: 9, color: "#B0AB9D", marginTop: 4, textAlign: "center" }}>% of territory based on annual volume</div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-2)" }}>
+            <span onClick={() => toggleHealth("new")} style={{ cursor: "pointer" }}>
+              <span style={{ color: "var(--pop-cool)", fontWeight: 700 }}>●</span> New <b style={{ color: "var(--text)" }}>{bal.new.n.toLocaleString()}</b>
+            </span>
+            <span onClick={() => toggleHealth("healthy")} style={{ cursor: "pointer" }}>
+              <span style={{ color: "var(--accent)", fontWeight: 700 }}>●</span> Healthy <b style={{ color: "var(--text)" }}>{bal.healthy.n.toLocaleString()}</b>
+            </span>
+            <span onClick={() => toggleHealth("atrisk")} style={{ cursor: "pointer" }}>
+              <span style={{ color: "var(--pop-warm)", fontWeight: 700 }}>●</span> At Risk <b style={{ color: "var(--text)" }}>{bal.atrisk.n.toLocaleString()}</b>
+            </span>
+          </div>
           {healthFilter && (
             <div style={{ display: "flex", justifyContent: "center", marginTop: 7 }}>
               <button onClick={() => setHealthFilter(null)}
-                style={{ fontSize: 11, fontWeight: 600, padding: "4px 12px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
-                  border: "0.5px solid #D6D2C6", background: "#fff", color: "#6B665A" }}>
-                Showing {healthFilter === "atrisk" ? "at-risk" : healthFilter} only · reset ✕
+                style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
+                  border: "0.5px solid var(--border-strong)", background: "var(--surface)", color: "var(--text-2)" }}>
+                Showing {healthFilter === "atrisk" ? "at-risk" : healthFilter} only · clear ✕
               </button>
             </div>
           )}
@@ -526,12 +635,12 @@ function BookInner() {
       )}
 
       {view === "grid" && (
-        <div style={{ display: "flex", gap: 12, padding: "0 12px 8px", fontSize: 9.5, color: "#9A968C", flexShrink: 0, flexWrap: "wrap" }}>
-          <span><span style={{ display: "inline-block", width: 9, height: 9, background: "#CFEADF", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />growing</span>
-          <span><span style={{ display: "inline-block", width: 9, height: 9, background: "#F6E0C6", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />softening</span>
-          <span><span style={{ display: "inline-block", width: 9, height: 9, background: "#fff", border: "0.5px solid #D6D2C6", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />steady</span>
-          <span><span style={{ color: "#B03A2A", fontWeight: 700, marginRight: 2 }}>✕</span>lost</span>
-          <span style={{ marginLeft: "auto" }}>cols by L52 vol · cells 90d cs</span>
+        <div style={{ display: "flex", gap: 12, padding: "0 12px 8px", fontSize: 9.5, color: "var(--text-3)", flexShrink: 0, flexWrap: "wrap" }}>
+          <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--growing-bg)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />growing</span>
+          <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--watch-bg)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />softening</span>
+          <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />steady</span>
+          <span><span style={{ color: "var(--atrisk-ink)", fontWeight: 700, marginRight: 2 }}>✕</span>lost</span>
+          <span style={{ marginLeft: "auto" }}>tap a column ▾ to filter · cols by L52 vol · cells 90d cs</span>
         </div>
       )}
 
@@ -548,37 +657,45 @@ function BookInner() {
           const pct = r.prior90_pct;
           const note = buildNote(r);
           const stale = (r.last_order_w != null && r.last_order_w >= 2) ? r.last_order_w * 30 : null;
-          const loc = `${titleCase(r.channel)} · ${r.chain || "Independent"} · ${r.city}`;
+          const loc = `${r.city} · ${r.chain || "Independent"}`;
+          const bc = bracketColor(r.headline);
+          const lapsed = isLapsed(r.headline);
 
           return (
-            <div key={r.account_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "#BBB5A7", width: 22, textAlign: "right", flexShrink: 0 }}>#{i + 1}</span>
-              <a href={`/account/${r.account_id}`}
-                style={{ flex: 1, minWidth: 0, display: "block", background: "#fff", borderRadius: 11, padding: "10px 13px", textDecoration: "none", boxShadow: "0 1px 3px rgba(0,0,0,.07)" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 14.5, fontWeight: 600, color: "#2B2B2B", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.account_name}</span>
-                      {lab && <span style={{ fontSize: 10, fontWeight: 700, color: lab.c, background: lab.bg, padding: "2px 8px", borderRadius: 11, whiteSpace: "nowrap", flexShrink: 0 }}>{lab.t}</span>}
+            <a key={r.account_id} href={`/account/${r.account_id}`}
+              style={{ position: "relative", display: "block", background: lapsed ? "var(--lapsed-card-bg)" : "var(--surface)", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)" }}>
+              {/* status corner brackets */}
+              <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${bc}`, borderLeft: `2px solid ${bc}`, borderTopLeftRadius: 7 }} />
+              <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${bc}`, borderRight: `1.5px solid ${bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
+
+              <div style={{ display: "flex", gap: 9, alignItems: "stretch" }}>
+                <span style={{ width: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>#{i + 1}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                    <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <span style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.account_name}</span>
+                      {lab && <span style={{ fontSize: 9, fontWeight: 700, color: lab.c, background: lab.bg, padding: "2px 7px", borderRadius: 11, whiteSpace: "nowrap", flexShrink: 0 }}>{lab.t}</span>}
                     </div>
-                    <div style={{ fontSize: 11, color: "#9A968C", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{loc}</div>
+                    <div style={{ textAlign: "right", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      <span style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.5px" }}>{v.toLocaleString()}</span><span style={{ fontSize: 10, color: "var(--text-3)" }}> cs/yr</span>
+                    </div>
                   </div>
-                  <div style={{ textAlign: "right", whiteSpace: "nowrap", flexShrink: 0 }}>
-                    <div><span style={{ fontSize: 17, fontWeight: 700, color: "#2B2B2B" }}>{v.toLocaleString()}</span><span style={{ fontSize: 10, color: "#9A968C" }}> cs/yr</span></div>
-                    <div style={{ fontSize: 11, marginTop: 1 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, marginTop: 3 }}>
+                    <span style={{ fontSize: 10.5, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{loc}</span>
+                    <span style={{ fontSize: 11, whiteSpace: "nowrap", flexShrink: 0 }}>
                       {pct != null && <span style={{ fontWeight: 700, color: pctColor(pct) }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : "▬"} {Math.abs(pct)}%</span>}
-                      {r.cases_per_month != null && <span style={{ color: "#9A968C" }}> · {r.cases_per_month}/mo</span>}
-                    </div>
+                      {r.cases_per_month != null && <span style={{ color: "var(--text-3)" }}> · {r.cases_per_month}/mo</span>}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 6, gap: 10 }}>
+                    <span style={{ fontSize: 11, color: lab ? lab.c : "var(--text-2)", lineHeight: 1.3, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {note}{stale && <span style={{ color: "var(--down)", fontWeight: 600 }}> · {stale}d+ no order</span>}
+                    </span>
+                    {!isNew(r.headline) && <span style={{ flexShrink: 0, opacity: 0.9 }}><Spark data={r.spark} /></span>}
                   </div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: 7, gap: 10 }}>
-                  <span style={{ fontSize: 11, color: lab ? lab.c : "#8A8678", lineHeight: 1.3, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {note}{stale && <span style={{ color: "#B03A2A", fontWeight: 600 }}> · {stale}d+ no order</span>}
-                  </span>
-                  {!isNew(r.headline) && <span style={{ flexShrink: 0, opacity: 0.9 }}><Spark data={r.spark} /></span>}
-                </div>
-              </a>
-            </div>
+              </div>
+            </a>
           );
         })}
       </div>
@@ -594,4 +711,4 @@ export default function BookPage() {
   );
 }
 
-const wrap = { background: "#F2F0EA", height: "100vh", maxWidth: 520, margin: "0 auto", display: "flex", flexDirection: "column" };
+const wrap = { background: "var(--bg)", height: "100vh", maxWidth: "var(--maxw)", margin: "0 auto", display: "flex", flexDirection: "column" };

@@ -1,33 +1,87 @@
+/* =====================================================================
+   ShelfStory — DESIGN TOKENS · single source of truth
+   To reskin the whole app, edit values HERE only.
+   To keep multiple skins, add a [data-theme="name"] block (see bottom)
+   and set <html data-theme="name">.
+   ===================================================================== */
+
 :root {
-  /* ============ SKIN — edit this file to restyle the whole app ============ */
-  --bg: #F6F5F1;
-  --surface: #FFFFFF;
-  --surface-2: #F0EEE8;
+  /* ---- Fonts (wired from next/font in layout.js) ---- */
+  --font-sans:  var(--font-dm), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --lapsed-card-bg: #FBEEE9;
 
-  --logo: #D26A3D;
+  /* ---- Layout & shape ---- */
+  --maxw: 520px;
+  --r-sm: 9px;
+  --r-md: 11px;
+  --r-lg: 14px;
 
-  --text:   #1E1B17;
-  --text-2: #6B655C;
-  --text-3: #9A938A;
+  /* ---- Surfaces ---- */
+  --bg:         #EEF1E9;   /* app canvas (warm green-grey) */
+  --surface:    #FFFFFF;   /* cards */
+  --surface-2:  #E4E8DC;   /* toggles / insets */
 
-  --border: #E6E2DB;
-  --border-strong: #D6D1C8;
+  /* ---- Text tiers ---- */
+  --text:    #2A332A;      /* primary  */
+  --text-2:  #54604F;      /* secondary */
+  --text-3:  #9AA593;      /* muted / captions */
 
-  --accent:    #0E7C75;
-  --accent-ink:#0A4F4A;
-  --accent-bg: #E2F1EF;
+  /* ---- Lines ---- */
+  --border:        #E7EBDF;
+  --border-strong: #DCE2D2;
 
-  --growing-bg:#E7F1DD; --growing-ink:#356B22;
-  --stable-bg: #EFEDE6; --stable-ink: #6B655C;
-  --watch-bg:  #FBEFD6; --watch-ink:  #946011;
-  --atrisk-bg: #FBE4E1; --atrisk-ink: #B23A2B;
-  --new-bg:    #E2EDF8; --new-ink:    #2C5E94;
-  --lapsed-ink:#8A837A;
-  --up:#356B22; --down:#B23A2B; --flat:#6B655C;
+  /* ---- Brand accent (green) ---- */
+  --accent:      #5E9277;
+  --accent-deep: #3F6E4A;
+  --accent-soft: #E1EFE2;
+  --accent-bg:   var(--accent);   /* active chip / segment fill */
+  --accent-ink:  #FFFFFF;         /* text on accent fill */
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* ---- Pop accents (rotate by context to avoid color fatigue) ---- */
+  --pop-warm:      #C56A4A;   /* attention: risk, loss, alerts */
+  --pop-warm-deep: #B0573A;
+  --pop-warm-soft: #F6E2D8;
+  --pop-cool:      #5E8FC0;   /* opportunity / analysis / "new" */
+  --pop-cool-deep: #3D6E93;
+  --pop-cool-soft: #E2EBF4;
 
-  --r-sm:8px; --r-md:12px; --r-lg:16px; --r-pill:999px;
-  --maxw:480px;
+  /* ---- Direction (deltas) ---- */
+  --up:   #3E8A5E;
+  --down: #C0533A;
+
+  /* ---- Status (account health) — derived from the palette ---- */
+  --growing-bg: var(--accent-soft);    --growing-ink: var(--accent-deep);
+  --stable-bg:  #ECEFE6;               --stable-ink:  var(--text-2);
+  --watch-bg:   #F5EBD3;               --watch-ink:   #8A6310;
+  --atrisk-bg:  var(--pop-warm-soft);  --atrisk-ink:  var(--pop-warm-deep);
+  --new-bg:     var(--pop-cool-soft);  --new-ink:     var(--pop-cool-deep);
+  --lapsed-ink: #8A7B5E;
+
+  /* ---- Logo climb-line (animated mark) ---- */
+  --logo: var(--pop-warm);
+
+  /* ---- Bracket corner-mark motif (override per section: green/orange/blue) ---- */
+  --bracket: var(--accent);
+
+  /* ---- Shadows ---- */
+  --shadow-sm:  0 1px 2px rgba(45,60,40,.05);
+  --shadow:     0 1px 3px rgba(45,60,40,.06), 0 1px 2px rgba(45,60,40,.04);
+  --shadow-pop: 0 8px 22px rgba(40,60,40,.14);
 }
+
+/* =====================================================================
+   ALTERNATE SKINS (optional) — keep as many as you like.
+   Switch the whole app by setting <html data-theme="terracotta">.
+   Only override what changes; everything else inherits from :root.
+   ---------------------------------------------------------------------
+[data-theme="terracotta"] {
+  --bg:#F7F4EE; --surface:#FFFFFF; --surface-2:#EFEBE2;
+  --text:#2A2620; --text-2:#5C564C; --text-3:#A39C8E;
+  --border:#ECE7DD; --border-strong:#E0D9CB;
+  --accent:#C4622D; --accent-deep:#A8501F; --accent-soft:#F6E9DE;
+  --pop-warm:#C0533A; --pop-warm-deep:#A8451F; --pop-warm-soft:#F8E6DF;
+  --pop-cool:#6E7A4E; --pop-cool-deep:#566032; --pop-cool-soft:#EAEEDD;
+  --up:#5E8A4E; --down:#C0533A;
+}
+   ===================================================================== */

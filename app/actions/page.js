@@ -11,36 +11,61 @@ const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
-const idsHref = arr => `/book?ids=${arr.slice(0, 40).join(",")}`;
+const idsHref = (arr, cap = 40) => `/book?ids=${arr.slice(0, cap).join(",")}`;
 
-const sel = { fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid #D6D2C6", background: "#FFFFFF", color: "#4A463C", fontFamily: "inherit", minWidth: 92, flexShrink: 0, appearance: "none", WebkitAppearance: "none" };
+const sel = { fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid var(--border-strong)", background: "var(--surface)", color: "var(--text-2)", fontFamily: "inherit", minWidth: 92, flexShrink: 0, appearance: "none", WebkitAppearance: "none" };
+
+// corner-bracket accent in the card's tone color
+function Brackets({ color }) {
+  return (
+    <>
+      <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${color}`, borderLeft: `2px solid ${color}`, borderTopLeftRadius: 7 }} />
+      <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${color}`, borderRight: `1.5px solid ${color}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
+    </>
+  );
+}
 
 function PlayCard({ play, open, onToggle, go }) {
   const tone = play.tone;
-  const border = { red: "#D9694A", amber: "#E0A93E", green: "#2FA36F", blue: "#3E86C7", ink: "#8A8678" }[tone];
-  const chip = { red: ["#A8302A", "#F6E1DD"], amber: ["#9A5A1E", "#F6E0C6"], green: ["#0C6E50", "#CFEADF"], blue: ["#1A5E8A", "#E2EDF8"], ink: ["#5C584E", "#EAE7DF"] }[tone];
+  const border = { red: "var(--pop-warm)", amber: "var(--watch-ink)", green: "var(--accent)", blue: "var(--pop-cool)", ink: "var(--text-3)" }[tone];
+  const chip = { red: ["var(--atrisk-ink)", "var(--atrisk-bg)"], amber: ["var(--watch-ink)", "var(--watch-bg)"], green: ["var(--growing-ink)", "var(--growing-bg)"], blue: ["var(--new-ink)", "var(--new-bg)"], ink: ["var(--text-2)", "var(--surface-2)"] }[tone];
   return (
-    <div onClick={onToggle} style={{ background: "#fff", borderRadius: 14, margin: "0 16px 10px", padding: "14px 15px", boxShadow: "0 1px 4px rgba(0,0,0,.07)", cursor: "pointer", borderLeft: `4px solid ${border}` }}>
+    <div onClick={onToggle} style={{ position: "relative", background: "var(--surface)", borderRadius: 14, margin: "0 16px 10px", padding: "14px 15px", boxShadow: "var(--shadow)", cursor: "pointer" }}>
+      <Brackets color={border} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 7 }}>
         <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .4, padding: "3px 8px", borderRadius: 9, color: chip[0], background: chip[1] }}>{play.tag}</span>
-        {play.impact && <span style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", color: play.impactTone === "opp" ? "#1F7A52" : "#B03A2A" }}>{play.impact}</span>}
+        {play.impact && <span style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", color: play.impactTone === "opp" ? "var(--up)" : "var(--down)" }}>{play.impact}</span>}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: "#2B2B2B", lineHeight: 1.25 }}>{play.title}</div>
-      <div style={{ fontSize: 12.5, color: "#6B665A", lineHeight: 1.45, marginTop: 5 }}>{play.detail}</div>
-      <div style={{ fontSize: 11, color: "#A39E90", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", lineHeight: 1.25 }}>{play.title}</div>
+      <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.45, marginTop: 5 }}>{play.detail}</div>
+      <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
         <span style={{ display: "inline-block", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }}>▸</span> {play.expandLabel}
       </div>
       {open && (
-        <div style={{ marginTop: 11, borderTop: "1px solid #F0EDE6", paddingTop: 10 }} onClick={e => e.stopPropagation()}>
+        <div style={{ marginTop: 11, borderTop: "1px solid var(--border)", paddingTop: 10 }} onClick={e => e.stopPropagation()}>
           {play.targets.map((t, i) => (
-            <div key={i} onClick={() => t.href && go(t.href)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0", fontSize: 12.5, borderBottom: i < play.targets.length - 1 ? "1px solid #F4F2EC" : "none", cursor: t.href ? "pointer" : "default" }}>
-              <span style={{ color: "#2B2B2B", fontWeight: 500 }}>{t.name}{t.sub && <span style={{ color: "#9A968C", fontWeight: 400 }}> · {t.sub}</span>}</span>
-              <span style={{ color: "#6B665A", whiteSpace: "nowrap" }}>{t.metric} {t.href && <span style={{ color: "#7A6FA0", fontWeight: 600 }}>→</span>}</span>
+            <div key={i} onClick={() => t.href && go(t.href)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "6px 0", fontSize: 12.5, borderBottom: i < play.targets.length - 1 ? "1px solid var(--border)" : "none", cursor: t.href ? "pointer" : "default" }}>
+              <span style={{ color: "var(--text)", fontWeight: 600 }}>{t.name}{t.sub && <span style={{ color: "var(--text-3)", fontWeight: 400 }}> · {t.sub}</span>}</span>
+              <span style={{ color: "var(--text-2)", whiteSpace: "nowrap" }}>{t.metric} {t.href && <span style={{ color: "var(--accent-deep)", fontWeight: 600 }}>→</span>}</span>
             </div>
           ))}
-          {play.foot && <div onClick={() => go(play.footHref)} style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: "#D8463A", cursor: "pointer" }}>{play.foot} →</div>}
+          {play.foot && <div onClick={() => go(play.footHref)} style={{ marginTop: 10, fontSize: 12, fontWeight: 700, color: "var(--accent-deep)", cursor: "pointer" }}>{play.foot} →</div>}
         </div>
       )}
+    </div>
+  );
+}
+
+// compact SKU-gap line — no box, tap jumps straight to Accounts
+function SkuGapRow({ play, go }) {
+  return (
+    <div onClick={() => go(play.href)}
+      style={{ display: "flex", alignItems: "baseline", gap: 9, padding: "9px 16px", cursor: "pointer" }}>
+      <span style={{ fontSize: 17, fontWeight: 700, color: "var(--accent-deep)", lineHeight: 1, fontFeatureSettings: '"tnum" 1, "lnum" 1', minWidth: 32 }}>{play.n}</span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: "var(--text-2)", lineHeight: 1.3 }}>
+        accounts don't carry <span style={{ fontWeight: 700, color: "var(--text)" }}>{play.skuName}</span>
+      </span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--accent-deep)", flexShrink: 0 }}>→</span>
     </div>
   );
 }
@@ -48,6 +73,7 @@ function PlayCard({ play, open, onToggle, go }) {
 function ActionsInner() {
   const router = useRouter();
   const [rows, setRows] = useState(null);
+  const [grid, setGrid] = useState(null);   // item_grid rows for SKU-whitespace play
   const [err, setErr] = useState(null);
   const [open, setOpen] = useState({});
   const [stF, setStF] = useState("All");
@@ -72,6 +98,19 @@ function ActionsInner() {
           from += 5000;
         }
         setRows(all);
+
+        // SKU-level rows for the "top SKU, missing here" play
+        const ids = all.map(a => a.account_id);
+        let g = [];
+        for (let i = 0; i < ids.length; i += 200) {
+          const { data: gd, error: ge } = await supabase
+            .from("item_grid")
+            .select("account_id,product_key,item_name,l90")
+            .in("account_id", ids.slice(i, i + 200));
+          if (ge) throw ge;
+          g = g.concat(gd || []);
+        }
+        setGrid(g);
       } catch (e) { setErr(e.message || "load failed"); }
     })();
   }, []);
@@ -110,6 +149,7 @@ function ActionsInner() {
     return parts.length ? parts.join(" · ") : "all territory";
   }, [stF, chF, chainF, distF]);
 
+  // account-level plays (don't depend on grid; render immediately)
   const plays = useMemo(() => {
     if (!fr) return null;
     const rows = fr; // scope everything to the filtered set
@@ -178,34 +218,13 @@ function ActionsInner() {
       if (domCh) rows.forEach(r => { if (r.channel_type === domCh) { chCur += r.cur90 || 0; chPrev += r.prev90 || 0; } });
       const chG = gpct(chCur, chPrev);
       out.push({
-        id: "leak", tag: "DISTRIBUTION LEAK", tone: "amber", section: "opportunity",
+        id: "leak", tag: "DISTRIBUTION LEAK", tone: "amber", section: "fix",
         impact: `${topLost.lst.length} doors lost`, impactTone: "risk",
         title: `${titleCase(topLost.sku)} is slipping${domCh ? ` in ${domCh}` : ""}`,
         detail: `${titleCase(topLost.sku)} dropped out of ${topLost.lst.length} doors recently${domCh && chG != null ? ` — yet ${domCh} overall is ${chG >= 0 ? "up " + chG + "%" : "down " + Math.abs(chG) + "%"}. ${chG >= 0 ? "SKU down while its channel's up means execution, not demand." : ""}` : "."}`,
         expandLabel: "see where it dropped",
         targets: topLost.lst.sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0)).slice(0, 5).map(r => ({ name: r.account_name, sub: `${r.city} · ${r.channel_type || ""}`, metric: "lost", href: `/book?ids=${r.account_id}` })),
         foot: "Open all that dropped it in Accounts", footHref: idsHref(topLost.lst.map(r => r.account_id)),
-      });
-    }
-
-    // 6. HOT MARKET, THIN COVERAGE
-    const cityAgg = {};
-    rows.forEach(r => { if (!r.city) return; const e = cityAgg[`${r.city}|${r.state}`] ||= { city: r.city, st: r.state, cur: 0, prev: 0, n: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.n++; });
-    const citiesArr = Object.values(cityAgg).filter(c => c.n >= 2);
-    const medN = citiesArr.length ? citiesArr.map(c => c.n).sort((a, b) => a - b)[Math.floor(citiesArr.length / 2)] : 0;
-    const hot = citiesArr.map(c => ({ ...c, g: gpct(c.cur, c.prev) })).filter(c => c.g != null && c.g >= 15 && c.n < medN).sort((a, b) => b.g - a.g)[0];
-    if (hot) {
-      out.push({
-        id: "hotmarket", tag: "HOT MARKET", tone: "green", section: "opportunity",
-        impact: "open doors", impactTone: "opp",
-        title: `${titleCase(hot.city)} is up ${hot.g}% — and you're thin there`,
-        detail: `${titleCase(hot.city)} grew ${hot.g}% over 90 days, but you hold only ${hot.n} account${hot.n === 1 ? "" : "s"}. Comparable cities in scope run ~${medN}. Demand's proven; distribution hasn't caught up.`,
-        expandLabel: "open the market report",
-        targets: [
-          { name: "90-day growth", sub: null, metric: `+${hot.g}%` },
-          { name: "Your doors", sub: null, metric: `${hot.n} (peers ~${medN})` },
-        ],
-        foot: `Explore ${titleCase(hot.city)} in Performance`, footHref: `/perf/overview?st=${hot.st}&city=${encodeURIComponent(hot.city)}`,
       });
     }
 
@@ -249,31 +268,79 @@ function ActionsInner() {
     return out;
   }, [fr]);
 
-  const route = useMemo(() => {
-    if (!plays) return null;
-    const cityCount = {};
-    plays.forEach(p => p.targets.forEach(t => { if (t.sub && t.href) { const city = String(t.sub).split(" · ")[0]; cityCount[city] = (cityCount[city] || 0) + 1; } }));
-    const top = Object.entries(cityCount).sort((a, b) => b[1] - a[1])[0];
-    return top && top[1] >= 3 ? { city: top[0], n: top[1] } : null;
-  }, [plays]);
+  // SKU-gap rows computed separately — depend on grid; null until grid loads
+  const skuGaps = useMemo(() => {
+    if (!fr) return null;
+    if (!grid) return null;           // still loading → caller shows placeholder
+    const rows = fr;
+    if (!grid.length) return [];
 
-  if (err) return <div style={wrap}><p style={{ color: "#B03A2A", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
+    const carriesByAcct = {};   // account_id -> Set(product_key) with l90 > 0
+    const volBySku = {};        // product_key -> total l90 across scoped accounts
+    const nameBySku = {};
+    const scopedIds = new Set(rows.map(r => r.account_id));
+    const acctById = {};
+    for (const r of rows) acctById[r.account_id] = r;
+    for (const it of grid) {
+      if (!scopedIds.has(it.account_id)) continue;
+      nameBySku[it.product_key] = it.item_name;
+      const v = it.l90 || 0;
+      if (v > 0) {
+        (carriesByAcct[it.account_id] ||= new Set()).add(it.product_key);
+        volBySku[it.product_key] = (volBySku[it.product_key] || 0) + v;
+      }
+    }
+    const active = rows.filter(r => (r.cur90 || 0) > 0);
+    const topSkus = Object.keys(volBySku).sort((a, b) => volBySku[b] - volBySku[a]);
+
+    const out = [];
+    let made = 0;
+    for (const pk of topSkus) {
+      if (made >= 3) break;
+      const sellsIn = new Set();   // "channel|state" where this SKU has any placement
+      for (const it of grid) {
+        if ((it.l90 || 0) <= 0 || it.product_key !== pk) continue;
+        const a = acctById[it.account_id]; if (!a) continue;
+        if (a.channel_type && a.state) sellsIn.add(`${a.channel_type}|${a.state}`);
+      }
+      const gaps = active.filter(r => {
+        if (!r.channel_type || !r.state) return false;
+        if (!sellsIn.has(`${r.channel_type}|${r.state}`)) return false;
+        const carried = carriesByAcct[r.account_id];
+        return !(carried && carried.has(pk));
+      }).sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0))
+        .slice(0, 100);   // cap at top 100 by volume
+
+      if (gaps.length < 3) continue;
+      const skuName = titleCase(nameBySku[pk] || "this SKU");
+      out.push({
+        id: `topsku_${pk}`,
+        n: gaps.length, skuName,
+        href: idsHref(gaps.map(r => r.account_id), 100),   // link carries up to 100
+      });
+      made++;
+    }
+    return out;
+  }, [fr, grid]);
+
+  if (err) return <div style={wrap}><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   const urgent = plays?.filter(p => p.section === "urgent") || [];
-  const opp = plays?.filter(p => p.section === "opportunity") || [];
   const fix = plays?.filter(p => p.section === "fix") || [];
+  const opp = plays?.filter(p => p.section === "opportunity") || [];
+  const skuLoading = plays && skuGaps === null;   // account plays ready, grid still loading
 
   const toggle = id => setOpen(o => ({ ...o, [id]: !o[id] }));
-  const Sec = ({ label }) => <div style={{ fontSize: 11, fontWeight: 700, color: "#9A968C", letterSpacing: .5, padding: "6px 16px 6px" }}>{label}</div>;
+  const Sec = ({ label }) => <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: .5, padding: "6px 16px 6px" }}>{label}</div>;
   const render = list => list.map(p => <PlayCard key={p.id} play={p} open={!!open[p.id]} onToggle={() => toggle(p.id)} go={go} />);
   const clearAll = () => { setStF("All"); setDistF("All"); setChF("All"); setChainF("All"); };
 
   return (
     <div style={wrap}>
       <div style={{ padding: "14px 16px 6px", flexShrink: 0 }}>
-        
-        <div style={{ fontSize: 24, fontWeight: 700, color: "#2B2B2B" }}>Actions to Take</div>
-        <div style={{ fontSize: 12.5, color: "#9A968C", marginTop: 2 }}>{plays ? `${plays.length} play${plays.length === 1 ? "" : "s"} · ${scopeLabel}` : "Reading your book…"}</div>
+
+        <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text)" }}>Actions to Take</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-3)", marginTop: 2 }}>{plays ? `${plays.length} play${plays.length === 1 ? "" : "s"} · ${scopeLabel}` : "Reading your book…"}</div>
       </div>
 
       {/* live filters — everything below recomputes from these */}
@@ -292,32 +359,28 @@ function ActionsInner() {
           {chains.map(c => <option key={c} value={c}>{c === "All" ? "Chain" : titleCase(c)}</option>)}
         </select>
         {anyFilter && (
-          <button onClick={clearAll} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "6px 12px", borderRadius: 8, border: "1.5px solid #D8463A", background: "#fff", color: "#D8463A", cursor: "pointer", fontFamily: "inherit" }}>↺ Clear</button>
+          <button onClick={clearAll} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "6px 12px", borderRadius: 8, border: "1.5px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit" }}>↺ Clear</button>
         )}
       </div>
 
-   
-
       <div className="nobar" style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
         {!plays && <Splash fixed={false} />}
-        {plays && plays.length === 0 && <div style={{ color: "#9A968C", fontSize: 13, padding: 16 }}>No plays meet the threshold in this scope — try widening the filters.</div>}
+        {plays && plays.length === 0 && skuGaps !== null && (skuGaps?.length || 0) === 0 && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 16 }}>No plays meet the threshold in this scope — try widening the filters.</div>}
+
         {urgent.length > 0 && <Sec label="URGENT — DON'T LET THESE SLIP" />}
         {render(urgent)}
-        {opp.length > 0 && <Sec label="OPPORTUNITIES — WHITESPACE & MOMENTUM" />}
-        {render(opp)}
+
         {fix.length > 0 && <Sec label="FIX EXECUTION" />}
         {render(fix)}
 
-        {route && (
-          <>
-            <Sec label="QUICK WIN" />
-            <div onClick={() => go(`/book?city=${encodeURIComponent(route.city)}`)} style={{ background: "#fff", borderRadius: 14, margin: "0 16px 10px", padding: "14px 15px", boxShadow: "0 1px 4px rgba(0,0,0,.07)", cursor: "pointer", borderLeft: "4px solid #3E86C7" }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .4, padding: "3px 8px", borderRadius: 9, color: "#1A5E8A", background: "#E2EDF8" }}>ROUTE</span>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#2B2B2B", marginTop: 7 }}>{route.n} of these plays cluster in {titleCase(route.city)}</div>
-              <div style={{ fontSize: 12.5, color: "#6B665A", marginTop: 5 }}>One trip clears a chunk of the list. <span style={{ color: "#D8463A", fontWeight: 600 }}>Open {titleCase(route.city)} in Accounts →</span></div>
-            </div>
-          </>
-        )}
+        {/* SKU GAPS — holds behind a quiet line until grid is ready, then plain tap-rows */}
+        {(skuLoading || (skuGaps && skuGaps.length > 0)) && <Sec label="SKU GAPS — TOP MOVERS NOT CARRIED" />}
+        {skuLoading && <div style={{ fontSize: 12, color: "var(--text-3)", padding: "2px 16px 8px" }}>Reading SKUs…</div>}
+        {skuGaps && skuGaps.map(p => <SkuGapRow key={p.id} play={p} go={go} />)}
+
+        {opp.length > 0 && <Sec label="OPPORTUNITIES — WHITESPACE & MOMENTUM" />}
+        {render(opp)}
+
         <div style={{ height: 20 }} />
       </div>
     </div>
@@ -328,7 +391,7 @@ export default function ActionsPage() {
   return (<Suspense fallback={<div style={wrap} />}><ActionsInner /></Suspense>);
 }
 
-const wrap = { background: "#F2F0EA", height: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" };
-const statTile = { flex: 1, background: "#fff", borderRadius: 12, padding: "11px 12px", boxShadow: "0 1px 4px rgba(0,0,0,.06)" };
-const statV = { fontSize: 19, fontWeight: 700, color: "#2B2B2B", lineHeight: 1 };
-const statL = { fontSize: 10, color: "#9A968C", marginTop: 4 };
+const wrap = { background: "var(--bg)", height: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", fontFamily: "var(--font-sans)" };
+const statTile = { flex: 1, background: "var(--surface)", borderRadius: 12, padding: "11px 12px", boxShadow: "var(--shadow)" };
+const statV = { fontSize: 19, fontWeight: 700, color: "var(--text)", lineHeight: 1 };
+const statL = { fontSize: 10, color: "var(--text-3)", marginTop: 4 };

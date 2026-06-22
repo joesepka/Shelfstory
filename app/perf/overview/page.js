@@ -9,7 +9,7 @@ function isNew(h) { return String(h || "").toLowerCase().trim() === "new"; }
 function isDecl(h) { const x = String(h || "").toLowerCase().trim(); return x === "decelerating" || x === "at-risk" || x === "lapsed"; }
 function vol(a) { return isNew(a.headline) ? (a.cur90 || 0) * 3 : (a.account_weight || 0); }
 function titleCase(s) { return String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()); }
-function band(g) { if (g == null) return "#9A8F7A"; if (g >= 5) return "#2FA36F"; if (g > -5) return "#9A8F7A"; if (g > -15) return "#E0A93E"; return "#D2685A"; }
+function band(g) { if (g == null) return "#9AA593"; if (g >= 5) return "#4A9068"; if (g > -5) return "#9AA593"; if (g > -15) return "#C2922E"; return "#C56A4A"; }
 function hexA(hex, a) { const h = hex.replace("#", ""); const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16); return `rgba(${r},${g},${b},${a})`; }
 function monthLabels(n) { const now = new Date(); const out = []; for (let k = n - 1; k >= 0; k--) { const d = new Date(now.getFullYear(), now.getMonth() - k, 1); out.push(d.toLocaleString("en-US", { month: "short" })); } return out; }
 
@@ -109,7 +109,7 @@ function OvInner() {
     };
   }, [rows, items]); // eslint-disable-line
 
-  if (err) return <div style={wrap}><Top title={title} label={null} back={() => router.push("/perf")} /><p style={{ color: "#B03A2A", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
+  if (err) return <div style={wrap}><Top title={title} label={null} back={() => router.push("/perf")} /><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   const dimWord = m ? (m.dim === "city" ? "market" : m.dim === "channel" ? "channel" : m.dim === "item" ? "SKU" : "state") : "";
   const mlabel = m ? marketLabel(m) : null;
@@ -118,40 +118,43 @@ function OvInner() {
   return (
     <div style={wrap}>
       <Top title={title} label={mlabel} back={() => router.push("/perf")} />
-      {!m && <div style={{ color: "#B5B0A2", fontSize: 13, padding: 16 }}>Building overview…</div>}
+      {!m && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 16 }}>Building overview…</div>}
       {m && (
         <div className="nobar" style={{ flex: 1, overflowY: "auto", padding: "0 16px 36px", WebkitOverflowScrolling: "touch" }}>
+          <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
           {/* health bar — top */}
           <div style={{ marginBottom: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "#6B665A", marginBottom: 5 }}>
-              <span><span style={{ color: "#3E86C7" }}>●</span> New {m.np}%</span>
-              <span><span style={{ color: "#1F9D72" }}>●</span> Healthy {m.hp}%</span>
-              <span><span style={{ color: "#D9694A" }}>●</span> At Risk {m.rp}%</span>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-2)", marginBottom: 5 }}>
+              <span><span style={{ color: "var(--pop-cool)" }}>●</span> New {m.np}%</span>
+              <span><span style={{ color: "var(--accent)" }}>●</span> Healthy {m.hp}%</span>
+              <span><span style={{ color: "var(--pop-warm)" }}>●</span> At Risk {m.rp}%</span>
             </div>
-            <div style={{ display: "flex", height: 24, borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
-              <div style={{ width: `${m.np}%`, background: "#3E86C7" }} />
-              <div style={{ width: `${m.hp}%`, background: "#1F9D72" }} />
-              <div style={{ width: `${m.rp}%`, background: "#D9694A" }} />
+            <div style={{ display: "flex", height: 24, borderRadius: 7, overflow: "hidden", boxShadow: "0 1px 3px rgba(45,60,40,.06)" }}>
+              <div style={{ width: `${m.np}%`, background: "var(--pop-cool)" }} />
+              <div style={{ width: `${m.hp}%`, background: "var(--accent)" }} />
+              <div style={{ width: `${m.rp}%`, background: "var(--pop-warm)" }} />
             </div>
           </div>
 
           {/* verdict */}
-          <div style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", boxShadow: "0 1px 4px rgba(0,0,0,.07)", marginBottom: 12 }}>
-            <div style={{ fontSize: 13.5, color: "#2B2B2B", lineHeight: 1.55 }}>{verdict}</div>
+          <div style={{ position: "relative", background: "var(--surface)", borderRadius: 14, padding: "14px 16px", boxShadow: "var(--shadow)", marginBottom: 12 }}>
+            <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: "2px solid var(--pop-cool)", borderLeft: "2px solid var(--pop-cool)", borderTopLeftRadius: 7 }} />
+            <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: "1.5px solid var(--pop-cool)", borderRight: "1.5px solid var(--pop-cool)", borderBottomRightRadius: 7, opacity: 0.4 }} />
+            <div style={{ fontSize: 13.5, color: "var(--text)", lineHeight: 1.55 }}>{verdict}</div>
           </div>
 
           {/* KPIs */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-            <Kpi label="L52W cases" val={Math.round(m.l52).toLocaleString()} />
-            <Kpi label="90-day cases" val={Math.round(m.cur).toLocaleString()} sub={m.pct != null ? `${m.pct > 0 ? "+" : ""}${m.pct}% vs prior 90` : "new"} subc={m.pct >= 0 ? "#1F7A52" : "#B03A2A"} />
-            <Kpi label="Accounts" val={m.n.toLocaleString()} sub={m.acctPct != null ? `${m.acctPct > 0 ? "+" : ""}${m.acctPct}% (90D)` : ""} subc={m.acctPct >= 0 ? "#1F7A52" : "#B03A2A"} />
-            <Kpi label="Live placements" val={Math.round(m.pNow).toLocaleString()} sub={m.distPct != null ? `${m.distPct > 0 ? "+" : ""}${m.distPct}% (90D)` : ""} subc={m.distPct >= 0 ? "#1F7A52" : "#B03A2A"} />
+            <Kpi label="L52W cases" val={Math.round(m.l52).toLocaleString()} sub="estimate" subc="var(--text-3)" />
+            <Kpi label="90-day cases" val={Math.round(m.cur).toLocaleString()} sub={m.pct != null ? `${m.pct > 0 ? "+" : ""}${m.pct}% vs prior 90` : "new"} subc={m.pct >= 0 ? "var(--up)" : "var(--down)"} />
+            <Kpi label="Accounts" val={m.n.toLocaleString()} sub={m.acctPct != null ? `${m.acctPct > 0 ? "+" : ""}${m.acctPct}% (90D)` : ""} subc={m.acctPct >= 0 ? "var(--up)" : "var(--down)"} />
+            <Kpi label="Live placements" val={Math.round(m.pNow).toLocaleString()} sub={m.distPct != null ? `${m.distPct > 0 ? "+" : ""}${m.distPct}% (90D)` : ""} subc={m.distPct >= 0 ? "var(--up)" : "var(--down)"} />
           </div>
 
           {/* rolling trends */}
-          <BarChart title="90-Day Rolling Cases" sub="trailing-90 case volume · last 12 periods" data={m.casesSeries} labels={monthLabels(12)} color="#3E6FA3"
+          <BarChart title="90-Day Rolling Cases" sub="trailing-90 case volume · last 12 periods" data={m.casesSeries} labels={monthLabels(12)} color="#5E8FC0"
             topVal={Math.round(m.cur / 3).toLocaleString()} topUnit="cs/mo" deltaPct={m.pct} deltaLabel="vs prev 90D" />
-          <BarChart title="90-Day Rolling Accounts" sub="accounts selling on a trailing-90 basis · last 12 periods" data={m.acctsSeries} labels={monthLabels(12)} color="#1F9D72"
+          <BarChart title="90-Day Rolling Accounts" sub="accounts selling on a trailing-90 basis · last 12 periods" data={m.acctsSeries} labels={monthLabels(12)} color="#5E9277"
             topVal={m.aNow.toLocaleString()} topUnit="current accts" deltaPct={m.acctPct} deltaLabel="vs prev 90D" />
 
           {/* tailwinds / headwinds */}
@@ -168,11 +171,11 @@ function OvInner() {
               {(() => { const mx = Math.max(...m.itemList.map(i => i.l52)) || 1; return m.itemList.map(it => (
                 <div key={it.name} style={{ marginBottom: 9 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 3 }}>
-                    <span style={{ fontSize: 13, color: "#2B2B2B", fontWeight: 500 }}>{titleCase(it.name)}</span>
-                    <span style={{ fontSize: 12, color: "#6B665A" }}>{Math.round(it.l52).toLocaleString()} cs
-                      {it.g != null && <span style={{ marginLeft: 6, fontWeight: 600, color: it.g > 1 ? "#1F7A52" : it.g < -1 ? "#B03A2A" : "#8A8678" }}>{it.g > 0 ? "+" : ""}{it.g}%</span>}</span>
+                    <span style={{ fontSize: 13, color: "var(--text)", fontWeight: 600 }}>{titleCase(it.name)}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-2)" }}>{Math.round(it.l52).toLocaleString()} cs
+                      {it.g != null && <span style={{ marginLeft: 6, fontWeight: 600, color: it.g > 1 ? "var(--up)" : it.g < -1 ? "var(--down)" : "var(--text-3)" }}>{it.g > 0 ? "+" : ""}{it.g}%</span>}</span>
                   </div>
-                  <div style={{ height: 6, background: "#ECE9E0", borderRadius: 3, overflow: "hidden" }}>
+                  <div style={{ height: 6, background: "var(--surface-2)", borderRadius: 3, overflow: "hidden" }}>
                     <div style={{ width: `${100 * it.l52 / mx}%`, height: "100%", background: band(it.g), borderRadius: 3 }} />
                   </div>
                 </div>
@@ -189,15 +192,15 @@ function BarChart({ title, sub, data, labels, color, topVal, topUnit, deltaPct, 
   if (!data || !data.length) return null;
   const mx = Math.max(...data, 1), n = data.length;
   return (
-    <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 4px rgba(0,0,0,.06)", marginBottom: 12 }}>
+    <div style={{ background: "var(--surface)", borderRadius: 12, padding: "12px 14px", boxShadow: "var(--shadow)", marginBottom: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#2B2B2B" }}>{title}</div>
-          <div style={{ fontSize: 10.5, color: "#9A968C", marginTop: 1 }}>{sub}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{title}</div>
+          <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 1 }}>{sub}</div>
         </div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontSize: 17, fontWeight: 700, color: "#2B2B2B", lineHeight: 1 }}>{topVal}<span style={{ fontSize: 10, fontWeight: 500, color: "#9A968C" }}> {topUnit}</span></div>
-          {deltaPct != null && <div style={{ fontSize: 11, fontWeight: 600, color: deltaPct > 0 ? "#1F7A52" : deltaPct < 0 ? "#B03A2A" : "#9A968C", marginTop: 2 }}>{deltaPct > 0 ? "+" : ""}{deltaPct}% {deltaLabel}</div>}
+          <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{topVal}<span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-3)" }}> {topUnit}</span></div>
+          {deltaPct != null && <div style={{ fontSize: 11, fontWeight: 600, color: deltaPct > 0 ? "var(--up)" : deltaPct < 0 ? "var(--down)" : "var(--text-3)", marginTop: 2 }}>{deltaPct > 0 ? "+" : ""}{deltaPct}% {deltaLabel}</div>}
         </div>
       </div>
       <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 88 }}>
@@ -208,7 +211,7 @@ function BarChart({ title, sub, data, labels, color, topVal, topUnit, deltaPct, 
         ))}
       </div>
       <div style={{ display: "flex", gap: 3, marginTop: 4 }}>
-        {labels.map((l, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8.5, color: "#B0AB9D" }}>{l}</div>)}
+        {labels.map((l, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 8.5, color: "var(--text-3)" }}>{l}</div>)}
       </div>
     </div>
   );
@@ -217,11 +220,11 @@ function BarChart({ title, sub, data, labels, color, topVal, topUnit, deltaPct, 
 function Top({ title, label, back }) {
   return (
     <div style={{ flexShrink: 0, padding: "12px 16px 10px" }}>
-      <div onClick={back} style={{ fontSize: 12.5, color: "#7A6FA0", cursor: "pointer", marginBottom: 6 }}>‹ Back to explorer</div>
+      <div onClick={back} style={{ fontSize: 12.5, color: "var(--accent-deep)", cursor: "pointer", marginBottom: 6 }}>‹ Back to explorer</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: .5, color: "#B0AB9D" }}>MARKET OVERVIEW</div>
-          <div style={{ fontSize: 23, fontWeight: 700, color: "#2B2B2B", marginTop: 2 }}>{title}</div>
+          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: .5, color: "var(--text-3)" }}>MARKET OVERVIEW</div>
+          <div style={{ fontSize: 23, fontWeight: 700, color: "var(--text)", marginTop: 2 }}>{title}</div>
         </div>
         {label && <div style={{ flexShrink: 0, marginTop: 2, fontSize: 11, fontWeight: 700, color: label.c, background: label.bg, padding: "5px 10px", borderRadius: 20, whiteSpace: "nowrap" }}>{label.t}</div>}
       </div>
@@ -231,11 +234,11 @@ function Top({ title, label, back }) {
 
 function marketLabel(m) {
   const p = m.pct;
-  if (p == null) return { t: "New market", c: "#1A5E8A", bg: "#E2EDF8" };
-  if (p >= 8) return { t: "Growing market", c: "#0C6E50", bg: "#CFEADF" };
-  if (p <= -8) return { t: "Contracting market", c: "#A8302A", bg: "#F4D2CC" };
-  if (m.rp >= 45) return { t: "At-risk market", c: "#9A5A1E", bg: "#F6E0C6" };
-  return { t: "Stable market", c: "#6B655C", bg: "#EAE7DF" };
+  if (p == null) return { t: "New market", c: "var(--new-ink)", bg: "var(--new-bg)" };
+  if (p >= 8) return { t: "Growing market", c: "var(--growing-ink)", bg: "var(--growing-bg)" };
+  if (p <= -8) return { t: "Contracting market", c: "var(--atrisk-ink)", bg: "var(--atrisk-bg)" };
+  if (m.rp >= 45) return { t: "At-risk market", c: "var(--watch-ink)", bg: "var(--watch-bg)" };
+  return { t: "Stable market", c: "var(--text-2)", bg: "var(--surface-2)" };
 }
 
 // Stretched conversational read: decomposes volume into distribution vs velocity vs accounts.
@@ -243,7 +246,7 @@ function buildVerdict(m, title) {
   const sz = Math.round(m.l52).toLocaleString();
   const v = m.pct, a = m.acctPct, d = m.distPct;
   const trend = v == null ? "running as a new market" : v >= 5 ? `up ${v}%` : v <= -5 ? `down ${Math.abs(v)}%` : "holding roughly flat";
-  let out = `${title} moved ${sz} cases over the last 52 weeks. Over the last 90 days volume is ${trend}${v != null ? " versus the prior quarter" : ""}`;
+  let out = `${title} moved an estimated ${sz} cases over the last 52 weeks. Over the last 90 days volume is ${trend}${v != null ? " versus the prior quarter" : ""}`;
   out += a != null ? `, on an account base that's ${a > 1 ? "up " + a + "%" : a < -1 ? "down " + Math.abs(a) + "%" : "essentially flat"}${d != null ? ` and ${d > 1 ? "distribution up " + d + "%" : d < -1 ? "distribution down " + Math.abs(d) + "%" : "distribution flat"} (placements)` : ""}.` : ".";
 
   // decomposition: velocity proxy = volume% - accounts%
@@ -271,32 +274,32 @@ function buildVerdict(m, title) {
 }
 function Kpi({ label, val, sub, subc }) {
   return (
-    <div style={{ background: "#fff", borderRadius: 12, padding: "11px 13px", boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
-      <div style={{ fontSize: 10.5, color: "#9A968C", marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 20, fontWeight: 700, color: "#2B2B2B", lineHeight: 1 }}>{val}</div>
-      {sub ? <div style={{ fontSize: 11, fontWeight: 600, color: subc || "#9A968C", marginTop: 3 }}>{sub}</div> : null}
+    <div style={{ background: "var(--surface)", borderRadius: 12, padding: "11px 13px", boxShadow: "var(--shadow)" }}>
+      <div style={{ fontSize: 10.5, color: "var(--text-3)", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text)", lineHeight: 1 }}>{val}</div>
+      {sub ? <div style={{ fontSize: 11, fontWeight: 600, color: subc || "var(--text-3)", marginTop: 3 }}>{sub}</div> : null}
     </div>
   );
 }
 function Section({ title, sub, children }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#2B2B2B" }}>{title} <span style={{ fontWeight: 400, color: "#9A968C", fontSize: 11 }}>· {sub}</span></div>
-      <div style={{ background: "#fff", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 4px rgba(0,0,0,.06)", marginTop: 6 }}>{children}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)" }}>{title} <span style={{ fontWeight: 400, color: "var(--text-3)", fontSize: 11 }}>· {sub}</span></div>
+      <div style={{ background: "var(--surface)", borderRadius: 12, padding: "12px 14px", boxShadow: "var(--shadow)", marginTop: 6 }}>{children}</div>
     </div>
   );
 }
 function MoverRow({ up, name, d, an }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "3px 0", fontSize: 13 }}>
-      <span style={{ color: "#2B2B2B" }}><span style={{ color: up ? "#1F7A52" : "#B03A2A", fontWeight: 700 }}>{up ? "▲" : "▼"}</span> {titleCase(name)}</span>
-      <span style={{ color: "#6B665A" }}>{d > 0 ? "+" : ""}{d.toLocaleString()} cs{an ? <span style={{ color: "#9A968C" }}> · {an > 0 ? "+" : ""}{an} accts</span> : null}</span>
+      <span style={{ color: "var(--text)" }}><span style={{ color: up ? "var(--up)" : "var(--down)", fontWeight: 700 }}>{up ? "▲" : "▼"}</span> {titleCase(name)}</span>
+      <span style={{ color: "var(--text-2)" }}>{d > 0 ? "+" : ""}{d.toLocaleString()} cs{an ? <span style={{ color: "var(--text-3)" }}> · {an > 0 ? "+" : ""}{an} accts</span> : null}</span>
     </div>
   );
 }
-function Empty() { return <div style={{ fontSize: 12, color: "#B0AB9D" }}>None in this scope.</div>; }
+function Empty() { return <div style={{ fontSize: 12, color: "var(--text-3)" }}>None in this scope.</div>; }
 
 export default function OverviewPage() {
   return (<Suspense fallback={<div style={wrap} />}><OvInner /></Suspense>);
 }
-const wrap = { background: "#F2F0EA", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" };
+const wrap = { background: "var(--bg)", minHeight: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", fontFamily: "var(--font-sans)" };

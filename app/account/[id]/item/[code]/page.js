@@ -76,12 +76,12 @@ export default function ItemHistory() {
           aria-label="Back"
         >‹</button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 17, fontWeight: 500, lineHeight: 1.15 }}>{data.item}</div>
+          <div style={{ fontSize: 17, fontWeight: 600, lineHeight: 1.15, color: "var(--text)" }}>{data.item}</div>
           <div style={{ fontSize: 12, color: "var(--text-3)" }}>
             {data.package ? `${data.package} · ` : ""}{data.account}
           </div>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 10px", borderRadius: "var(--r-sm)",
+        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: "var(--r-sm)",
                        background: data.lost ? "var(--atrisk-bg)" : "var(--growing-bg)",
                        color: data.lost ? "var(--atrisk-ink)" : "var(--growing-ink)" }}>
           {data.lost ? "lost" : "active"}
@@ -97,7 +97,7 @@ export default function ItemHistory() {
         ].map(([label, val], i) => (
           <div key={i} style={{ flex: 1, padding: "9px 11px", borderRight: i < 3 ? "0.5px solid var(--border)" : "none" }}>
             <div style={{ fontSize: 11, color: "var(--text-3)" }}>{label}</div>
-            <div style={{ fontSize: 15, fontWeight: 500 }}>{val}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{val}</div>
           </div>
         ))}
       </div>
@@ -110,7 +110,7 @@ export default function ItemHistory() {
           <g key={i}>
             {m.cases > 0 && <circle cx={X(i)} cy={Y(m.cases)} r="3" fill={lineColor} />}
             {m.cases > 0 && (
-              <text x={X(i)} y={Y(m.cases) - 9} textAnchor="middle" fontSize="13" fontWeight="500" fill="var(--text)">
+              <text x={X(i)} y={Y(m.cases) - 9} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text)">
                 {m.cases}
               </text>
             )}
