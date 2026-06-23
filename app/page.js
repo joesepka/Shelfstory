@@ -15,9 +15,6 @@ const UP = "#5C9A7B", DOWN = "#C07A72", FLAT = "#A5A092";
 const BOOK = "#3F6E4A";   // --accent-deep (book strokes)
 const TREND = "#5E9277";  // --accent (climbing line / arrow / dots / progress)
 
-// cloud tint (decorative, fixed light blue)
-const CLOUD = "#6FA8D6";
-
 // data-as-of label — bump this when you reload the book
 const DATA_UPDATED = "June 15th, 2026";
 
@@ -27,13 +24,67 @@ const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
-// cloud path shapes (shared by home + splash)
-const CLOUD_PATHS = {
-  a: "M18 92 Q10 92 10 84 Q8 72 22 72 Q24 56 44 58 Q48 38 74 42 Q82 24 108 30 Q120 14 142 24 Q158 16 172 30 Q196 26 200 46 Q224 44 226 62 Q252 60 256 76 Q284 74 288 88 Q300 90 300 92 L300 96 Q160 100 18 96 Z",
-  b: "M16 80 Q8 80 8 72 Q8 60 22 62 Q24 46 44 48 Q50 30 74 36 Q84 20 106 28 Q122 18 138 30 Q160 26 164 46 Q188 44 190 62 Q214 60 218 76 Q232 78 232 80 L232 84 Q130 88 16 84 Z",
-  c: "M20 100 Q10 100 10 90 Q8 76 26 78 Q28 58 50 60 Q56 38 84 44 Q94 22 122 30 Q138 14 162 26 Q180 16 198 30 Q224 26 230 48 Q258 46 262 66 Q292 64 296 82 Q326 80 330 96 Q344 98 344 100 L344 104 Q180 110 20 104 Z",
-  d: "M14 80 Q8 80 8 72 Q8 60 20 62 Q22 46 42 48 Q48 30 70 36 Q80 20 100 28 Q116 18 132 30 Q152 26 156 46 Q178 44 182 62 Q204 62 204 78 Q214 80 214 82 L214 84 Q120 88 14 84 Z",
-  e: "M18 90 Q10 90 10 82 Q8 68 24 70 Q26 52 46 54 Q52 34 78 40 Q88 22 112 30 Q128 14 150 26 Q168 18 184 32 Q208 28 212 48 Q238 46 242 66 Q270 64 274 82 Q294 84 294 90 L294 94 Q160 98 18 94 Z",
+// shared cloud path
+const CLOUD_PATH = "M18 92 Q10 92 10 84 Q8 72 22 72 Q24 56 44 58 Q48 38 74 42 Q82 24 108 30 Q120 14 142 24 Q158 16 172 30 Q196 26 200 46 Q224 44 226 62 Q252 60 256 76 Q284 74 288 88 Q300 90 300 92 L300 96 Q160 100 18 96 Z";
+
+// ---- weather model: maps the book's 90-day trend to a sky ----
+// pct = s.curPct (same number the overview leads with)
+function weatherFor(pct) {
+  if (pct == null) return WEATHER.fair;
+  if (pct >= 6) return WEATHER.sunny;
+  if (pct >= -2) return WEATHER.fair;
+  if (pct > -8) return WEATHER.overcast;
+  return WEATHER.gloomy;
+}
+const WEATHER = {
+  sunny: {
+    key: "sunny", bg: "#FBF7EE",
+    chip: { t: "Sunny outlook", c: "#8A6310", bg: "#FAF0D6" },
+    sun: { x: 0.82, y: 86, r: 30, color: "#F2C14E" },
+    rain: false,
+    clouds: [
+      { top: 64, w: 200, dur: 70, del: 0, color: "#EDE4D2", op: .5 },
+      { top: 300, w: 170, dur: 84, del: -25, color: "#F0E8D8", op: .42 },
+      { top: 470, w: 210, dur: 76, del: -12, color: "#EEE5D4", op: .4 },
+    ],
+  },
+  fair: {
+    key: "fair", bg: "#FAF9F4",
+    chip: { t: "Fair · holding steady", c: "#5F6B58", bg: "#EDEEE6" },
+    sun: { x: 0.84, y: 78, r: 26, color: "#E8D9A8", behind: true },
+    rain: false,
+    clouds: [
+      { top: 72, w: 280, dur: 72, del: 0, color: "#D9D2C2", op: .4 },
+      { top: 188, w: 220, dur: 60, del: -22, color: "#E0DAC9", op: .36 },
+      { top: 300, w: 320, dur: 84, del: -44, color: "#DCD6C6", op: .34 },
+      { top: 412, w: 240, dur: 56, del: -12, color: "#DAD3C3", op: .34 },
+      { top: 500, w: 280, dur: 78, del: -30, color: "#DCD6C6", op: .32 },
+    ],
+  },
+  overcast: {
+    key: "overcast", bg: "#EEF0F0",
+    chip: { t: "Overcast · softening", c: "#54604F", bg: "#DDE0E2" },
+    sun: null, rain: false,
+    clouds: [
+      { top: 60, w: 300, dur: 66, del: 0, color: "#B5BAC0", op: .5 },
+      { top: 168, w: 240, dur: 60, del: -20, color: "#AEB4BB", op: .52 },
+      { top: 286, w: 340, dur: 84, del: -40, color: "#B8BDC3", op: .5 },
+      { top: 396, w: 250, dur: 56, del: -12, color: "#B0B6BD", op: .5 },
+      { top: 492, w: 300, dur: 78, del: -30, color: "#B5BAC0", op: .48 },
+    ],
+  },
+  gloomy: {
+    key: "gloomy", bg: "#E2E5E8",
+    chip: { t: "Gloomy · book sliding", c: "#79473A", bg: "#EAD9D2" },
+    sun: null, rain: true,
+    clouds: [
+      { top: 52, w: 320, dur: 64, del: 0, color: "#8E96A0", op: .62 },
+      { top: 158, w: 260, dur: 58, del: -18, color: "#868E99", op: .64 },
+      { top: 276, w: 360, dur: 84, del: -38, color: "#929AA4", op: .6 },
+      { top: 384, w: 300, dur: 56, del: -10, color: "#8A929C", op: .62 },
+      { top: 484, w: 320, dur: 78, del: -28, color: "#8E96A0", op: .6 },
+    ],
+  },
 };
 
 // small top-right wordmark: open book + rising trendline
@@ -41,10 +92,8 @@ function HeaderLogo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
       <svg viewBox="0 0 64 48" style={{ width: 30, height: "auto" }} aria-hidden="true">
-        {/* book — two facing pages + spine */}
         <path d="M32 40 q-9 -4 -22 -2 v-22 q13 -2 22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
         <path d="M32 40 q9 -4 22 -2 v-22 q-13 -2 -22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
-        {/* rising trendline inside the book */}
         <polyline points="15,30 23,27 31,22 41,14" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M37 14 L41 14 L41 18" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -53,20 +102,61 @@ function HeaderLogo() {
   );
 }
 
-// soft static cloud layer for the splash background
+// reactive weather layer — sun, clouds, optional rain; tinted to the book's outlook
+function Weather({ w, poofing }) {
+  return (
+    <div className={"weatherLayer" + (poofing ? " poofing" : "")} aria-hidden="true"
+      style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none", transition: "opacity .55s ease", opacity: poofing ? 0 : 1 }}>
+      {w.sun && (
+        <svg className="sun" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: w.sun.behind ? 0.5 : 1 }}>
+          {!w.sun.behind && (
+            <g className="sunrays" style={{ transformOrigin: `${(w.sun.x * 100)}% ${w.sun.y}px` }}>
+              {Array.from({ length: 12 }).map((_, i) => {
+                const a = i * 30 * Math.PI / 180;
+                const cxv = `calc(${w.sun.x * 100}% + ${Math.cos(a) * (w.sun.r + 5)}px)`;
+                return (
+                  <line key={i}
+                    x1={`calc(${w.sun.x * 100}% + ${Math.cos(a) * (w.sun.r + 5)}px)`} y1={w.sun.y + Math.sin(a) * (w.sun.r + 5)}
+                    x2={`calc(${w.sun.x * 100}% + ${Math.cos(a) * (w.sun.r + 15)}px)`} y2={w.sun.y + Math.sin(a) * (w.sun.r + 15)}
+                    stroke={w.sun.color} strokeWidth="2.5" strokeLinecap="round" />
+                );
+              })}
+            </g>
+          )}
+          <circle cx={`${w.sun.x * 100}%`} cy={w.sun.y} r={w.sun.r} fill={w.sun.color} />
+        </svg>
+      )}
+      {w.clouds.map((c, i) => (
+        <svg key={i} className="cl" viewBox="0 0 320 110"
+          style={{ position: "absolute", top: c.top, left: -(c.w + 40), width: c.w, opacity: c.op, animationDuration: c.dur + "s", animationDelay: c.del + "s" }}>
+          <path d={CLOUD_PATH} fill={c.color} />
+        </svg>
+      ))}
+      {w.rain && Array.from({ length: 26 }).map((_, i) => {
+        const left = (i * 37 % 96) + 2;
+        const top = (i * 53 % 70) + 8;
+        const dur = (0.8 + (i % 5) * 0.1).toFixed(2);
+        const del = ((i % 7) * 0.18).toFixed(2);
+        return <span key={i} className="drop" style={{ left: left + "%", top: top + "%", animationDuration: dur + "s", animationDelay: del + "s" }} />;
+      })}
+    </div>
+  );
+}
+
+// neutral splash clouds (data not loaded yet, so weather is unknown at splash time)
 function SplashClouds() {
   const clouds = [
-    { d: CLOUD_PATHS.c, vb: "0 0 360 120", w: 360, top: 40, left: -60 },
-    { d: CLOUD_PATHS.a, vb: "0 0 320 110", w: 300, top: 150, left: 120 },
-    { d: CLOUD_PATHS.e, vb: "0 0 300 110", w: 320, top: 300, left: -40 },
-    { d: CLOUD_PATHS.b, vb: "0 0 260 100", w: 240, top: 430, left: 160 },
-    { d: CLOUD_PATHS.d, vb: "0 0 220 100", w: 260, top: 520, left: -30 },
+    { vb: "0 0 360 120", w: 360, top: 40, left: -60, color: "#D9D2C2" },
+    { vb: "0 0 320 110", w: 300, top: 150, left: 120, color: "#E0DAC9" },
+    { vb: "0 0 300 110", w: 320, top: 300, left: -40, color: "#DCD6C6" },
+    { vb: "0 0 260 100", w: 240, top: 430, left: 160, color: "#DAD3C3" },
+    { vb: "0 0 220 100", w: 260, top: 520, left: -30, color: "#DCD6C6" },
   ];
   return (
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}>
       {clouds.map((c, i) => (
-        <svg key={i} viewBox={c.vb} style={{ position: "absolute", width: c.w, top: c.top, left: c.left, opacity: 0.16 }}>
-          <path d={c.d} fill={CLOUD} />
+        <svg key={i} viewBox="0 0 320 110" style={{ position: "absolute", width: c.w, top: c.top, left: c.left, opacity: 0.4 }}>
+          <path d={CLOUD_PATH} fill={c.color} />
         </svg>
       ))}
     </div>
@@ -178,7 +268,6 @@ function Stat({ label, value, unit, pct, divider }) {
   );
 }
 
-// bolded anchor — the place / SKU / number your eye should catch
 function A({ children }) { return <strong style={{ fontWeight: 700, color: "var(--text)" }}>{children}</strong>; }
 
 function buildBrief(rows) {
@@ -238,30 +327,6 @@ function buildBrief(rows) {
   return { p1, p2 };
 }
 
-// drifting blue layered clouds — behind everything
-function Clouds({ poofing }) {
-  const paths = CLOUD_PATHS;
-  const clouds = [
-    { id: "cA", d: paths.a, vb: "0 0 320 110", w: 440, top: 92 },
-    { id: "cB", d: paths.b, vb: "0 0 260 100", w: 300, top: 188 },
-    { id: "cC", d: paths.c, vb: "0 0 360 120", w: 500, top: 296 },
-    { id: "cD", d: paths.d, vb: "0 0 220 100", w: 250, top: 408 },
-    { id: "cE", d: paths.e, vb: "0 0 300 110", w: 430, top: 472 },
-    { id: "cF", d: paths.b, vb: "0 0 260 100", w: 330, top: 568 },
-  ];
-  return (
-    <div className={"cloudLayer" + (poofing ? " poofing" : "")} aria-hidden="true"
-      style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none", transition: "opacity .55s ease", opacity: poofing ? 0 : 1 }}>
-      {clouds.map(c => (
-        <svg key={c.id} className={"cl " + c.id} viewBox={c.vb}
-          style={{ position: "absolute", width: c.w, top: c.top, left: -(c.w + 40) }}>
-          <path d={c.d} fill={CLOUD} />
-        </svg>
-      ))}
-    </div>
-  );
-}
-
 export default function Home() {
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
@@ -314,7 +379,9 @@ export default function Home() {
 
   const brief = useMemo(() => buildBrief(rows), [rows]);
 
-  // tap a nav card → clouds poof → route after the animation
+  // weather follows the book's 90-day trend (same number the overview leads with)
+  const w = useMemo(() => weatherFor(s ? s.curPct : null), [s]);
+
   function navTo(href) {
     if (poofing) return;
     setPoofing(true);
@@ -325,8 +392,8 @@ export default function Home() {
     <>
       {showSplash && <Splash onDone={() => setShowSplash(false)} />}
 
-      <main style={{ position: "relative", minHeight: "100vh", background: "var(--bg)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
-        <Clouds poofing={poofing} />
+      <main style={{ position: "relative", minHeight: "100vh", background: w.bg, transition: "background .8s ease", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
+        <Weather w={w} poofing={poofing} />
 
         <div style={{ position: "relative", zIndex: 1 }}>
           {/* top row: greeting + logo */}
@@ -334,11 +401,12 @@ export default function Home() {
             <div style={{ minWidth: 0 }}>
               <h1 style={{ fontFamily: "var(--font-sans)", fontSize: 26, color: "var(--text)", margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.3px" }}>{greet}, Joe.</h1>
               <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
+              {s && <span style={{ display: "inline-block", marginTop: 8, fontSize: 10.5, fontWeight: 700, color: w.chip.c, background: w.chip.bg, padding: "3px 10px", borderRadius: 20 }}>{w.chip.t}</span>}
             </div>
             <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
           </div>
 
-          {/* collapsible brief — now above the stat box; bobs to draw the eye, stops when open */}
+          {/* collapsible brief */}
           {s && brief && (
             <div style={{ marginTop: 16 }}>
               <div onClick={() => setBriefOpen(o => !o)}
@@ -385,20 +453,19 @@ export default function Home() {
 
       <style>{`
         @keyframes briefIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
-        .cloudLayer .cl{opacity:.2;will-change:transform;}
-        .cloudLayer .cA{animation:driftAcross 72s linear infinite;animation-delay:-10s;}
-        .cloudLayer .cB{animation:driftAcross 60s linear infinite;animation-delay:-34s;}
-        .cloudLayer .cC{animation:driftAcross 84s linear infinite;animation-delay:-22s;}
-        .cloudLayer .cD{animation:driftAcross 56s linear infinite;animation-delay:-6s;}
-        .cloudLayer .cE{animation:driftAcross 78s linear infinite;animation-delay:-46s;}
-        .cloudLayer .cF{animation:driftAcross 64s linear infinite;animation-delay:-28s;}
+        .weatherLayer .cl{will-change:transform;animation-name:driftAcross;animation-timing-function:linear;animation-iteration-count:infinite;}
         @keyframes driftAcross{from{transform:translateX(0);}to{transform:translateX(620px);}}
-        .cloudLayer.poofing .cl{animation:poof .6s ease-out forwards !important;}
-        @keyframes poof{0%{transform:scale(1);opacity:.2}35%{transform:scale(1.4);opacity:.26}100%{transform:scale(2.2);opacity:0}}
+        .weatherLayer .sunrays{animation:rayspin 90s linear infinite;}
+        @keyframes rayspin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+        .weatherLayer .sun{animation:sunPulse 5s ease-in-out infinite;}
+        @keyframes sunPulse{0%,100%{opacity:.92;}50%{opacity:1;}}
+        .weatherLayer .drop{position:absolute;width:1.5px;height:9px;background:#8A929C;opacity:.4;border-radius:1px;animation-name:rainfall;animation-timing-function:linear;animation-iteration-count:infinite;}
+        @keyframes rainfall{0%{transform:translateY(-10px);opacity:0;}30%{opacity:.45;}100%{transform:translateY(46px);opacity:0;}}
+        .weatherLayer.poofing .cl{animation:poof .6s ease-out forwards !important;}
+        @keyframes poof{0%{transform:scale(1);}35%{transform:scale(1.4);opacity:.3;}100%{transform:scale(2.2);opacity:0;}}
         @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
         .bob{animation:bob 2.6s ease-in-out infinite;}
-        .navcard .openchip{display:inline-block;}
-        @media (prefers-reduced-motion: reduce){.cl,.bob{animation:none !important;}}
+        @media (prefers-reduced-motion: reduce){.cl,.bob,.sunrays,.sun,.drop{animation:none !important;}}
       `}</style>
     </>
   );
@@ -407,7 +474,7 @@ export default function Home() {
 function NavCard({ title, sub, onClick }) {
   return (
     <div className="navcard" onClick={onClick} style={{
-      background: "rgba(255,255,255,0.42)", border: "0.5px solid var(--border)", borderRadius: 18, padding: "18px 18px", marginTop: 12,
+      background: "rgba(255,255,255,0.5)", border: "0.5px solid var(--border)", borderRadius: 18, padding: "18px 18px", marginTop: 12,
       boxShadow: "var(--shadow)", cursor: "pointer",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
