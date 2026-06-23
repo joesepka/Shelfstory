@@ -201,19 +201,18 @@ function GridMatrix({ accounts }) {
         </div>
       )}
 
-      <div className="nobar gridsnap" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch",
-        scrollSnapType: "x proximity", scrollPaddingLeft: ACCT_W, overscrollBehavior: "contain" }}>
-        <style>{`.gridsnap td.snapcol, .gridsnap th.snapcol { scroll-snap-align: start; } .gridsnap td.nosnap, .gridsnap th.nosnap { scroll-snap-align: none; }`}</style>
+      <div className="nobar gridscroll" style={{ overflow: "auto", height: "100%", WebkitOverflowScrolling: "touch",
+        touchAction: "pan-x pan-y", overscrollBehavior: "contain", contain: "layout paint", willChange: "transform" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" }}>
           <thead>
             <tr>
               <th style={corner}>{fAccounts.length} accts · 90d cs</th>
-              <th className="nosnap" style={totalHead}>90D<br/>total</th>
+              <th style={totalHead}>90D<br/>total</th>
               {cols.map(c => {
                 const active = filterOf(c.key);
                 const open = menuKey === c.key;
                 return (
-                  <th key={c.key} className="snapcol" style={{ ...headCell, position: "sticky", cursor: "pointer",
+                  <th key={c.key} style={{ ...headCell, position: "sticky", cursor: "pointer",
                     background: active ? (active.mode === "gaps" ? "var(--pop-warm-soft)" : "var(--accent-soft)") : headCell.background,
                     color: active ? (active.mode === "gaps" ? "var(--pop-warm-deep)" : "var(--accent-deep)") : headCell.color }}
                     onClick={() => setMenuKey(open ? null : c.key)}>
@@ -255,16 +254,16 @@ function GridMatrix({ accounts }) {
                       </div>
                     </a>
                   </th>
-                  <td className="nosnap" style={{ width: TOTAL_W, minWidth: TOTAL_W, height: ROW_H, background: "#F6F7F2", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
+                  <td style={{ width: TOTAL_W, minWidth: TOTAL_W, height: ROW_H, background: "#F6F7F2", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
                     <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-3)", fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{tot90.toLocaleString()}</span>
                   </td>
                   {cols.map(c => {
                     const it = byAcct[a.account_id]?.[c.key];
-                    if (!it) return <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#F4F7EF", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8" }} />;
+                    if (!it) return <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#F4F7EF", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8" }} />;
                     const tone = cellTone(it.cell_state);
                     const lost = it.cell_state === "lost_recent";
                     return (
-                      <td key={c.key} className="snapcol" style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
+                      <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
                         <a href={`/account/${a.account_id}/item/${c.key}`} style={{ textDecoration: "none", display: "block" }}>
                           {lost
                             ? <span style={{ fontSize: 13, fontWeight: 700, color: "var(--atrisk-ink)" }}>✕</span>
@@ -330,7 +329,7 @@ function TreeMap({ accounts }) {
   const N = accounts.length || 1;
 
   return (
-    <div className="nobar" style={{ height: "100%", overflowY: "auto", padding: "8px 12px 40px", WebkitOverflowScrolling: "touch" }}>
+    <div className="nobar" style={{ height: "100%", overflowY: "auto", padding: "8px 12px 40px", WebkitOverflowScrolling: "touch", touchAction: "pan-y", overscrollBehavior: "contain" }}>
       {rows.map((row, ri) => (
         <div key={ri} style={{ display: "flex", gap: 5, marginBottom: 5 }}>
           {row.items.map((a, j) => {
