@@ -27,6 +27,15 @@ const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
+// cloud path shapes (shared by home + splash)
+const CLOUD_PATHS = {
+  a: "M18 92 Q10 92 10 84 Q8 72 22 72 Q24 56 44 58 Q48 38 74 42 Q82 24 108 30 Q120 14 142 24 Q158 16 172 30 Q196 26 200 46 Q224 44 226 62 Q252 60 256 76 Q284 74 288 88 Q300 90 300 92 L300 96 Q160 100 18 96 Z",
+  b: "M16 80 Q8 80 8 72 Q8 60 22 62 Q24 46 44 48 Q50 30 74 36 Q84 20 106 28 Q122 18 138 30 Q160 26 164 46 Q188 44 190 62 Q214 60 218 76 Q232 78 232 80 L232 84 Q130 88 16 84 Z",
+  c: "M20 100 Q10 100 10 90 Q8 76 26 78 Q28 58 50 60 Q56 38 84 44 Q94 22 122 30 Q138 14 162 26 Q180 16 198 30 Q224 26 230 48 Q258 46 262 66 Q292 64 296 82 Q326 80 330 96 Q344 98 344 100 L344 104 Q180 110 20 104 Z",
+  d: "M14 80 Q8 80 8 72 Q8 60 20 62 Q22 46 42 48 Q48 30 70 36 Q80 20 100 28 Q116 18 132 30 Q152 26 156 46 Q178 44 182 62 Q204 62 204 78 Q214 80 214 82 L214 84 Q120 88 14 84 Z",
+  e: "M18 90 Q10 90 10 82 Q8 68 24 70 Q26 52 46 54 Q52 34 78 40 Q88 22 112 30 Q128 14 150 26 Q168 18 184 32 Q208 28 212 48 Q238 46 242 66 Q270 64 274 82 Q294 84 294 90 L294 94 Q160 98 18 94 Z",
+};
+
 // small top-right wordmark: open book + rising trendline
 function HeaderLogo() {
   return (
@@ -40,6 +49,26 @@ function HeaderLogo() {
         <path d="M37 14 L41 14 L41 18" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
       <span style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>ShelfStory</span>
+    </div>
+  );
+}
+
+// soft static cloud layer for the splash background
+function SplashClouds() {
+  const clouds = [
+    { d: CLOUD_PATHS.c, vb: "0 0 360 120", w: 360, top: 40, left: -60 },
+    { d: CLOUD_PATHS.a, vb: "0 0 320 110", w: 300, top: 150, left: 120 },
+    { d: CLOUD_PATHS.e, vb: "0 0 300 110", w: 320, top: 300, left: -40 },
+    { d: CLOUD_PATHS.b, vb: "0 0 260 100", w: 240, top: 430, left: 160 },
+    { d: CLOUD_PATHS.d, vb: "0 0 220 100", w: 260, top: 520, left: -30 },
+  ];
+  return (
+    <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}>
+      {clouds.map((c, i) => (
+        <svg key={i} viewBox={c.vb} style={{ position: "absolute", width: c.w, top: c.top, left: c.left, opacity: 0.16 }}>
+          <path d={c.d} fill={CLOUD} />
+        </svg>
+      ))}
     </div>
   );
 }
@@ -103,20 +132,23 @@ function Splash({ onDone }) {
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       transition: "opacity 0.4s ease", opacity: progress >= 1 ? 0 : 1, pointerEvents: progress >= 1 ? "none" : "auto",
     }}>
-      <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }}>
-        <path d={L} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
-        <path d={R} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
-        {drawnPts.length > 1 && (
-          <path d={linePath} stroke={TREND} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-        )}
-        {pts.slice(0, fullSeg + 1).map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={2.6} fill={TREND} />
-        ))}
-        {arrow && <path d={arrow} stroke={TREND} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
-      </svg>
-      <div style={{ fontFamily: T.serif, fontSize: 26, color: T.ink, letterSpacing: 1, marginTop: 18 }}>ShelfStory</div>
-      <div style={{ width: 130, height: 4, background: T.line, borderRadius: 2, marginTop: 22, overflow: "hidden" }}>
-        <div style={{ width: `${progress * 100}%`, height: "100%", background: TREND, borderRadius: 2 }} />
+      <SplashClouds />
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }}>
+          <path d={L} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
+          <path d={R} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
+          {drawnPts.length > 1 && (
+            <path d={linePath} stroke={TREND} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          )}
+          {pts.slice(0, fullSeg + 1).map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r={2.6} fill={TREND} />
+          ))}
+          {arrow && <path d={arrow} stroke={TREND} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+        </svg>
+        <div style={{ fontFamily: T.serif, fontSize: 26, color: T.ink, letterSpacing: 1, marginTop: 18 }}>ShelfStory</div>
+        <div style={{ width: 130, height: 4, background: T.line, borderRadius: 2, marginTop: 22, overflow: "hidden" }}>
+          <div style={{ width: `${progress * 100}%`, height: "100%", background: TREND, borderRadius: 2 }} />
+        </div>
       </div>
     </div>
   );
@@ -208,20 +240,14 @@ function buildBrief(rows) {
 
 // drifting blue layered clouds — behind everything
 function Clouds({ poofing }) {
-  const paths = {
-    a: "M18 92 Q10 92 10 84 Q8 72 22 72 Q24 56 44 58 Q48 38 74 42 Q82 24 108 30 Q120 14 142 24 Q158 16 172 30 Q196 26 200 46 Q224 44 226 62 Q252 60 256 76 Q284 74 288 88 Q300 90 300 92 L300 96 Q160 100 18 96 Z",
-    b: "M16 80 Q8 80 8 72 Q8 60 22 62 Q24 46 44 48 Q50 30 74 36 Q84 20 106 28 Q122 18 138 30 Q160 26 164 46 Q188 44 190 62 Q214 60 218 76 Q232 78 232 80 L232 84 Q130 88 16 84 Z",
-    c: "M20 100 Q10 100 10 90 Q8 76 26 78 Q28 58 50 60 Q56 38 84 44 Q94 22 122 30 Q138 14 162 26 Q180 16 198 30 Q224 26 230 48 Q258 46 262 66 Q292 64 296 82 Q326 80 330 96 Q344 98 344 100 L344 104 Q180 110 20 104 Z",
-    d: "M14 80 Q8 80 8 72 Q8 60 20 62 Q22 46 42 48 Q48 30 70 36 Q80 20 100 28 Q116 18 132 30 Q152 26 156 46 Q178 44 182 62 Q204 62 204 78 Q214 80 214 82 L214 84 Q120 88 14 84 Z",
-    e: "M18 90 Q10 90 10 82 Q8 68 24 70 Q26 52 46 54 Q52 34 78 40 Q88 22 112 30 Q128 14 150 26 Q168 18 184 32 Q208 28 212 48 Q238 46 242 66 Q270 64 274 82 Q294 84 294 90 L294 94 Q160 98 18 94 Z",
-  };
+  const paths = CLOUD_PATHS;
   const clouds = [
-    { id: "cA", d: paths.a, vb: "0 0 320 110", w: 300, top: 96 },
-    { id: "cB", d: paths.b, vb: "0 0 260 100", w: 200, top: 190 },
-    { id: "cC", d: paths.c, vb: "0 0 360 120", w: 340, top: 300 },
-    { id: "cD", d: paths.d, vb: "0 0 220 100", w: 160, top: 412 },
-    { id: "cE", d: paths.e, vb: "0 0 300 110", w: 280, top: 470 },
-    { id: "cF", d: paths.b, vb: "0 0 260 100", w: 210, top: 560 },
+    { id: "cA", d: paths.a, vb: "0 0 320 110", w: 440, top: 92 },
+    { id: "cB", d: paths.b, vb: "0 0 260 100", w: 300, top: 188 },
+    { id: "cC", d: paths.c, vb: "0 0 360 120", w: 500, top: 296 },
+    { id: "cD", d: paths.d, vb: "0 0 220 100", w: 250, top: 408 },
+    { id: "cE", d: paths.e, vb: "0 0 300 110", w: 430, top: 472 },
+    { id: "cF", d: paths.b, vb: "0 0 260 100", w: 330, top: 568 },
   ];
   return (
     <div className={"cloudLayer" + (poofing ? " poofing" : "")} aria-hidden="true"
@@ -359,16 +385,16 @@ export default function Home() {
 
       <style>{`
         @keyframes briefIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
-        .cloudLayer .cl{opacity:.13;will-change:transform;}
+        .cloudLayer .cl{opacity:.2;will-change:transform;}
         .cloudLayer .cA{animation:driftAcross 72s linear infinite;animation-delay:-10s;}
         .cloudLayer .cB{animation:driftAcross 60s linear infinite;animation-delay:-34s;}
         .cloudLayer .cC{animation:driftAcross 84s linear infinite;animation-delay:-22s;}
         .cloudLayer .cD{animation:driftAcross 56s linear infinite;animation-delay:-6s;}
         .cloudLayer .cE{animation:driftAcross 78s linear infinite;animation-delay:-46s;}
         .cloudLayer .cF{animation:driftAcross 64s linear infinite;animation-delay:-28s;}
-        @keyframes driftAcross{from{transform:translateX(0);}to{transform:translateX(560px);}}
+        @keyframes driftAcross{from{transform:translateX(0);}to{transform:translateX(620px);}}
         .cloudLayer.poofing .cl{animation:poof .6s ease-out forwards !important;}
-        @keyframes poof{0%{transform:scale(1);opacity:.13}35%{transform:scale(1.4);opacity:.2}100%{transform:scale(2.2);opacity:0}}
+        @keyframes poof{0%{transform:scale(1);opacity:.2}35%{transform:scale(1.4);opacity:.26}100%{transform:scale(2.2);opacity:0}}
         @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
         .bob{animation:bob 2.6s ease-in-out infinite;}
         .navcard .openchip{display:inline-block;}
@@ -381,7 +407,7 @@ export default function Home() {
 function NavCard({ title, sub, onClick }) {
   return (
     <div className="navcard" onClick={onClick} style={{
-      background: "rgba(255,255,255,0.58)", border: "0.5px solid var(--border)", borderRadius: 18, padding: "18px 18px", marginTop: 12,
+      background: "rgba(255,255,255,0.42)", border: "0.5px solid var(--border)", borderRadius: 18, padding: "18px 18px", marginTop: 12,
       boxShadow: "var(--shadow)", cursor: "pointer",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
