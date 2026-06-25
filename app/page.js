@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { useExplode } from "../lib/useExplode";
 
 const T = {
   bg: "#FFFFFF", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
@@ -327,6 +328,15 @@ function buildBrief(rows) {
   return { p1, p2 };
 }
 
+// home nav cards — add/reorder here
+const NAV = [
+  { href: "/book", title: "Accounts", sub: "Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." },
+  { href: "/perf", title: "Performance Overview", sub: "The whole book at a glance — drill territory, channel, and chains, then generate a market report." },
+  { href: "/actions", title: "Actions to Take", sub: "Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." },
+  { href: "/dist", title: "Distributor Review", sub: "A full review for any distributor — pulse, account health, items, channels, and an exportable executive summary." },
+  { href: "/wholesale", title: "Wholesale Trends", sub: "Depletion and inventory momentum across your wholesale network — pacing, gaps, and where to push. (Coming soon.)" },
+];
+
 export default function Home() {
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
@@ -335,6 +345,7 @@ export default function Home() {
   const [greet, setGreet] = useState("Welcome");
   const [briefOpen, setBriefOpen] = useState(false);
   const [poofing, setPoofing] = useState(false);
+  const { burst, styleFor } = useExplode();
 
   useEffect(() => {
     (async () => {
@@ -384,8 +395,8 @@ export default function Home() {
 
   function navTo(href) {
     if (poofing) return;
-    setPoofing(true);
-    setTimeout(() => router.push(href), 500);
+    setPoofing(true);              // fade the weather sky
+    burst(href, () => router.push(href)); // explode the cards, then navigate
   }
 
   return (
@@ -441,11 +452,11 @@ export default function Home() {
             {s && <div style={{ textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 8 }}>vs prior 90 days</div>}
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 26 }}>WHERE TO?</div>
-          <NavCard onClick={() => navTo("/book")} title="Accounts" sub="Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." />
-          <NavCard onClick={() => navTo("/perf")} title="Performance Overview" sub="The whole book at a glance — drill territory, channel, and chains, then generate a market report." />
-          <NavCard onClick={() => navTo("/actions")} title="Actions to Take" sub="Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." />
-          <NavCard onClick={() => navTo("/dist")} title="Distributor Review" sub="A full review for any distributor — pulse, account health, items, channels, and an executive summary you can export to PDF." />
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22 }}>WHERE TO?</div>
+          {NAV.map(c => (
+            <NavCard key={c.href} title={c.title} sub={c.sub}
+              onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} />
+          ))}
 
           <div style={{ height: 28 }} />
         </div>
@@ -471,17 +482,17 @@ export default function Home() {
   );
 }
 
-function NavCard({ title, sub, onClick }) {
+function NavCard({ title, sub, onClick, popStyle }) {
   return (
     <div className="navcard" onClick={onClick} style={{
-      background: "rgba(255,255,255,0.5)", border: "0.5px solid var(--border)", borderRadius: 18, padding: "18px 18px", marginTop: 12,
-      boxShadow: "var(--shadow)", cursor: "pointer",
+      background: "rgba(255,255,255,0.5)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "11px 15px", marginTop: 8,
+      boxShadow: "var(--shadow)", cursor: "pointer", ...(popStyle || {}),
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)" }}>{title}</div>
-        <div className="openchip" style={{ fontSize: 11.5, fontWeight: 700, color: "var(--accent-deep)", whiteSpace: "nowrap" }}>open ›</div>
+        <div style={{ fontSize: 15.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
+        <div className="openchip" style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-deep)", whiteSpace: "nowrap" }}>open ›</div>
       </div>
-      <div style={{ fontSize: 13, color: "var(--text-2)", marginTop: 6, lineHeight: 1.4 }}>{sub}</div>
+      <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 3, lineHeight: 1.35 }}>{sub}</div>
     </div>
   );
 }

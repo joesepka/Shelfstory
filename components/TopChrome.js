@@ -14,13 +14,13 @@ export default function TopChrome() {
       <button onClick={() => router.back()} aria-label="Back"
         style={{
           position: "absolute", left: 14, bottom: 18, pointerEvents: "auto",
-          width: 46, height: 46, borderRadius: 23, border: "none", cursor: "pointer",
+          height: 42, borderRadius: 21, border: "none", cursor: "pointer",
           background: "#fff", color: "#5C584E",
-          boxShadow: "0 3px 12px rgba(0,0,0,.22)", fontSize: 24, lineHeight: 1,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontFamily: "inherit", paddingBottom: 3,
+          boxShadow: "0 3px 12px rgba(0,0,0,.22)", fontSize: 15, fontWeight: 700, lineHeight: 1,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
+          fontFamily: "inherit", padding: "0 18px 0 13px",
         }}>
-        ‹
+        <span style={{ fontSize: 22, marginTop: -2 }}>‹</span> back
       </button>
     </div>
   );

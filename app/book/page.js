@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
+import { useExplode } from "../../lib/useExplode";
 
 
 function label(hd) {
@@ -390,6 +391,7 @@ const VIEWS = ["account", "grid", "tree"];
 
 function BookInner() {
   const router = useRouter();
+  const { burst, styleFor } = useExplode();
   const searchParams = useSearchParams();
   const urlView = searchParams.get("view");
 
@@ -654,9 +656,11 @@ function BookInner() {
           const bc = bracketColor(r.headline);
           const lapsed = isLapsed(r.headline);
 
+          const href = `/account/${r.account_id}`;
           return (
-            <a key={r.account_id} href={`/account/${r.account_id}`}
-              style={{ position: "relative", display: "block", background: lapsed ? "var(--lapsed-card-bg)" : "var(--surface)", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)" }}>
+            <a key={r.account_id} href={href}
+              onClick={(e) => { e.preventDefault(); burst(r.account_id, () => router.push(href)); }}
+              style={{ position: "relative", display: "block", background: lapsed ? "var(--lapsed-card-bg)" : "var(--surface)", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)", ...(styleFor(r.account_id) || {}) }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${bc}`, borderLeft: `2px solid ${bc}`, borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${bc}`, borderRight: `1.5px solid ${bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
 

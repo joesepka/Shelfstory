@@ -1,0 +1,268 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase } from "../../lib/supabase";
+
+// Wholesale Trends — over-time view. Same top filters as the book (minus "near me"),
+// plus Item. View toggle is 24 Month (24 x 30-day buckets) / Quarterly (8 x 90-day).
+// First graph: ACTUAL 30-day cases per period (from ai_window_dense, window 0 = most
+// recent 30 days) summed across whatever the filters select. NOT rolling-90.
+
+const scrollSel = {
+  fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid var(--border-strong)",
+  background: "var(--surface)", color: "var(--text-2)", fontFamily: "inherit", minWidth: 96, flexShrink: 0,
+  appearance: "none", WebkitAppearance: "none",
+};
+const wrap = { background: "var(--bg)", height: "100vh", maxWidth: "var(--maxw)", margin: "0 auto", display: "flex", flexDirection: "column" };
+const kfmt = v => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + "k" : Math.round(v).toLocaleString();
+const isOn = a => String(a.channel || "").toUpperCase().startsWith("ON");
+
+// labels anchored to the data snapshot; window 0 = most recent 30 days (oldest -> newest)
+function monthLabels(snap) {
+  const base = snap ? new Date(snap) : new Date();
+  const out = [];
+  for (let k = 23; k >= 0; k--) { const d = new Date(base); d.setDate(d.getDate() - k * 30); out.push(d.toLocaleString("en-US", { month: "short" })); }
+  return out;
+}
+function quarterLabels(snap) {
+  const base = snap ? new Date(snap) : new Date();
+  const out = [];
+  for (let qn = 7; qn >= 0; qn--) { const d = new Date(base); d.setDate(d.getDate() - qn * 90); out.push(d.toLocaleString("en-US", { month: "short", year: "2-digit" })); }
+  return out;
+}
+
+export default function WholesalePage() {
+  const [rows, setRows] = useState(null);   // account_list (attrs only)
+  const [items, setItems] = useState([]);   // [{ key, name }]
+  const [snap, setSnap] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const [q, setQ] = useState("");
+  const [stF, setStF] = useState("All");
+  const [cityF, setCityF] = useState("All");
+  const [chainF, setChainF] = useState("All");
+  const [premF, setPremF] = useState("All");
+  const [distF, setDistF] = useState("All");
+  const [itemF, setItemF] = useState("All");
+  const [mode, setMode] = useState("month"); // "month" | "quarter"
+
+  const [series, setSeries] = useState(null); // 24 sums, index 0 = most recent window
+  const [loading, setLoading] = useState(true);
+  const loadId = useRef(0);
+
+  // account universe (for filter options + scope) + snapshot date + item names
+  useEffect(() => {
+    (async () => {
+      try {
+        let all = [], from = 0;
+        while (true) {
+          const { data, error } = await supabase.from("account_list")
+            .select("account_id,account_name,chain,city,state,distributor,channel,channel_type,account_weight")
+            .order("account_weight", { ascending: false }).range(from, from + 4999);
+          if (error) throw error;
+          all = all.concat(data || []);
+          if (!data || data.length < 5000) break;
+          from += 5000;
+        }
+        setRows(all);
+      } catch (e) { setErr(e.message || "load failed"); }
+    })();
+    (async () => {
+      const { data } = await supabase.from("ai_window_dense").select("snapshot_date").limit(1);
+      if (data && data[0]) setSnap(data[0].snapshot_date);
+    })();
+    (async () => {
+      try {
+        // only ~14 distinct SKUs — one page is plenty to collect them all
+        const { data } = await supabase.from("item_grid").select("product_key,item_name").limit(5000);
+        const map = {};
+        for (const r of (data || [])) if (r.product_key && !(r.product_key in map)) map[r.product_key] = r.item_name;
+        setItems(Object.entries(map).map(([key, name]) => ({ key, name })).sort((a, b) => String(a.name).localeCompare(String(b.name))));
+      } catch { /* item dropdown is best-effort */ }
+    })();
+  }, []);
+
+  const states = useMemo(() => rows ? ["All", ...[...new Set(rows.map(r => r.state).filter(Boolean))].sort()] : ["All"], [rows]);
+  const cities = useMemo(() => { if (!rows) return ["All"]; let p = rows; if (stF !== "All") p = p.filter(r => r.state === stF); return ["All", ...[...new Set(p.map(r => r.city).filter(Boolean))].sort()]; }, [rows, stF]);
+  const chains = useMemo(() => { if (!rows) return ["All"]; let p = rows; if (stF !== "All") p = p.filter(r => r.state === stF); if (cityF !== "All") p = p.filter(r => r.city === cityF); return ["All", ...[...new Set(p.map(r => r.chain).filter(Boolean))].sort()]; }, [rows, stF, cityF]);
+  const dists = useMemo(() => rows ? ["All", ...[...new Set(rows.map(r => r.distributor).filter(Boolean))].sort()] : ["All"], [rows]);
+
+  const scopedIds = useMemo(() => {
+    if (!rows) return [];
+    let f = rows;
+    if (stF !== "All") f = f.filter(r => r.state === stF);
+    if (cityF !== "All") f = f.filter(r => r.city === cityF);
+    if (chainF !== "All") f = f.filter(r => r.chain === chainF);
+    if (distF !== "All") f = f.filter(r => r.distributor === distF);
+    if (premF !== "All") f = f.filter(r => premF === "ON" ? isOn(r) : !isOn(r));
+    if (q.trim()) { const qq = q.trim().toLowerCase(); f = f.filter(r => String(r.account_name || "").toLowerCase().includes(qq)); }
+    return f.map(r => r.account_id);
+  }, [rows, stF, cityF, chainF, distF, premF, q]);
+
+  // load the 24-window series — one fast server-side RPC (sums inside Postgres).
+  // Defaults to ALL wholesale (no params). Debounced so typing search doesn't
+  // fire a request per keystroke.
+  useEffect(() => {
+    const myId = ++loadId.current;
+    setLoading(true);
+    const t = setTimeout(async () => {
+      try {
+        const params = {};
+        if (stF !== "All") params.p_state = stF;
+        if (cityF !== "All") params.p_city = cityF;
+        if (chainF !== "All") params.p_chain = chainF;
+        if (distF !== "All") params.p_distributor = distF;
+        if (premF !== "All") params.p_premise = premF;
+        if (itemF !== "All") params.p_product_key = itemF;
+        if (q.trim()) params.p_name = q.trim();
+        const { data, error } = await supabase.rpc("trends_30d", params);
+        if (error) throw error;
+        if (loadId.current !== myId) return; // a newer load superseded this one
+        const sums = new Array(24).fill(0);
+        for (const r of (data || [])) { const wi = r.window_index; if (wi >= 0 && wi < 24) sums[wi] = Number(r.cases) || 0; }
+        setSeries(sums);
+        setLoading(false);
+      } catch (e) { if (loadId.current === myId) { setErr(e.message || "trend load failed"); setLoading(false); } }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [stF, cityF, chainF, distF, premF, itemF, q]);
+
+  const noMatch = !!rows && scopedIds.length === 0;
+
+  const display = useMemo(() => {
+    if (!series) return null;
+    if (mode === "quarter") {
+      const qs = [];
+      for (let qi = 0; qi < 8; qi++) qs.push((series[qi * 3] || 0) + (series[qi * 3 + 1] || 0) + (series[qi * 3 + 2] || 0));
+      return qs.reverse(); // oldest -> newest
+    }
+    return series.slice().reverse(); // oldest -> newest
+  }, [series, mode]);
+  const labels = useMemo(() => mode === "quarter" ? quarterLabels(snap) : monthLabels(snap), [mode, snap]);
+
+  const scopeLabel = useMemo(() => {
+    const parts = [];
+    if (distF !== "All") parts.push(distF);
+    if (chainF !== "All") parts.push(chainF);
+    if (cityF !== "All") parts.push(cityF); else if (stF !== "All") parts.push(stF);
+    if (premF !== "All") parts.push(premF === "ON" ? "On-premise" : "Off-premise");
+    if (itemF !== "All") { const it = items.find(x => x.key === itemF); parts.push(it ? it.name : itemF); }
+    if (q.trim()) parts.push(`"${q.trim()}"`);
+    return parts.length ? parts.join(" · ") : "All wholesale";
+  }, [distF, chainF, cityF, stF, premF, itemF, q, items]);
+
+  return (
+    <div style={wrap}>
+      <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
+
+      <div style={{ padding: "12px 14px 2px", flexShrink: 0 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px" }}>Wholesale Trends</div>
+        <div style={{ fontSize: 11.5, color: "var(--text-3)", marginTop: 1 }}>Actual 30-day depletions over time — filter, then scroll.</div>
+      </div>
+
+      {/* search */}
+      <div style={{ padding: "8px 12px 2px", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 11, padding: "9px 12px", boxShadow: "var(--shadow-sm)" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9AA593" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
+          </svg>
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search accounts by name…"
+            style={{ border: "none", background: "none", outline: "none", fontFamily: "inherit", fontSize: 13, color: "var(--text)", width: "100%" }} />
+          {q && <span onClick={() => setQ("")} style={{ cursor: "pointer", color: "var(--text-3)", fontWeight: 700, fontSize: 13 }}>✕</span>}
+        </div>
+      </div>
+
+      {/* filters (no "near me") */}
+      <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
+        <select style={scrollSel} value={stF} onChange={e => { setStF(e.target.value); setCityF("All"); setChainF("All"); }}>
+          {states.map(s => <option key={s} value={s}>{s === "All" ? "State" : s}</option>)}
+        </select>
+        <select style={scrollSel} value={cityF} onChange={e => { setCityF(e.target.value); setChainF("All"); }}>
+          {cities.map(c => <option key={c} value={c}>{c === "All" ? "City" : c}</option>)}
+        </select>
+        <select style={scrollSel} value={chainF} onChange={e => setChainF(e.target.value)}>
+          {chains.map(c => <option key={c} value={c}>{c === "All" ? "Chain" : c}</option>)}
+        </select>
+        <select style={scrollSel} value={premF} onChange={e => setPremF(e.target.value)}>
+          <option value="All">Premise</option>
+          <option value="ON">On-premise</option>
+          <option value="OFF">Off-premise</option>
+        </select>
+        <select style={scrollSel} value={distF} onChange={e => setDistF(e.target.value)}>
+          {dists.map(d => <option key={d} value={d}>{d === "All" ? "Distributor" : d}</option>)}
+        </select>
+        <select style={scrollSel} value={itemF} onChange={e => setItemF(e.target.value)}>
+          <option value="All">Item</option>
+          {items.map(it => <option key={it.key} value={it.key}>{it.name}</option>)}
+        </select>
+      </div>
+
+      {/* view toggle: 24 Month / Quarterly */}
+      <div style={{ display: "flex", gap: 4, padding: "0 12px 10px", flexShrink: 0 }}>
+        {[["month", "24 Month"], ["quarter", "Quarterly"]].map(([k, t]) => (
+          <button key={k} onClick={() => setMode(k)}
+            style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: "7px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit",
+              background: mode === k ? "var(--text-2)" : "var(--surface-2)", color: mode === k ? "#fff" : "var(--text-2)" }}>
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* scroll area: charts */}
+      <div className="nobar" style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "0 12px 60px", WebkitOverflowScrolling: "touch" }}>
+        {err && <div style={{ fontSize: 13, color: "var(--down)", padding: "10px 2px" }}>Couldn’t load. {err}</div>}
+
+        {!err && noMatch && (
+          <div style={{ marginTop: 16, padding: "16px", textAlign: "center", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, color: "var(--text-2)", fontSize: 12.5 }}>No accounts match these filters.</div>
+        )}
+
+        {!err && !noMatch && loading && (
+          <div style={{ marginTop: 16, fontSize: 12.5, color: "var(--text-3)", padding: "10px 2px" }}>Crunching trends…</div>
+        )}
+
+        {!err && !noMatch && !loading && display && (
+          <>
+            <div style={{ fontSize: 11.5, color: "var(--text-3)", margin: "12px 2px 0" }}>{scopeLabel}{rows ? ` · ${scopedIds.length.toLocaleString()} accounts` : ""}</div>
+            <TrendBars
+              title="30-day cases"
+              sub={mode === "quarter" ? "Actual cases · 8 quarters (90-day buckets)" : "Actual cases · last 24 periods (30-day buckets)"}
+              data={display} labels={labels} hi={mode === "quarter" ? 1 : 3} unit="cs" />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Over-time bars — matches the market-overview BarCard look. Highlights the most
+// recent `hi` periods. Hides per-bar numbers when dense (24 bars) to stay readable.
+function TrendBars({ title, sub, data, labels, hi, unit }) {
+  const mx = Math.max(...data, 1), n = data.length;
+  const dense = n > 12;
+  return (
+    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
+        <div style={{ fontSize: 9.5, color: "var(--text-3)" }}>{Math.round(data[n - 1]).toLocaleString()} {unit} latest</div>
+      </div>
+      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{sub}</div>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: dense ? 2 : 3, height: 120, marginTop: 10 }}>
+        {data.map((v, i) => {
+          const on = i >= n - hi;
+          const showNum = !dense || i === n - 1 || v === mx;
+          return (
+            <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0 }}>
+              <div style={{ fontSize: 6.5, lineHeight: 1, textAlign: "center", marginBottom: 2, color: on ? "var(--accent-deep)" : "var(--text-3)", fontWeight: on ? 700 : 400, fontFeatureSettings: '"tnum" 1', whiteSpace: "nowrap", overflow: "hidden" }}>{showNum && v > 0 ? kfmt(v) : ""}</div>
+              <div style={{ width: "100%", height: `${v > 0 ? Math.max(2, (v / mx) * 92) : 0}%`, background: on ? "var(--accent)" : "#C9DCD0", borderRadius: "2px 2px 0 0" }} />
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: dense ? 2 : 3, marginTop: 4 }}>
+        {labels.map((l, i) => {
+          const show = !dense || i % 3 === 0 || i === n - 1;
+          return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden" }}>{show ? l : ""}</div>;
+        })}
+      </div>
+    </div>
+  );
+}
