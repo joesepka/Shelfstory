@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import Splash from "../../components/Splash";
 
 function label(hd) {
   switch (String(hd || "").toLowerCase().trim()) {
@@ -473,7 +474,7 @@ function BookInner() {
 
       <div className="nobar" style={{ flex: 1, overflow: fullBleed ? "hidden" : "auto", minHeight: 0,
         padding: view === "grid" ? "0 0 0 12px" : view === "tree" ? "0" : "0 12px 40px", WebkitOverflowScrolling: "touch" }}>
-        {!rows && <div style={{ color: "#B5B0A2", fontSize: 13, padding: 10 }}>Loading…</div>}
+        {!rows && <div style={{ position: "relative", height: 320 }}><Splash fixed={false} /></div>}
 
         {view === "grid" && rows && <GridMatrix accounts={shown} />}
         {view === "tree" && rows && <TreeMap accounts={shownTree} />}

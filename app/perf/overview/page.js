@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
+import Splash from "../../../components/Splash";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
@@ -251,7 +252,7 @@ function OvInner() {
 
       <div className="screen-only" style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
         <Top title={title} back={() => router.push("/perf")} canPrint={!!ready} onExport={exportPdf} exporting={exporting} />
-        {!m && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 16 }}>Building overview…</div>}
+        {!m && <div style={{ position: "relative", height: 320 }}><Splash fixed={false} /></div>}
         {m && (
           <div className="nobar" style={{ flex: 1, overflowY: "auto", padding: "0 16px 40px", WebkitOverflowScrolling: "touch" }}>
             <section>

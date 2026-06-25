@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import Splash from "../../components/Splash";
 
 function gpct(cur, prev) { return prev > 0 ? Math.round(100 * (cur - prev) / prev) : (cur > 0 ? 999 : null); }
 function fmtPct(g) { if (g == null || g === 999) return "new"; return (g > 0 ? "+" : "") + g + "%"; }
@@ -200,7 +201,7 @@ function PerfInner() {
       </div>
 
       <div key={scopeSig + view} className="nobar" style={{ flex: 1, overflowY: "auto", padding: "0 14px 28px", animation: pop ? "none" : "pfIn .26s ease", WebkitOverflowScrolling: "touch" }}>
-        {!rows && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 10 }}>Loading…</div>}
+        {!rows && <div style={{ position: "relative", height: 320 }}><Splash fixed={false} /></div>}
         {rows && !boxes.length && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 10 }}>Nothing in this scope.</div>}
 
         {taperRows.map((row, ri) => (
