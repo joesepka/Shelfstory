@@ -206,6 +206,23 @@ function OvInner() {
     };
   }, [rows, plcByAcct]); // eslint-disable-line
 
+  // Deck "Your book" lists: top growers + biggest decliners by 90D case delta
+  // (cur90 − prev90). No real growth drivers → top non-declining accounts by volume.
+  const bookLists = useMemo(() => {
+    if (!rows || !rows.length) return null;
+    const tagFor = h => { const x = String(h || "").toLowerCase(); return x === "lapsed" ? "lapsed" : x === "at-risk" ? "at-risk" : x === "decelerating" ? "softening" : x === "new" ? "new" : x === "accelerating" ? "accelerating" : ""; };
+    const wd = rows.map(a => ({ account_id: a.account_id, account_name: a.account_name, city: a.city, chain: a.chain, channel_type: a.channel_type, cur90: a.cur90 || 0, prev90: a.prev90 || 0, delta: Math.round((a.cur90 || 0) - (a.prev90 || 0)), tag: tagFor(a.headline) }));
+    let growers = wd.filter(a => a.delta > 0).sort((x, y) => y.delta - x.delta).slice(0, 10);
+    let growMode = "growing";
+    if (growers.length === 0) { growers = wd.filter(a => a.delta >= 0 && a.cur90 > 0).sort((x, y) => y.cur90 - x.cur90).slice(0, 10); growMode = "top"; }
+    growers = growers.map(a => growMode === "growing"
+      ? { ...a, mainVal: `+${a.delta.toLocaleString()} cs`, mainColor: PT.up }
+      : { ...a, tag: "", mainVal: `${a.cur90.toLocaleString()} cs`, mainColor: PT.ink });
+    const decliners = wd.filter(a => a.delta < 0 && a.prev90 > 0).sort((x, y) => x.delta - y.delta).slice(0, 10)
+      .map(a => ({ ...a, mainVal: `${a.delta.toLocaleString()} cs`, mainColor: PT.down }));
+    return { growers, decliners, growMode };
+  }, [rows]);
+
   const verdict = useMemo(() => m ? buildVerdict(m, title) : "", [m, title]);
 
   const summary = useMemo(() => {
@@ -232,7 +249,7 @@ function OvInner() {
     return { head: head.slice(0, 4), opp: opp.slice(0, 4) };
   }, [m, health, items, tableA, tableB]);
 
-  const ready = m && health && items && tableA && tableB && movers && summary && demoRows;
+  const ready = m && health && items && tableA && tableB && movers && summary && demoRows && bookLists;
   const deckRef = useRef(null);
   const [exporting, setExporting] = useState(false);
 
@@ -352,7 +369,7 @@ function OvInner() {
         )}
       </div>
 
-      {ready && <PrintDeck deckRef={deckRef} title={title} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} demoRows={demoRows} />}
+      {ready && <PrintDeck deckRef={deckRef} title={title} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} demoRows={demoRows} bookLists={bookLists} />}
     </div>
   );
 }
@@ -403,6 +420,30 @@ function PDemoBars({ title, bars, benchmark }) {
       <div style={{ display: "flex", gap: 7, marginTop: 3 }}>
         {bars.map((b, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: PT.mut, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</div>)}
       </div>
+    </div>
+  );
+}
+
+// Ranked account list for the deck (growers / decliners). rows carry precomputed
+// mainVal + mainColor + tag so this stays a dumb renderer.
+function PAcctList({ title, sub, accent, rows, empty }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: accent }}>{title}</div>
+      <div style={{ fontSize: 8.5, color: PT.mut, marginBottom: 6 }}>{sub}</div>
+      {(!rows || rows.length === 0) && <div style={{ fontSize: 10, color: PT.mut, fontStyle: "italic" }}>{empty}</div>}
+      {rows && rows.map((a, i) => (
+        <div key={a.account_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "4.5px 0", borderBottom: i < rows.length - 1 ? `1px solid ${PT.line}` : "none" }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 600, color: PT.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleCase(a.account_name)}</div>
+            <div style={{ fontSize: 8.5, color: PT.mut, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.city}{a.chain ? ` · ${titleCase(a.chain)}` : a.channel_type ? ` · ${titleCase(a.channel_type)}` : ""}</div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: a.mainColor }}>{a.mainVal}</div>
+            {a.tag && <div style={{ fontSize: 8, color: PT.mut }}>{a.tag}</div>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -493,7 +534,7 @@ function PAcctRos({ accts, ros, labels, hi }) {
 }
 function PPanelHead({ children }) { return <div style={{ fontSize: 9.5, fontWeight: 700, color: PT.mut, textTransform: "uppercase", letterSpacing: .3, marginBottom: 7 }}>{children}</div>; }
 
-function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows }) {
+function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows, bookLists }) {
   const labels = monthLabels(11);
   const topItems = (items?.all || []).slice(0, 8);
   const itemMx = Math.max(...topItems.map(it => Math.max(it.l90, it.prev)), 1);
@@ -659,41 +700,38 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
         <PFoot page="4" />
       </div>
 
-      {/* HEALTH */}
+      {/* HEALTH — circles up top, then growers / decliners */}
       <div className="pslide">
         <PHead kick="03 · Account Health" title="Where the book stands" />
-        <div style={{ flex: 1, padding: "0.18in 0.4in", display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <div style={{ fontSize: 9.5, color: PT.mut, marginBottom: 6 }}>{m.n.toLocaleString()} accounts · circle size = share of 90-day volume</div>
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-around" }}>
-              {[["new", "New", PT.blueSoft, PT.blue], ["healthy", "Healthy", PT.greenSoft, PT.green], ["atrisk", "At risk", PT.amberSoft, PT.amber], ["lapsed", "Lapsed", PT.warmSoft, PT.warm]].map(([k, lab, bg, ink]) => {
-                const b = health[k]; const maxP = Math.max(health.new.pct, health.healthy.pct, health.atrisk.pct, health.lapsed.pct, 1);
-                const d = Math.round(54 + 70 * Math.sqrt(b.pct / maxP));
-                return (
-                  <div key={k} style={{ textAlign: "center" }}>
-                    <div style={{ width: d, height: d, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
-                      <span style={{ fontSize: d >= 90 ? 26 : d >= 72 ? 19 : 15, fontWeight: 700, color: ink }}>{b.n.toLocaleString()}</span>
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: ink, marginTop: 7, whiteSpace: "nowrap" }}>{lab}</div>
-                    <div style={{ fontSize: 9.5, color: PT.mut }}>{b.pct}%</div>
+        <div style={{ flex: 1, padding: "0.18in 0.34in", display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+          <div style={{ fontSize: 9.5, color: PT.mut }}>{m.n.toLocaleString()} accounts · circle size = share of 90-day volume</div>
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-around", flexShrink: 0 }}>
+            {[["new", "New", PT.blueSoft, PT.blue], ["healthy", "Healthy", PT.greenSoft, PT.green], ["atrisk", "At risk", PT.amberSoft, PT.amber], ["lapsed", "Lapsed", PT.warmSoft, PT.warm]].map(([k, lab, bg, ink]) => {
+              const b = health[k]; const maxP = Math.max(health.new.pct, health.healthy.pct, health.atrisk.pct, health.lapsed.pct, 1);
+              const d = Math.round(46 + 52 * Math.sqrt(b.pct / maxP));
+              return (
+                <div key={k} style={{ textAlign: "center" }}>
+                  <div style={{ width: d, height: d, borderRadius: "50%", background: bg, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto" }}>
+                    <span style={{ fontSize: d >= 84 ? 22 : d >= 66 ? 17 : 14, fontWeight: 700, color: ink }}>{b.n.toLocaleString()}</span>
                   </div>
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", marginTop: 16 }}>
-              <div style={{ width: "50%", padding: "0 0.2in" }}>
-                <div style={{ height: 11, border: `2px solid ${PT.greenMid}`, borderTop: "none", borderRadius: "0 0 8px 8px" }} />
-                <div style={{ textAlign: "center", marginTop: 6 }}><span style={{ fontSize: 19, fontWeight: 700, color: PT.green, letterSpacing: "-.5px" }}>{health.goodPct}%</span><span style={{ fontSize: 9.5, color: PT.ink2, marginLeft: 6 }}>healthy book · new + healthy</span></div>
-              </div>
-              <div style={{ width: "50%", padding: "0 0.2in" }}>
-                <div style={{ height: 11, border: `2px solid ${PT.warm}`, borderTop: "none", borderRadius: "0 0 8px 8px" }} />
-                <div style={{ textAlign: "center", marginTop: 6 }}><span style={{ fontSize: 19, fontWeight: 700, color: PT.warm, letterSpacing: "-.5px" }}>{health.badPct}%</span><span style={{ fontSize: 9.5, color: PT.ink2, marginLeft: 6 }}>needs attention · at-risk + lapsed</span></div>
-              </div>
-            </div>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: ink, marginTop: 6, whiteSpace: "nowrap" }}>{lab}</div>
+                  <div style={{ fontSize: 9, color: PT.mut }}>{b.pct}%</div>
+                </div>
+              );
+            })}
           </div>
-          <div style={{ background: PT.panel, border: `1px solid ${PT.line}`, borderRadius: 6, padding: "0.1in 0.14in", fontSize: 9.5, color: PT.ink2, lineHeight: 1.4, marginTop: 8 }}>
-            {topGrp && <><b style={{ color: PT.ink }}>Leading:</b> {topGrp.label} {topGrp.gPct > 0 ? "+" : ""}{topGrp.gPct}% carrying growth{softGrp && softGrp.gPct < 0 ? `; ${softGrp.label} softening (${softGrp.gPct}%)` : ""}. </>}
-            {health.lapsed.n > 0 && <><b style={{ color: PT.warm }}>{health.lapsed.n} lapsed</b> this quarter — the at-risk {health.atrisk.pct}% is defensible if half are caught.</>}
+          <div style={{ display: "flex", justifyContent: "center", gap: 26, fontSize: 9.5, color: PT.ink2, flexShrink: 0 }}>
+            <span><b style={{ color: PT.green, fontSize: 13 }}>{health.goodPct}%</b> healthy book · new + healthy</span>
+            <span style={{ color: PT.lineStrong }}>|</span>
+            <span><b style={{ color: PT.warm, fontSize: 13 }}>{health.badPct}%</b> needs attention · at-risk + lapsed</span>
+          </div>
+          <div style={{ display: "flex", gap: 24, flex: 1, minHeight: 0, borderTop: `1px solid ${PT.lineStrong}`, paddingTop: 12 }}>
+            <PAcctList accent={PT.green} rows={bookLists.growers} empty="No growth drivers this quarter."
+              title={bookLists.growMode === "growing" ? "Top growing accounts" : "Top accounts"}
+              sub={bookLists.growMode === "growing" ? "by 90-day case growth vs prior 90" : "steady — no clear growth drivers this quarter"} />
+            <div style={{ width: 1, background: PT.line, flexShrink: 0 }} />
+            <PAcctList accent={PT.warm} rows={bookLists.decliners} empty="No material decliners — book is holding."
+              title="Biggest decliners" sub="lost & at-risk · 90-day case drop vs prior 90" />
           </div>
         </div>
         <PFoot page="5" />
