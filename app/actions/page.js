@@ -219,9 +219,9 @@ function ActionsInner() {
       const chG = gpct(chCur, chPrev);
       out.push({
         id: "leak", tag: "DISTRIBUTION LEAK", tone: "amber", section: "fix",
-        impact: `${topLost.lst.length} doors lost`, impactTone: "risk",
+        impact: `${topLost.lst.length} placements lost`, impactTone: "risk",
         title: `${titleCase(topLost.sku)} is slipping${domCh ? ` in ${domCh}` : ""}`,
-        detail: `${titleCase(topLost.sku)} dropped out of ${topLost.lst.length} doors recently${domCh && chG != null ? ` — yet ${domCh} overall is ${chG >= 0 ? "up " + chG + "%" : "down " + Math.abs(chG) + "%"}. ${chG >= 0 ? "SKU down while its channel's up means execution, not demand." : ""}` : "."}`,
+        detail: `${titleCase(topLost.sku)} dropped out of ${topLost.lst.length} placements recently${domCh && chG != null ? ` — yet ${domCh} overall is ${chG >= 0 ? "up " + chG + "%" : "down " + Math.abs(chG) + "%"}. ${chG >= 0 ? "SKU down while its channel's up means execution, not demand." : ""}` : "."}`,
         expandLabel: "see where it dropped",
         targets: topLost.lst.sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0)).slice(0, 5).map(r => ({ name: r.account_name, sub: `${r.city} · ${r.channel_type || ""}`, metric: "lost", href: `/book?ids=${r.account_id}` })),
         foot: "Open all that dropped it in Accounts", footHref: idsHref(topLost.lst.map(r => r.account_id)),
@@ -236,11 +236,11 @@ function ActionsInner() {
       out.push({
         id: "placement", tag: "PLACEMENT", tone: "amber", section: "fix",
         impact: "not pulling", impactTone: "risk",
-        title: `${flat.add} new ${titleCase(flat.city)} doors — and volume's flat`,
-        detail: `You added ${flat.add} placement${flat.add === 1 ? "" : "s"} in ${titleCase(flat.city)} but the market's volume hasn't moved. The doors are in — they're not turning yet. Sell-through and merchandising follow-up, not a win.`,
-        expandLabel: "see the quiet doors",
+        title: `${flat.add} new ${titleCase(flat.city)} placements — and volume's flat`,
+        detail: `You added ${flat.add} placement${flat.add === 1 ? "" : "s"} in ${titleCase(flat.city)} but the market's volume hasn't moved. The placements are in — they're not turning yet. Sell-through and merchandising follow-up, not a win.`,
+        expandLabel: "see the quiet placements",
         targets: flat.addAccts.sort((a, b) => (b.placements_delta || 0) - (a.placements_delta || 0)).slice(0, 5).map(r => ({ name: r.account_name, sub: r.city, metric: `+${r.placements_delta} plc`, href: `/book?ids=${r.account_id}` })),
-        foot: "Open new doors in Accounts", footHref: idsHref(flat.addAccts.map(r => r.account_id)),
+        foot: "Open new placements in Accounts", footHref: idsHref(flat.addAccts.map(r => r.account_id)),
       });
     }
 

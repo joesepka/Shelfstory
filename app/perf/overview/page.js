@@ -121,7 +121,7 @@ function OvInner() {
       const cUp = it.dCases > 0;
       if (it.dDoors !== 0 && Math.sign(it.dDoors) === Math.sign(it.dCases) && Math.abs(it.dDoors) >= 2)
         return `${it.dDoors > 0 ? "+" : ""}${it.dDoors} placements — ${cUp ? "distribution-led" : "lost distribution"}`;
-      return `same doors selling ${cUp ? "harder" : "softer"} — velocity`;
+      return `same placements selling ${cUp ? "harder" : "softer"} — velocity`;
     };
     return { up: up.map(it => ({ ...it, why: why(it) })), down: down.map(it => ({ ...it, why: why(it) })) };
   }, [items]);
@@ -445,7 +445,7 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
     let s = `Volume is ${t} over 90 days on an account base ${a > 1 ? "up " + a + "%" : a < -1 ? "down " + Math.abs(a) + "%" : "essentially flat"}.`;
     if (v != null && a != null) {
       const gap = v - a;
-      if (v >= 3 && gap <= -4) s += " Growth is distribution-led — newer doors haven't ramped, so velocity upside is banked.";
+      if (v >= 3 && gap <= -4) s += " Growth is distribution-led — newer placements haven't ramped, so velocity upside is banked.";
       else if (v >= 3 && gap >= 4) s += " Growth is velocity-led — the same accounts are selling harder.";
       else if (v <= -3) s += " The decline needs both a win-back push and a sell-through fix.";
       else s += " Accounts and rate-of-sale are roughly balanced.";
@@ -923,7 +923,7 @@ function buildVerdict(m, title) {
     const vel = v - a, gap = v - a;
     if (v <= -3) {
       if (gap >= 6) out += ` This is mostly a velocity problem — accounts are largely intact, but each is pulling roughly ${Math.abs(vel)}% less. The lever is rate-of-sale: displays, features, menu placement.`;
-      else if (gap <= -6) out += ` This is a distribution problem more than velocity — accounts are falling faster (${a}%) than volume (${v}%). Win those doors back and volume returns quickly.`;
+      else if (gap <= -6) out += ` This is a distribution problem more than velocity — accounts are falling faster (${a}%) than volume (${v}%). Win those placements back and volume returns quickly.`;
       else out += ` The decline is broad-based — accounts down about ${Math.abs(a)}% and rate-of-sale down a similar ${Math.abs(vel)}%. It needs both a win-back push and a sell-through fix.`;
     } else if (v >= 3) {
       if (gap <= -6) out += ` The growth is distribution-led — adding accounts (${a}%) faster than volume is climbing (${v}%), so newer accounts haven't fully ramped. Velocity upside is still banked.`;

@@ -63,17 +63,17 @@ function buildBriefing(acc, b, items, white) {
 
   const signals = [];
 
-  // ---- velocity vs distribution: is the move rate-of-sale or doors? ----
+  // ---- velocity vs distribution: is the move rate-of-sale or placements? ----
   if (acc.prev90 > 0 && acc.live_prev > 0 && acc.live_placements > 0) {
     const rosNow = acc.cur90 / acc.live_placements;
     const rosPrev = acc.prev90 / acc.live_prev;
     const rosD = Math.round((100 * (rosNow - rosPrev)) / rosPrev);
     const plcD = Math.round((100 * (acc.live_placements - acc.live_prev)) / acc.live_prev);
     if (Math.abs(rosD) >= 4 || Math.abs(plcD) >= 4) {
-      if (rosD >= 4 && plcD <= 2) signals.push({ k: "up", t: `Velocity-led: each door is moving ${rosD}% more than last quarter — rate of sale, not new placements.` });
-      else if (plcD >= 4 && rosD <= 2) signals.push({ k: "opp", t: `Distribution-led: ${plcD}% more doors but rate of sale is flat — velocity upside still banked.` });
-      else if (plcD <= -4 && rosD >= -2) signals.push({ k: "warn", t: `Losing doors (${plcD}%) faster than volume — a distribution problem, not velocity. Win the placements back.` });
-      else if (rosD <= -4) signals.push({ k: "warn", t: `Rate of sale is the drag — same doors moving ${Math.abs(rosD)}% less. A velocity fix, not distribution.` });
+      if (rosD >= 4 && plcD <= 2) signals.push({ k: "up", t: `Velocity-led: each placement is moving ${rosD}% more than last quarter — rate of sale, not new placements.` });
+      else if (plcD >= 4 && rosD <= 2) signals.push({ k: "opp", t: `Distribution-led: ${plcD}% more placements but rate of sale is flat — velocity upside still banked.` });
+      else if (plcD <= -4 && rosD >= -2) signals.push({ k: "warn", t: `Losing placements (${plcD}%) faster than volume — a distribution problem, not velocity. Win the placements back.` });
+      else if (rosD <= -4) signals.push({ k: "warn", t: `Rate of sale is the drag — same placements moving ${Math.abs(rosD)}% less. A velocity fix, not distribution.` });
     }
   }
 
