@@ -319,6 +319,13 @@ export default function AccountOverview() {
           <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>
             {acc.city}{acc.state ? `, ${acc.state}` : ""} · {titleCase(acc.channel)} · {acc.chain || "Independent"}
           </div>
+          {(acc.area_type || acc.median_hh_income != null) && (
+            <div style={{ fontSize: 11.5, color: "var(--text-3)", marginTop: 4 }}>
+              {acc.area_type && <span style={{ fontWeight: 700, color: "var(--accent-deep)" }}>{acc.area_type}</span>}
+              {acc.median_hh_income != null && <> · ~${Math.round(acc.median_hh_income / 1000)}K median HH income</>}
+              {acc.total_population != null && <> · pop. {acc.total_population >= 1000 ? Math.round(acc.total_population / 1000) + "K" : acc.total_population.toLocaleString()}</>}
+            </div>
+          )}
         </div>
         <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", background: head.bg, color: head.fg }}>{acc.headline}</span>
       </div>

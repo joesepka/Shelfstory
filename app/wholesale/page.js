@@ -55,7 +55,7 @@ export default function WholesalePage() {
         let all = [], from = 0;
         while (true) {
           const { data, error } = await supabase.from("account_list")
-            .select("account_id,account_name,chain,city,state,distributor,channel,channel_type,account_weight,cur90,prev90")
+            .select("account_id,account_name,chain,city,state,distributor,channel,channel_type,account_weight,cur90,prev90,area_type,income_bucket")
             .order("account_weight", { ascending: false }).range(from, from + 4999);
           if (error) throw error;
           all = all.concat(data || []);
@@ -110,7 +110,7 @@ export default function WholesalePage() {
       if (!itemChan) return null;                       // waiting on the per-item fetch
       src = itemChan;
     } else {
-      src = scopedRows.map(r => ({ channel: r.channel, channel_type: r.channel_type, cur: Number(r.cur90) || 0, prev: Number(r.prev90) || 0 }));
+      src = scopedRows.map(r => ({ channel: r.channel, channel_type: r.channel_type, area_type: r.area_type, income_bucket: r.income_bucket, cur: Number(r.cur90) || 0, prev: Number(r.prev90) || 0 }));
     }
     if (!src.length) return null;
     const grp = arr => {
@@ -135,6 +135,37 @@ export default function WholesalePage() {
       ...subs.map(s => ({ label: titleCase(s.key), ros: s.ros, prevRos: s.prevRos })),
     ];
     return { bars, benchmark: total.ros };
+  }, [scopedRows, itemF, itemChan]);
+
+  // ROS by demographic (area type) and by household income — same standard ROS rule,
+  // same item-aware source as channelRos. Each is a Total bar + the buckets in a fixed
+  // order; benchmark = overall scope ROS. Skips empty buckets.
+  const demoRos = useMemo(() => {
+    let src;
+    if (itemF !== "All") { if (!itemChan) return null; src = itemChan; }
+    else src = scopedRows.map(r => ({ area_type: r.area_type, income_bucket: r.income_bucket, cur: Number(r.cur90) || 0, prev: Number(r.prev90) || 0 }));
+    if (!src.length) return null;
+    const grp = arr => {
+      let cC = 0, cA = 0, pC = 0, pA = 0;
+      for (const r of arr) {
+        const c = Number(r.cur) || 0, p = Number(r.prev) || 0;
+        cC += c; if (c > 0) cA++;
+        pC += p; if (p > 0) pA++;
+      }
+      return { ros: cA > 0 ? cC / cA / 3 : 0, prevRos: pA > 0 ? pC / pA / 3 : 0 };
+    };
+    const total = grp(src);
+    const series = (keyFn, order, labelMap) => {
+      const by = {};
+      for (const r of src) { const k = keyFn(r); if (!k) continue; (by[k] = by[k] || []).push(r); }
+      const bars = [{ label: "Total", ros: total.ros, prevRos: total.prevRos }];
+      for (const k of order) if (by[k] && by[k].length) { const g = grp(by[k]); bars.push({ label: labelMap[k] || k, ros: g.ros, prevRos: g.prevRos }); }
+      return { bars, benchmark: total.ros };
+    };
+    const AREA = ["Urban", "Suburban", "Small Town", "Rural"];
+    const INCOME = ["Low (<$58K)", "Moderate ($58-70K)", "High ($70-84K)", "Affluent ($84K+)"];
+    const INCOME_SHORT = { "Low (<$58K)": "Low", "Moderate ($58-70K)": "Moderate", "High ($70-84K)": "High", "Affluent ($84K+)": "Affluent" };
+    return { area: series(r => r.area_type, AREA, {}), income: series(r => r.income_bucket, INCOME, INCOME_SHORT) };
   }, [scopedRows, itemF, itemChan]);
 
   // load the 24-window series — one fast server-side RPC (sums inside Postgres).
@@ -299,6 +330,18 @@ export default function WholesalePage() {
                 title={itemF !== "All" ? `ROS by channel · ${items.find(x => x.key === itemF)?.name || itemF}` : "ROS by channel"}
                 sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"
                 bars={channelRos.bars} benchmark={channelRos.benchmark} />
+            )}
+            {demoRos && (
+              <ChannelRosCard
+                title={itemF !== "All" ? `ROS by area type · ${items.find(x => x.key === itemF)?.name || itemF}` : "ROS by area type"}
+                sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"
+                bars={demoRos.area.bars} benchmark={demoRos.area.benchmark} />
+            )}
+            {demoRos && (
+              <ChannelRosCard
+                title={itemF !== "All" ? `ROS by household income · ${items.find(x => x.key === itemF)?.name || itemF}` : "ROS by household income"}
+                sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"
+                bars={demoRos.income.bars} benchmark={demoRos.income.benchmark} />
             )}
             {itemLineSeries && (
               <ItemRosLines

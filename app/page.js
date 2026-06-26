@@ -260,8 +260,8 @@ function Stat({ label, value, unit, pct, divider, delay = 0 }) {
     <div style={{ flex: 1, minWidth: 0, textAlign: "center", borderLeft: divider ? "1px solid var(--border-strong)" : "none" }}>
       <div style={{ fontSize: 8.5, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, height: 22, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
       <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 2, marginTop: 3 }}>
-        <span className="statfloat" style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1', animationDelay: `${delay}s` }}>{value}</span>
-        {unit && <span style={{ fontSize: 9, color: "var(--text-3)" }}>{unit}</span>}
+        <span className="statfloat" style={{ fontSize: 21, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1', animationDelay: `${delay}s` }}>{value}</span>
+        {unit && <span style={{ fontSize: 9.5, color: "var(--text-3)" }}>{unit}</span>}
       </div>
       <div style={{ fontSize: 9.5, fontWeight: 700, color: c, marginTop: 5 }}>
         {arrow} {pct == null ? "—" : `${Math.abs(pct)}%`}
