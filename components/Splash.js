@@ -60,7 +60,7 @@ export default function Splash({ fixed = true }) {
     : { position: "absolute", inset: 0 };
 
   return (
-    <div style={{ ...outer, background: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+    <div style={{ ...outer, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }} aria-label="Loading">
         <path d={L} stroke="#B5B0A2" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />
         <path d={R} stroke="#B5B0A2" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />

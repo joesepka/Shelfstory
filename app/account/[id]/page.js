@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import LoadingScreen from "../../../components/LoadingScreen";
+import { greenBar } from "../../../lib/utils";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
 
@@ -61,6 +62,7 @@ function Trend({ spark, color }) {
   const n = spark.length;
   const W = 620, H = 156, padL = 34, padR = 12, padT = 16, padB = 26;
   const top = Math.max(...spark) || 1;
+  const loV = Math.min(...spark.filter(x => x > 0), top);
   const slot = (W - padL - padR) / n;
   const barW = slot * 0.64;
   const gap = (slot - barW) / 2;
@@ -83,9 +85,7 @@ function Trend({ spark, color }) {
         const x = X(i) + gap;
         const y = Y(v);
         const h = Math.max(v > 0 ? 2 : 0, base - y);
-        const newest = i === n - 1;
-        const pv = spark[i - 1];
-        const f = newest ? "var(--accent-deep)" : (pv == null || v <= 0) ? "var(--bar-neutral)" : v >= pv * 1.02 ? "var(--bar-grow)" : v <= pv * 0.97 ? "var(--bar-dip)" : "var(--bar-neutral)";
+        const f = greenBar(v, loV, top);
         return (
           <rect key={i} x={x.toFixed(1)} y={(base - h).toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)}
             rx="2" fill={f}

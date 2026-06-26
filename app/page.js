@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
 
 const T = {
-  bg: "#FFFFFF", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
+  bg: "var(--bg)", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
   font: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
   serif: "var(--font-sans)",
 };
