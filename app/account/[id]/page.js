@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import LoadingScreen from "../../../components/LoadingScreen";
@@ -172,11 +172,50 @@ function Trend({ spark, color }) {
   );
 }
 
+// in-place order history: a row of green order boxes (replaces the trend chart)
+function ItemBoxes({ name, months, total, lastOrdered, lost, onClose }) {
+  const series = [...months].reverse();
+  const vals = series.map((m) => m.cases).filter((x) => x > 0);
+  const hi = Math.max(...vals, 1);
+  const lo = vals.length ? Math.min(...vals) : hi;
+  return (
+    <div style={{ animation: "dotIn .28s ease" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 2px 7px" }}>
+        <div style={{ fontSize: 11, color: "var(--text-3)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><strong style={{ color: "var(--text-2)", fontWeight: 600 }}>{name}</strong> · cases · 30-day periods</div>
+        <button onClick={onClose} aria-label="Back to account trend" style={{ flexShrink: 0, border: "none", background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 20, fontSize: 11, fontWeight: 600, padding: "4px 11px", cursor: "pointer", fontFamily: "inherit" }}>✕ close</button>
+      </div>
+      <div style={{ display: "flex", gap: 5 }}>
+        {series.map((m, i) => {
+          const t = hi > lo ? 0.18 + 0.82 * ((m.cases - lo) / (hi - lo)) : 1;
+          const txt = t > 0.5 ? "#fff" : "var(--accent-deep)";
+          return (
+            <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: 0, animation: "dotIn .3s ease both", animationDelay: `${i * 26}ms` }}>
+              <div style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600,
+                background: m.cases > 0 ? greenBar(m.cases, lo, hi) : "var(--surface)",
+                border: m.cases > 0 ? "none" : "1px dashed var(--border-strong)",
+                color: m.cases > 0 ? txt : "var(--text-3)" }}>{m.cases > 0 ? m.cases : ""}</div>
+              <div style={{ fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>{monthLabel(m.i)}</div>
+            </div>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 8, padding: "0 2px" }}>
+        {total} cs over 12 months · last ordered {lastOrdered}{lost ? " · lost" : ""}
+      </div>
+    </div>
+  );
+}
+
 export default function AccountOverview() {
   const { id } = useParams();
   const router = useRouter();
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
+  const [sel, setSel] = useState(null);        // open SKU { product_key, item_name } or null
+  const [itemData, setItemData] = useState(null);
+  const [itemErr, setItemErr] = useState(false);
+  const selRef = useRef(null);
+  const chartRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -212,6 +251,27 @@ export default function AccountOverview() {
       }
     })();
   }, [id]);
+
+  // open a SKU's order history in place of the trend chart (no navigation)
+  async function openItem(it) {
+    if (sel && sel.product_key === it.product_key) { closeItem(); return; }
+    selRef.current = it.product_key;
+    setSel({ product_key: it.product_key, item_name: it.item_name });
+    setItemData(null); setItemErr(false);
+    if (chartRef.current) chartRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    const { data, error } = await supabase.from("depletions_window")
+      .select("window_index, cases").eq("account_id", id).eq("product_key", it.product_key).lte("window_index", 11);
+    if (selRef.current !== it.product_key) return; // superseded by another click
+    if (error) { setItemErr(true); return; }
+    const byIdx = {};
+    for (const r of (data || [])) byIdx[r.window_index] = Number(r.cases);
+    const months = [];
+    for (let i = 0; i < 12; i++) months.push({ i, cases: byIdx[i] || 0 });
+    const total = months.reduce((s, m) => s + m.cases, 0);
+    const firstIdx = months.find((m) => m.cases > 0)?.i;
+    setItemData({ months, total, lastOrdered: firstIdx == null ? "—" : monthLabel(firstIdx), lost: (byIdx[0] || 0) === 0 });
+  }
+  function closeItem() { selRef.current = null; setSel(null); setItemData(null); setItemErr(false); }
 
   if (err) return <div className="wrap"><p className="state-msg">Couldn’t load account. {err}</p></div>;
   if (!d) return <LoadingScreen />;
@@ -337,22 +397,37 @@ export default function AccountOverview() {
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 2px 2px" }}>rolling-90 cases · last 12 months</div>
-      <Trend spark={acc.spark} color={head.fg} />
+      <div ref={chartRef} style={{ scrollMarginTop: 12, minHeight: 96 }}>
+        {sel ? (
+          itemErr ? (
+            <div style={{ fontSize: 12, color: "var(--down)", padding: "12px 2px" }}>Couldn’t load orders. <button onClick={closeItem} style={{ border: "none", background: "none", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>back</button></div>
+          ) : !itemData ? (
+            <div style={{ height: 96, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", fontSize: 12 }}>Loading orders…</div>
+          ) : (
+            <ItemBoxes name={sel.item_name} months={itemData.months} total={itemData.total} lastOrdered={itemData.lastOrdered} lost={itemData.lost} onClose={closeItem} />
+          )
+        ) : (
+          <>
+            <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 2px 2px" }}>rolling-90 cases · last 12 months</div>
+            <Trend spark={acc.spark} color={head.fg} />
+          </>
+        )}
+      </div>
 
       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, letterSpacing: "0.3px" }}>WHAT&apos;S ON THE SHELF</div>
       {skus.map((k, i) => {
         const [bg, fg, lbl] = SK[k.cell_state] || SK.stable;
         return (
-          <a key={i} href={`/account/${id}/item/${k.product_key}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 2px", borderBottom: "0.5px solid var(--border)" }}>
+          <div key={i} onClick={() => openItem(k)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 6px", borderRadius: 7, borderBottom: "0.5px solid var(--border)", cursor: "pointer", background: sel && sel.product_key === k.product_key ? "var(--surface-2)" : "transparent" }}>
             <span style={{ fontSize: 13, color: "var(--text)" }}>{k.item_name}</span>
             <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 7, background: bg, color: fg }}>{lbl}</span>
               <span style={{ fontSize: 13, fontWeight: 600, minWidth: 34, textAlign: "right", color: "var(--text)" }}>
                 {k.cell_state === "lost_recent" ? <span style={{ color: "var(--atrisk-ink)", fontWeight: 700 }}>✕</span> : `${k.l90} cs`}
               </span>
+              <span aria-hidden="true" style={{ color: "var(--accent-deep)", fontWeight: 700, fontSize: 12, width: 8 }}>{sel && sel.product_key === k.product_key ? "▾" : "›"}</span>
             </span>
-          </a>
+          </div>
         );
       })}
 
