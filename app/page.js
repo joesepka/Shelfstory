@@ -333,13 +333,14 @@ function buildBrief(rows) {
   return { p1, p2 };
 }
 
-// home nav cards — add/reorder here
+// home nav — big-editorial list. order here is display order; `color` tints the
+// arrow, `highlight` gives the row a subtle coral wash (the priority action).
 const NAV = [
-  { href: "/book", title: "Accounts", sub: "Find accounts by area, see what's happening at each, and work your list — account, grid, or tree." },
-  { href: "/perf", title: "Performance Overview", sub: "The whole book at a glance — drill territory, channel, and chains, then generate a market report." },
-  { href: "/actions", title: "Actions to Take", sub: "Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." },
-  { href: "/dist", title: "Distributor Review", sub: "A full review for any distributor — pulse, account health, items, channels, and an exportable executive summary." },
-  { href: "/wholesale", title: "Wholesale Trends", sub: "Depletion and inventory momentum across your wholesale network — pacing, gaps, and where to push." },
+  { href: "/book", title: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list." },
+  { href: "/perf", title: "Universe Tree", color: "#3D6E93", sub: "Drill the whole book down to its biggest areas of distress." },
+  { href: "/dist", title: "Presentation", color: "#8A6310", sub: "A full, presentable per-distributor review." },
+  { href: "/wholesale", title: "Historical Trends", color: "#534AB7", sub: "Depletion and inventory momentum over time." },
+  { href: "/actions", title: "Actions", color: "#B0573A", sub: "Your highest-priority plays for the day.", highlight: true },
 ];
 
 export default function Home() {
@@ -462,14 +463,9 @@ export default function Home() {
             {s && <div className="riseIn" style={{ animationDelay: ".18s", textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 8 }}>vs prior 90 days</div>}
           </div>
 
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22 }}>WHERE TO?</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-            {NAV.filter(c => c.href !== "/actions").map(c => (
-              <NavCard key={c.href} title={c.title} sub={c.sub} onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} grid />
-            ))}
-          </div>
-          {NAV.filter(c => c.href === "/actions").map(c => (
-            <NavCard key={c.href} title={c.title} sub={c.sub} onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} highlight />
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22, marginBottom: 2 }}>WHERE TO?</div>
+          {NAV.map(c => (
+            <EditorialRow key={c.href} name={c.title} sub={c.sub} color={c.color} highlight={c.highlight} onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} />
           ))}
 
           <div style={{ height: 28 }} />
@@ -480,6 +476,9 @@ export default function Home() {
         @keyframes briefIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
         @keyframes riseIn{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
         .riseIn{animation:riseIn .5s cubic-bezier(.22,.61,.36,1) both;}
+        .edrow{transition:opacity .15s ease, background .15s ease;}
+        .edrow:active{opacity:.6;}
+        @media (hover:hover){.edrow:hover{opacity:.72;}}
         .weatherLayer .cl{will-change:transform;animation-name:driftAcross;animation-timing-function:linear;animation-iteration-count:infinite;}
         @keyframes driftAcross{from{transform:translateX(0);}to{transform:translateX(620px);}}
         .weatherLayer .sunrays{animation:rayspin 90s linear infinite;}
@@ -500,20 +499,27 @@ export default function Home() {
   );
 }
 
-function NavCard({ title, sub, onClick, popStyle, grid, highlight }) {
+// big-editorial nav row: oversized lowercase name, section-tinted arrow, hairline
+// divider. The priority action gets a subtle coral wash + "today" tag.
+function EditorialRow({ name, sub, color, onClick, popStyle, highlight }) {
   return (
-    <div className="navcard" onClick={onClick} style={{
-      background: highlight ? "var(--accent-soft)" : "rgba(255,255,255,0.5)",
-      border: highlight ? "0.5px solid var(--accent)" : "0.5px solid var(--border)",
-      borderRadius: 14, padding: "12px 14px",
-      marginTop: grid ? 0 : 8, height: grid ? "100%" : "auto", boxSizing: "border-box",
-      boxShadow: "var(--shadow)", cursor: "pointer", ...(popStyle || {}),
+    <div className="edrow" onClick={onClick} style={{
+      cursor: "pointer",
+      padding: highlight ? "12px 13px" : "13px 2px",
+      marginTop: highlight ? 9 : 0,
+      borderBottom: highlight ? "none" : "1px solid var(--border)",
+      borderRadius: highlight ? 14 : 0,
+      background: highlight ? "rgba(176,87,58,0.07)" : "transparent",
+      ...(popStyle || {}),
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: grid ? 14.5 : 15.5, fontWeight: 700, color: highlight ? "var(--accent-deep)" : "var(--text)" }}>{title}</div>
-        {!grid && <div className="openchip" style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-deep)", whiteSpace: "nowrap" }}>{highlight ? "today ›" : "open ›"}</div>}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: "-1px", lineHeight: 1.05, textTransform: "lowercase", color: highlight ? color : "var(--text)" }}>{name}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          {highlight && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color, background: "rgba(176,87,58,0.13)", padding: "2px 8px", borderRadius: 20 }}>today</span>}
+          <span style={{ fontSize: 19, color, lineHeight: 1 }}>→</span>
+        </span>
       </div>
-      <div style={{ fontSize: 12, color: "var(--text-2)", marginTop: 3, lineHeight: 1.35 }}>{sub}</div>
+      <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>{sub}</div>
     </div>
   );
 }
