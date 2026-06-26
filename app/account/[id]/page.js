@@ -28,6 +28,8 @@ function titleCase(s) {
 function sigColor(k) {
   return k === "warn" ? "var(--pop-warm)" : k === "up" ? "var(--accent)" : k === "opp" ? "var(--pop-cool)" : "var(--pop-cool-deep)";
 }
+const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
+function median(arr) { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 function monthLabel(monthsAgo) {
   const d = new Date(SNAPSHOT);
   d.setDate(d.getDate() - 30 * monthsAgo);
@@ -191,7 +193,20 @@ export default function AccountOverview() {
         const items = (itemRes.data || []);
         const carried = new Set(items.map((i) => i.product_key));
         const white = (mktRes.data || []).filter((m) => !carried.has(m.product_key)).slice(0, 3);
-        setD({ acc, bench: benRes.data, items, white });
+        // peer cohort for the active-SKU comparison: same on/off premise (strict)
+        const onP = String(acc.channel || "").toUpperCase().startsWith("ON");
+        let cohort = [], cf = 0;
+        while (true) {
+          const { data: cd, error: ce } = await supabase.from("account_list")
+            .select("account_id, live_placements, channel_type, state")
+            .ilike("channel", onP ? "ON%" : "OFF%")
+            .range(cf, cf + 4999);
+          if (ce) throw ce;
+          cohort = cohort.concat(cd || []);
+          if (!cd || cd.length < 5000) break;
+          cf += 5000;
+        }
+        setD({ acc, bench: benRes.data, items, white, cohort, onP });
       } catch (e) {
         setErr(e.message || "load failed");
       }
@@ -201,10 +216,32 @@ export default function AccountOverview() {
   if (err) return <div className="wrap"><p className="state-msg">Couldn’t load account. {err}</p></div>;
   if (!d) return <LoadingScreen />;
 
-  const { acc, bench, items, white } = d;
+  const { acc, bench, items, white, cohort = [], onP } = d;
   const head = HEAD[acc.headline] || HEAD["Stable"];
   const pct = acc.prior90_pct;
   const dl = acc.placements_delta;
+
+  // active-SKU comparison: same-premise peers, prefer same channel_type in-state,
+  // broaden to channel-wide, then all same-premise; null (just the number) if < 5 peers.
+  const onWord = onP ? "on-premise" : "off-premise";
+  const skuComp = (() => {
+    const mine = acc.live_placements || 0;
+    const base = cohort.filter((a) => a.account_id !== acc.account_id);
+    const ch = acc.channel_type;
+    const tiers = [
+      { peers: base.filter((a) => ch && a.channel_type === ch && a.state === acc.state), label: `similar ${ch ? titleCase(ch) + " " : ""}${onWord} accounts in ${STNAME[acc.state] || acc.state}` },
+      { peers: ch ? base.filter((a) => a.channel_type === ch) : [], label: `${ch ? titleCase(ch) + " " : ""}${onWord} accounts` },
+      { peers: base, label: `${onWord} accounts across the book` },
+    ];
+    for (const t of tiers) {
+      const vals = t.peers.map((a) => a.live_placements || 0);
+      if (vals.length >= 5) {
+        const med = median(vals);
+        if (med > 0) return { pct: Math.round(((mine - med) / med) * 100), n: vals.length, label: t.label };
+      }
+    }
+    return null;
+  })();
 
   const skus = [...items].sort((a, b) => {
     const al = a.cell_state === "lost_recent", bl = b.cell_state === "lost_recent";
@@ -266,7 +303,7 @@ export default function AccountOverview() {
         {[
           ["annualized", <>{acc.account_weight} <span style={{ fontSize: 11, color: "var(--text-2)" }}>cs</span></>, null],
           ["L90 cases", <>{acc.cur90} {pct != null && <span style={{ fontSize: 11, color: pct < 0 ? "var(--down)" : pct > 0 ? "var(--up)" : "var(--text-3)" }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : ""}{Math.abs(pct)}%</span>}</>, "vs prior 90D"],
-          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, null],
+          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, skuComp ? <span style={{ color: skuComp.pct > 0 ? "var(--up)" : skuComp.pct < 0 ? "var(--down)" : "var(--text-3)" }}>{skuComp.pct > 0 ? "+" : ""}{skuComp.pct}% vs peers</span> : null],
         ].map(([label, val, note], i) => (
           <div key={i} style={{ flex: 1, padding: "10px 12px", borderRight: i < 2 ? "0.5px solid var(--border)" : "none" }}>
             <div style={{ fontSize: 11, color: "var(--text-3)" }}>{label}</div>
@@ -282,9 +319,20 @@ export default function AccountOverview() {
           <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.4 }}>
             Does <strong style={{ fontWeight: 600, color: "var(--text)" }}>{bench.wt_vs_chan_pct > 0 ? "+" : ""}{bench.wt_vs_chan_pct}%</strong>
             {" the volume of the median "}{titleCase(acc.channel)}{"-channel account "}
-            ({acc.account_weight} vs {bench.chan_med_wt} cs) on{" "}
-            <strong style={{ fontWeight: 600, color: "var(--text)" }}>{acc.live_placements} SKUs</strong>
-            {" vs the channel's typical "}{bench.chan_med_sk}.
+            ({acc.account_weight} vs {bench.chan_med_wt} cs).
+          </div>
+        </div>
+      )}
+
+      {skuComp && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 2px 2px" }}>
+          <span style={{ fontSize: 15, color: skuComp.pct > 0 ? "var(--up)" : skuComp.pct < 0 ? "var(--down)" : "var(--text-2)" }}>▥</span>
+          <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.4 }}>
+            Carries <strong style={{ fontWeight: 600, color: "var(--text)" }}>{acc.live_placements} active SKUs</strong> — {skuComp.pct >= 5
+              ? <><strong style={{ fontWeight: 600, color: "var(--up)" }}>{skuComp.pct}% more</strong> than </>
+              : skuComp.pct <= -5
+                ? <><strong style={{ fontWeight: 600, color: "var(--down)" }}>{Math.abs(skuComp.pct)}% fewer</strong> than </>
+                : "about the same as "}{skuComp.label} <span style={{ color: "var(--text-3)" }}>({skuComp.n} compared)</span>.
           </div>
         </div>
       )}
