@@ -2,8 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
-import { BarCard, AcctRosCard } from "../../components/Charts";
-import { isOn } from "../../lib/utils";
+import { BarCard, AcctRosCard, ChannelRosCard, ItemRosLines } from "../../components/Charts";
+import { isOn, titleCase } from "../../lib/utils";
 import FilterSelect from "../../components/FilterSelect";
 
 // Wholesale Trends — over-time view. Same top filters as the book (minus "near me"),
@@ -43,6 +43,7 @@ export default function WholesalePage() {
 
   const [series, setSeries] = useState(null); // 30-day window sums, index 0 = most recent
   const [acct, setAcct] = useState(null);     // { accts:[12], cases90:[12] } by rolling-90 period
+  const [itemRos, setItemRos] = useState(null); // [{ key, ros:[8] }] top items, ROS over 8 periods
   const [loading, setLoading] = useState(true);
   const loadId = useRef(0);
 
@@ -53,7 +54,7 @@ export default function WholesalePage() {
         let all = [], from = 0;
         while (true) {
           const { data, error } = await supabase.from("account_list")
-            .select("account_id,account_name,chain,city,state,distributor,channel,channel_type,account_weight")
+            .select("account_id,account_name,chain,city,state,distributor,channel,channel_type,account_weight,cur90,prev90")
             .order("account_weight", { ascending: false }).range(from, from + 4999);
           if (error) throw error;
           all = all.concat(data || []);
@@ -83,7 +84,7 @@ export default function WholesalePage() {
   const chains = useMemo(() => { if (!rows) return ["All"]; let p = rows; if (stF !== "All") p = p.filter(r => r.state === stF); if (cityF !== "All") p = p.filter(r => r.city === cityF); return ["All", ...[...new Set(p.map(r => r.chain).filter(Boolean))].sort()]; }, [rows, stF, cityF]);
   const dists = useMemo(() => rows ? ["All", ...[...new Set(rows.map(r => r.distributor).filter(Boolean))].sort()] : ["All"], [rows]);
 
-  const scopedIds = useMemo(() => {
+  const scopedRows = useMemo(() => {
     if (!rows) return [];
     let f = rows;
     if (stF !== "All") f = f.filter(r => r.state === stF);
@@ -91,8 +92,40 @@ export default function WholesalePage() {
     if (chainF !== "All") f = f.filter(r => r.chain === chainF);
     if (distF !== "All") f = f.filter(r => r.distributor === distF);
     if (premF !== "All") f = f.filter(r => premF === "ON" ? isOn(r) : !isOn(r));
-    return f.map(r => r.account_id);
+    return f;
   }, [rows, stF, cityF, chainF, distF, premF]);
+  const scopedIds = useMemo(() => scopedRows.map(r => r.account_id), [scopedRows]);
+
+  // Graph: ROS by channel. Standard ROS = 90D cases / active accounts / 3. Bars are
+  // Total, Off, On, then the top-5 subchannels (channel_type) by 90D volume. prevRos
+  // (prior-90) drives the momentum chip; benchmark = the overall Total ROS. Computed
+  // client-side from cur90/prev90 — no per-item granularity needed here.
+  const channelRos = useMemo(() => {
+    const rs = scopedRows;
+    if (!rs.length) return null;
+    const grp = arr => {
+      let cC = 0, cA = 0, pC = 0, pA = 0;
+      for (const r of arr) {
+        const c = Number(r.cur90) || 0, p = Number(r.prev90) || 0;
+        cC += c; if (c > 0) cA++;
+        pC += p; if (p > 0) pA++;
+      }
+      return { ros: cA > 0 ? cC / cA / 3 : 0, prevRos: pA > 0 ? pC / pA / 3 : 0, cases: cC };
+    };
+    const off = rs.filter(r => !isOn(r)), on = rs.filter(r => isOn(r));
+    const byType = {};
+    for (const r of rs) { const k = r.channel_type || "Other"; (byType[k] = byType[k] || []).push(r); }
+    const subs = Object.entries(byType).map(([k, arr]) => ({ key: k, ...grp(arr) }))
+      .sort((a, b) => b.cases - a.cases).slice(0, 5);
+    const total = grp(rs);
+    const bars = [
+      { label: "Total", ros: total.ros, prevRos: total.prevRos },
+      ...(off.length ? [{ label: "Off", ros: grp(off).ros, prevRos: grp(off).prevRos }] : []),
+      ...(on.length ? [{ label: "On", ros: grp(on).ros, prevRos: grp(on).prevRos }] : []),
+      ...subs.map(s => ({ label: titleCase(s.key), ros: s.ros, prevRos: s.prevRos })),
+    ];
+    return { bars, benchmark: total.ros };
+  }, [scopedRows]);
 
   // load the 24-window series — one fast server-side RPC (sums inside Postgres).
   // Defaults to ALL wholesale (no params). Debounced so typing search doesn't
@@ -102,26 +135,39 @@ export default function WholesalePage() {
     setLoading(true);
     const t = setTimeout(async () => {
       try {
-        const params = {};
-        if (stF !== "All") params.p_state = stF;
-        if (cityF !== "All") params.p_city = cityF;
-        if (chainF !== "All") params.p_chain = chainF;
-        if (distF !== "All") params.p_distributor = distF;
-        if (premF !== "All") params.p_premise = premF;
-        if (itemF !== "All") params.p_product_key = itemF;
-        const [r30, rAcc] = await Promise.all([
+        const sparams = {};                          // scope only (no product key)
+        if (stF !== "All") sparams.p_state = stF;
+        if (cityF !== "All") sparams.p_city = cityF;
+        if (chainF !== "All") sparams.p_chain = chainF;
+        if (distF !== "All") sparams.p_distributor = distF;
+        if (premF !== "All") sparams.p_premise = premF;
+        const params = { ...sparams, ...(itemF !== "All" ? { p_product_key: itemF } : {}) };
+        const [r30, rAcc, rItem] = await Promise.all([
           supabase.rpc("trends_30d", params),            // graph 1: actual 30-day cases
           supabase.rpc("trends_accounts_90d", params),   // graph 2: rolling-90 accounts + cases
+          supabase.rpc("trends_item_ros", sparams),      // graph 4: per-item ROS over 8 periods
         ]);
         if (r30.error) throw r30.error;
         if (rAcc.error) throw rAcc.error;
+        if (rItem.error) throw rItem.error;
         if (loadId.current !== myId) return; // a newer load superseded this one
         const sums = new Array(24).fill(0);
         for (const r of (r30.data || [])) { const wi = r.window_index; if (wi >= 0 && wi < 24) sums[wi] = Number(r.cases) || 0; }
         const accts = new Array(12).fill(0), cases90 = new Array(12).fill(0);
         for (const r of (rAcc.data || [])) { const p = r.period; if (p >= 0 && p < 12) { accts[p] = Number(r.accts) || 0; cases90[p] = Number(r.cases) || 0; } }
+        // top-5 items by total 90D volume; ROS = cases / accts / 3 per period, oldest -> newest
+        const byKey = {};
+        for (const r of (rItem.data || [])) {
+          const p = r.period; if (p < 0 || p > 7) continue;
+          const e = byKey[r.product_key] || (byKey[r.product_key] = { cases: new Array(8).fill(0), accts: new Array(8).fill(0), tot: 0 });
+          const c = Number(r.cases) || 0;
+          e.cases[p] = c; e.accts[p] = Number(r.accts) || 0; e.tot += c;
+        }
+        const top5 = Object.entries(byKey).sort((a, b) => b[1].tot - a[1].tot).slice(0, 5)
+          .map(([key, e]) => ({ key, ros: e.cases.map((c, i) => (e.accts[i] > 0 ? c / e.accts[i] / 3 : 0)).reverse() }));
         setSeries(sums);
         setAcct({ accts, cases90 });
+        setItemRos(top5);
         setLoading(false);
       } catch (e) { if (loadId.current === myId) { setErr(e.message || "trend load failed"); setLoading(false); } }
     }, 300);
@@ -153,6 +199,19 @@ export default function WholesalePage() {
   }, [acct, mode]);
 
   const labels = useMemo(() => mode === "quarter" ? quarterLabels(snap) : monthLabels(snap), [mode, snap]);
+
+  // item ROS chart: 8 monthly labels (oldest -> newest) + named/colored series
+  const itemLabels = useMemo(() => {
+    const base = snap ? new Date(snap) : new Date();
+    const out = [];
+    for (let k = 7; k >= 0; k--) { const d = new Date(base); d.setDate(d.getDate() - k * 30); out.push(d.toLocaleString("en-US", { month: "short" })); }
+    return out;
+  }, [snap]);
+  const itemLineSeries = useMemo(() => {
+    if (!itemRos || !itemRos.length) return null;
+    const colors = ["#3C6E47", "#2C5378", "#C0703A", "#6E4FA3", "#B23A48"];
+    return itemRos.map((s, i) => ({ name: items.find(x => x.key === s.key)?.name || s.key, color: colors[i % colors.length], ros: s.ros }));
+  }, [itemRos, items]);
 
   const scopeLabel = useMemo(() => {
     const parts = [];
@@ -218,6 +277,18 @@ export default function WholesalePage() {
                 title="Accounts & rate of sale"
                 sub={mode === "quarter" ? "Rolling-90 accounts (bars) · ROS/mo (line) · by quarter" : "Rolling-90 accounts (bars) · ROS/mo (line)"}
                 accts={acctDisplay.accts} ros={acctDisplay.ros} labels={labels} hi={mode === "quarter" ? 1 : 3} />
+            )}
+            {channelRos && (
+              <ChannelRosCard
+                title="ROS by channel"
+                sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"
+                bars={channelRos.bars} benchmark={channelRos.benchmark} />
+            )}
+            {itemLineSeries && (
+              <ItemRosLines
+                title="ROS over time · top items"
+                sub="Standard ROS per item · last 8 months · top 5 by volume in scope"
+                series={itemLineSeries} labels={itemLabels} />
             )}
           </>
         )}
