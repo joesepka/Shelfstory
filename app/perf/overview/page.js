@@ -23,7 +23,7 @@ function OvInner() {
   useEffect(() => {
     (async () => {
       setRows(null); setGrid(null);
-      let q = supabase.from("account_list").select("account_id,account_name,city,state,channel,channel_type,chain,headline,account_weight,cur90,prev90,live_placements,live_prev,spark");
+      let q = supabase.from("account_list").select("account_id,account_name,city,state,channel,channel_type,chain,headline,account_weight,cur90,prev90,live_placements,live_prev,spark,area_type,income_bucket");
       if (scope.st) q = q.eq("state", scope.st);
       if (scope.city) q = q.eq("city", scope.city);
       if (scope.channel) q = q.eq("channel_type", scope.channel);
@@ -183,6 +183,26 @@ function OvInner() {
   const tableA = useMemo(() => buildDim(dims[0]), [rows, plcByAcct, dims]); // eslint-disable-line
   const tableB = useMemo(() => buildDim(dims[1]), [rows, plcByAcct, dims]); // eslint-disable-line
 
+  // ROS by area type + household income (standard ROS), scoped to this territory.
+  const demoRows = useMemo(() => {
+    if (!rows || !plcByAcct) return null;
+    let cur = 0, prev = 0, accts = 0;
+    for (const a of rows) { const c = a.cur90 || 0, p = a.prev90 || 0; cur += c; if (c > 0) accts++; prev += p; }
+    const totRos = accts ? cur / accts / 3 : 0;
+    const pick = (agg, keys, labels) => {
+      const bars = [{ label: "Total", ros: totRos, gPct: gpct(cur, prev) }];
+      if (!agg) return bars;
+      const by = {}; agg.forEach(r => { by[r.key] = r; });
+      keys.forEach((k, i) => { const e = by[k]; if (e && e.accts) bars.push({ label: labels[i], ros: e.ros, gPct: e.gPct }); });
+      return bars;
+    };
+    return {
+      area: pick(aggBy(a => a.area_type || null), ["Urban", "Suburban", "Small Town", "Rural"], ["Urban", "Suburban", "Small Town", "Rural"]),
+      income: pick(aggBy(a => a.income_bucket || null), ["Low (<$58K)", "Moderate ($58-70K)", "High ($70-84K)", "Affluent ($84K+)"], ["Low", "Moderate", "High", "Affluent"]),
+      benchmark: totRos,
+    };
+  }, [rows, plcByAcct]); // eslint-disable-line
+
   const verdict = useMemo(() => m ? buildVerdict(m, title) : "", [m, title]);
 
   const summary = useMemo(() => {
@@ -209,7 +229,7 @@ function OvInner() {
     return { head: head.slice(0, 4), opp: opp.slice(0, 4) };
   }, [m, health, items, tableA, tableB]);
 
-  const ready = m && health && items && tableA && tableB && movers && summary;
+  const ready = m && health && items && tableA && tableB && movers && summary && demoRows;
   const deckRef = useRef(null);
   const [exporting, setExporting] = useState(false);
 
@@ -220,7 +240,7 @@ function OvInner() {
       const slides = Array.from(deckRef.current.querySelectorAll(".pslide"));
       const pdf = new jsPDF({ orientation: "landscape", unit: "in", format: [11, 8.5] });
       for (let i = 0; i < slides.length; i++) {
-        const canvas = await html2canvas(slides[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: slides[i].scrollWidth, windowHeight: slides[i].scrollHeight });
+        const canvas = await html2canvas(slides[i], { scale: 2, backgroundColor: "#FBF7EE", useCORS: true, logging: false, windowWidth: slides[i].scrollWidth, windowHeight: slides[i].scrollHeight });
         const img = canvas.toDataURL("image/jpeg", 0.92);
         if (i > 0) pdf.addPage([11, 8.5], "landscape");
         pdf.addImage(img, "JPEG", 0, 0, 11, 8.5);
@@ -329,7 +349,7 @@ function OvInner() {
         )}
       </div>
 
-      {ready && <PrintDeck deckRef={deckRef} title={title} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} />}
+      {ready && <PrintDeck deckRef={deckRef} title={title} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} demoRows={demoRows} />}
     </div>
   );
 }
@@ -337,17 +357,52 @@ function OvInner() {
 /* ================= PRINT DECK ================= */
 const PRINT_CSS = `
 .print-deck { position: absolute; left: -20000px; top: 0; width: 11in; }
-.pslide { width: 11in; height: 8.5in; min-height: 8.5in; max-height: 8.5in; overflow: hidden; position: relative; box-sizing: border-box; display: flex; flex-direction: column; background: #fff; font-family: var(--font-sans), system-ui, sans-serif; }
+.pslide { width: 11in; height: 8.5in; min-height: 8.5in; max-height: 8.5in; overflow: hidden; position: relative; box-sizing: border-box; display: flex; flex-direction: column; background: #FBF7EE; font-family: var(--font-sans), system-ui, sans-serif; }
 `;
 
+// Deck palette — matches the app's cream-paper "Story" skin. Hardcoded (not CSS vars)
+// because html2canvas captures these slides off-screen.
 const PT = {
-  ink: "#2A332A", ink2: "#54604F", mut: "#9AA593", line: "#E7EBDF", lineStrong: "#DCE2D2",
+  paper: "#FBF7EE", card: "#FFFDF8",
+  ink: "#2B2B2B", ink2: "#54604F", mut: "#9A968C", line: "#EDE9DF", lineStrong: "#E3DDD0",
   green: "#3F6E4A", greenMid: "#5E9277", greenSoft: "#E1EFE2",
   blue: "#3D6E93", blueMid: "#5E8FC0", blueSoft: "#E2EBF4",
   amber: "#8A6310", amberSoft: "#F5EBD3",
   warm: "#B0573A", warmSoft: "#F6E2D8", up: "#3E8A5E", down: "#C0533A",
-  tile: "#F7F8F5", panel: "#F7F8F5",
+  purple: "#534AB7", purpleDeep: "#463A76", purpleSoft: "#EEEDFE",
+  tile: "#FFFDF8", panel: "#FFFDF8",
 };
+
+function PBracket({ c }) {
+  return <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 13, height: 13, borderTop: `2px solid ${c || PT.greenMid}`, borderLeft: `2px solid ${c || PT.greenMid}`, borderTopLeftRadius: 7 }} />;
+}
+
+// value-shaded ROS bars by category (purple) with a dashed benchmark line — mirrors
+// the app's ChannelRosCard. bars: [{label, ros, gPct}]. benchmark: number.
+function PDemoBars({ title, bars, benchmark }) {
+  const mx = Math.max(...bars.map(b => b.ros), benchmark || 0, 0.1);
+  const lo = Math.min(...bars.map(b => b.ros).filter(x => x > 0), mx);
+  const scale = mx * 1.18;
+  const shade = v => { const t = mx > lo ? (v - lo) / (mx - lo) : 1; const u = 0.2 + 0.8 * Math.max(0, Math.min(1, t)); const a = [171, 165, 222], b = [70, 58, 118]; return `rgb(${a.map((x, k) => Math.round(x + (b[k] - x) * u)).join(",")})`; };
+  const benchTop = benchmark > 0 ? (1 - benchmark / scale) * 100 : -1;
+  return (
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: 9, color: PT.mut, marginBottom: 6 }}>{title}</div>
+      <div style={{ position: "relative", display: "flex", alignItems: "flex-end", gap: 7, height: "0.62in" }}>
+        {benchmark > 0 && <div style={{ position: "absolute", left: 0, right: 0, top: `${benchTop}%`, borderTop: `1.2px dashed ${PT.purpleDeep}`, opacity: 0.5 }} />}
+        {bars.map((b, i) => (
+          <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
+            <span style={{ fontSize: 8, fontWeight: 700, color: PT.ink2 }}>{b.ros.toFixed(1)}</span>
+            <div style={{ width: "100%", height: `${b.ros > 0 ? Math.max(3, (b.ros / scale) * 100) : 0}%`, background: shade(b.ros), borderRadius: "2px 2px 0 0" }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 7, marginTop: 3 }}>
+        {bars.map((b, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: PT.mut, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</div>)}
+      </div>
+    </div>
+  );
+}
 
 function PHead({ kick, title }) {
   return (
@@ -435,7 +490,7 @@ function PAcctRos({ accts, ros, labels, hi }) {
 }
 function PPanelHead({ children }) { return <div style={{ fontSize: 9.5, fontWeight: 700, color: PT.mut, textTransform: "uppercase", letterSpacing: .3, marginBottom: 7 }}>{children}</div>; }
 
-function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, tableB, dims, summary }) {
+function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows }) {
   const labels = monthLabels(11);
   const topItems = (items?.all || []).slice(0, 8);
   const itemMx = Math.max(...topItems.map(it => Math.max(it.l90, it.prev)), 1);
@@ -478,7 +533,7 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
       <div className="pslide">
         <PHead kick={`Territory Review · ${title}`} title="Contents" />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 0.6in" }}>
-          {[["01", "Pulse", "90-day performance, trend, and what's moving"], ["02", "Items", "top sellers, current 90 days vs prior"], ["03", "Account Health", "where the book stands by status"], ["04", "Where It Sells", "the breakdowns that matter for this scope"], ["05", "Executive Summary", "headwinds, opportunities, and the ask"]].map((r, i) => (
+          {[["01", "Pulse", "90-day performance, trend, and what's moving"], ["02", "Items", "top sellers, current 90 days vs prior"], ["03", "Account Health", "where the book stands by status"], ["04", "Where It Sells", "breakdowns by channel, chain, area & income"], ["05", "Executive Summary", "headwinds, opportunities, and the ask"]].map((r, i) => (
             <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 16, padding: "0.11in 0", borderBottom: i < 4 ? `1px solid ${PT.line}` : "none" }}>
               <span style={{ fontSize: 20, fontWeight: 700, color: PT.greenMid, width: 34 }}>{r[0]}</span>
               <span style={{ fontSize: 16, fontWeight: 700, color: PT.ink }}>{r[1]}</span>
@@ -502,21 +557,24 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
           </div>
           <div style={{ display: "flex", gap: 10, flex: 1, minHeight: 0 }}>
             <div style={{ flex: 1.55, display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
-              <div style={{ background: PT.panel, border: `1px solid ${PT.line}`, borderRadius: 6, padding: "0.1in 0.13in", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+              <div style={{ position: "relative", background: PT.card, border: `1px solid ${PT.line}`, borderRadius: 8, padding: "0.12in 0.15in", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+                <PBracket c={PT.greenMid} />
                 <PPanelHead>12-month volume — rolling 90, quarter in focus</PPanelHead>
                 <PChartBars data={m.cases} labels={labels} hi={3} color="#C9DCD0" colorHi={PT.greenMid} inkHi={PT.green} />
               </div>
-              <div style={{ background: PT.panel, border: `1px solid ${PT.line}`, borderRadius: 6, padding: "0.1in 0.13in", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+              <div style={{ position: "relative", background: PT.card, border: `1px solid ${PT.line}`, borderRadius: 8, padding: "0.12in 0.15in", flexShrink: 0, display: "flex", flexDirection: "column" }}>
+                <PBracket c={PT.blueMid} />
                 <PPanelHead>Accounts (bars) &amp; rate of sale (line)</PPanelHead>
                 <PAcctRos accts={m.accts} ros={m.ros} labels={labels} hi={3} />
               </div>
             </div>
-            <div style={{ flex: 1, background: PT.panel, border: `1px solid ${PT.line}`, borderRadius: 6, padding: "0.14in 0.16in", display: "flex", flexDirection: "column" }}>
+            <div style={{ position: "relative", flex: 1, background: PT.card, border: `1px solid ${PT.line}`, borderRadius: 8, padding: "0.16in 0.18in", display: "flex", flexDirection: "column" }}>
+              <PBracket c={PT.greenMid} />
               <PPanelHead>What's driving it</PPanelHead>
               <div style={{ fontSize: 11.5, color: PT.ink2, lineHeight: 1.5 }}>{shortVerdict}</div>
-              <div style={{ marginTop: 12, borderTop: `1px solid ${PT.lineStrong}`, paddingTop: 10, flex: 1, display: "flex", flexDirection: "column" }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: PT.mut, textTransform: "uppercase", marginBottom: 8 }}>Biggest movers</div>
-                <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "space-around" }}>
+              <div style={{ marginTop: 13, borderTop: `1px solid ${PT.lineStrong}`, paddingTop: 11 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: PT.mut, textTransform: "uppercase", marginBottom: 9 }}>Biggest movers</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
                   {[...movers.up, ...movers.down].slice(0, 4).map((it, i) => (
                     <div key={i}>
                       <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
@@ -640,8 +698,8 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
 
       {/* WHERE IT SELLS */}
       <div className="pslide">
-        <PHead kick="04 · Where It Sells" title={`${dims[0] === "channel" ? "Channel" : titleCase(dims[0])} & ${titleCase(dims[1])}`} />
-        <div style={{ flex: 1, padding: "0.18in 0.34in", display: "flex", flexDirection: "column", minHeight: 0 }}>
+        <PHead kick="04 · Where It Sells" title={`${dims[0] === "channel" ? "Channel" : titleCase(dims[0])}, ${titleCase(dims[1])} & Market`} />
+        <div style={{ flex: 1, padding: "0.2in 0.34in", display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
           <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
               <PPanelHead>By {dims[0]}</PPanelHead>
@@ -652,8 +710,16 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
               <PTable table={tableB} />
             </div>
           </div>
-          <div style={{ background: PT.panel, border: `1px solid ${PT.line}`, borderRadius: 6, padding: "0.13in 0.16in", fontSize: 11.5, color: PT.ink2, marginTop: 10 }}>
-            <b style={{ color: PT.ink }}>Read:</b> {topGrp ? `${topGrp.label} carrying growth` : "Mixed signals"}{softGrp && softGrp.gPct < 0 ? `; ${softGrp.label} softening` : ""}. {allRows.find(r => r.isIndie) ? `Independents — ${allRows.find(r => r.isIndie).gPct > 0 ? "up " + allRows.find(r => r.isIndie).gPct + "%" : "flat"} — are the lever you most directly control.` : ""}
+          <div style={{ position: "relative", background: PT.card, border: `1px solid ${PT.line}`, borderRadius: 8, padding: "0.14in 0.18in", flexShrink: 0 }}>
+            <PBracket c={PT.purpleDeep} />
+            <PPanelHead>Market — rate of sale by area &amp; income</PPanelHead>
+            <div style={{ display: "flex", gap: 26 }}>
+              <PDemoBars title="By area type" bars={demoRows.area} benchmark={demoRows.benchmark} />
+              <PDemoBars title="By household income" bars={demoRows.income} benchmark={demoRows.benchmark} />
+            </div>
+          </div>
+          <div style={{ background: PT.card, border: `1px solid ${PT.line}`, borderRadius: 8, padding: "0.13in 0.16in", fontSize: 11.5, color: PT.ink2, flexShrink: 0 }}>
+            <b style={{ color: PT.ink }}>Read:</b> {topGrp ? `${topGrp.label} carrying growth` : "Mixed signals"}{softGrp && softGrp.gPct < 0 ? `; ${softGrp.label} softening` : ""}.{(() => { const inc = demoRows.income; const top = inc[inc.length - 1], lowB = inc[1]; return top && lowB && top.ros > lowB.ros * 1.15 ? ` Rate of sale climbs with income — ${top.label.toLowerCase()} ZIPs run ${top.ros.toFixed(1)} vs ${lowB.ros.toFixed(1)} in the lowest tier.` : ""; })()}
           </div>
         </div>
         <PFoot page="6" />

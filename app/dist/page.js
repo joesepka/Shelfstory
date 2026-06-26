@@ -234,7 +234,7 @@ function DistInner() {
       const slides = Array.from(deckRef.current.querySelectorAll(".pslide"));
       const pdf = new jsPDF({ orientation: "landscape", unit: "in", format: [11, 8.5] });
       for (let i = 0; i < slides.length; i++) {
-        const canvas = await html2canvas(slides[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: slides[i].scrollWidth, windowHeight: slides[i].scrollHeight });
+        const canvas = await html2canvas(slides[i], { scale: 2, backgroundColor: "#FBF7EE", useCORS: true, logging: false, windowWidth: slides[i].scrollWidth, windowHeight: slides[i].scrollHeight });
         const img = canvas.toDataURL("image/jpeg", 0.92);
         if (i > 0) pdf.addPage([11, 8.5], "landscape");
         pdf.addImage(img, "JPEG", 0, 0, 11, 8.5);
