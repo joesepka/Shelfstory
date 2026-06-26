@@ -39,7 +39,7 @@ function weatherFor(pct) {
 }
 const WEATHER = {
   sunny: {
-    key: "sunny", bg: "#FBF7EE",
+    key: "sunny", bg: "#FFFFFF",
     chip: { t: "Sunny outlook", c: "#8A6310", bg: "#FAF0D6" },
     sun: { x: 0.82, y: 86, r: 30, color: "#F2C14E" },
     rain: false,
@@ -50,7 +50,7 @@ const WEATHER = {
     ],
   },
   fair: {
-    key: "fair", bg: "#FAF9F4",
+    key: "fair", bg: "#FFFFFF",
     chip: { t: "Fair · holding steady", c: "#5F6B58", bg: "#EDEEE6" },
     sun: { x: 0.84, y: 78, r: 26, color: "#E8D9A8", behind: true },
     rain: false,
@@ -339,7 +339,7 @@ const NAV = [
   { href: "/book", title: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list." },
   { href: "/perf", title: "Decision Tree", color: "#3D6E93", sub: "Drill territory, channel, chain, or distributor to the biggest distress — and a report." },
   { href: "/wholesale", title: "Historical Trends", color: "#534AB7", sub: "Depletion and inventory momentum over time." },
-  { href: "/actions", title: "Actions", color: "#B0573A", sub: "Your highest-priority plays for the day.", highlight: true },
+  { href: "/actions", title: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true },
 ];
 
 export default function Home() {
@@ -504,18 +504,18 @@ function EditorialRow({ name, sub, color, onClick, popStyle, highlight }) {
   return (
     <div className="edrow" onClick={onClick} style={{
       cursor: "pointer",
-      padding: highlight ? "12px 13px" : "13px 2px",
+      padding: highlight ? "11px 12px" : "12px 2px",
       marginTop: highlight ? 9 : 0,
       borderBottom: highlight ? "none" : "1px solid var(--border)",
-      borderRadius: highlight ? 14 : 0,
-      background: highlight ? "rgba(176,87,58,0.07)" : "transparent",
+      borderRadius: highlight ? 12 : 0,
+      background: highlight ? "var(--surface-2)" : "transparent",
       ...(popStyle || {}),
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: "-1px", lineHeight: 1.05, textTransform: "lowercase", color: highlight ? color : "var(--text)" }}>{name}</span>
+        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: "-0.8px", lineHeight: 1.05, textTransform: "lowercase", color: "var(--text)" }}>{name}</span>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          {highlight && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color, background: "rgba(176,87,58,0.13)", padding: "2px 8px", borderRadius: 20 }}>today</span>}
-          <span style={{ fontSize: 19, color, lineHeight: 1 }}>→</span>
+          {highlight && <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.6, textTransform: "uppercase", color: "var(--text-3)" }}>today</span>}
+          <span style={{ fontSize: 17, color, lineHeight: 1 }}>→</span>
         </span>
       </div>
       <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>{sub}</div>

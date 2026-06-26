@@ -18,8 +18,8 @@
   --r-lg: 14px;
 
   /* ---- Surfaces ---- */
-  --bg:         #FBF7EE;   /* Story skin: warm cream paper */
-  --surface:    #FFFFFF;   /* cards (pop white on cream) */
+  --bg:         #FFFFFF;   /* clean white paper */
+  --surface:    #FFFFFF;   /* cards (border + shadow define them on white) */
   --surface-2:  #EDE6D6;   /* toggles / insets (warm) */
 
   /* ---- Text tiers ---- */
