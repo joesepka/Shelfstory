@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import LoadingScreen from "../../../../../components/LoadingScreen";
+import { greenBar } from "../../../../../lib/utils";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00"); // window 0 "data thru" date
 
@@ -56,16 +57,11 @@ export default function ItemHistory() {
   if (err) return <div className="wrap"><p className="state-msg">Couldn’t load history. {err}</p></div>;
   if (!data) return <LoadingScreen />;
 
-  // chart geometry — oldest (left) -> newest (right)
+  // order grid — oldest (left) -> newest (right); each 30-day period is a box
   const series = [...data.months].reverse();
-  const W = 620, H = 190, padL = 14, padR = 14, padT = 30, padB = 26;
-  const mx = Math.max(...series.map((m) => m.cases), 1);
-  const n = series.length;
-  const X = (i) => padL + (i / (n - 1)) * (W - padL - padR);
-  const Y = (v) => padT + (1 - v / mx) * (H - padT - padB);
-  const line = series.map((m, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(m.cases).toFixed(1)).join(" ");
-
-  const lineColor = data.lost ? "var(--atrisk-ink)" : "var(--growing-ink)";
+  const vals = series.map((m) => m.cases).filter((x) => x > 0);
+  const hi = Math.max(...vals, 1);
+  const lo = vals.length ? Math.min(...vals) : hi;
 
   return (
     <div className="wrap">
@@ -104,20 +100,23 @@ export default function ItemHistory() {
 
       <div style={{ fontSize: 11, color: "var(--text-3)", paddingBottom: 4 }}>cases ordered · each 30-day period</div>
 
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Monthly order history">
-        <path d={line} fill="none" stroke={lineColor} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
-        {series.map((m, i) => (
-          <g key={i}>
-            {m.cases > 0 && <circle cx={X(i)} cy={Y(m.cases)} r="3" fill={lineColor} />}
-            {m.cases > 0 && (
-              <text x={X(i)} y={Y(m.cases) - 9} textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text)">
-                {m.cases}
-              </text>
-            )}
-            <text x={X(i)} y={H - 8} textAnchor="middle" fontSize="11" fill="var(--text-3)">{m.label}</text>
-          </g>
-        ))}
-      </svg>
+      <div style={{ display: "flex", gap: 5, marginTop: 6 }} role="img" aria-label="Monthly order history">
+        {series.map((m, i) => {
+          const t = hi > lo ? 0.18 + 0.82 * ((m.cases - lo) / (hi - lo)) : 1;
+          const txt = t > 0.5 ? "#fff" : "var(--accent-deep)";
+          return (
+            <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: 0, animation: "dotIn .3s ease both", animationDelay: `${i * 28}ms` }}>
+              <div style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600,
+                background: m.cases > 0 ? greenBar(m.cases, lo, hi) : "var(--surface)",
+                border: m.cases > 0 ? "none" : "1px dashed var(--border-strong)",
+                color: m.cases > 0 ? txt : "var(--text-3)" }}>
+                {m.cases > 0 ? m.cases : ""}
+              </div>
+              <div style={{ fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>{m.label}</div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
