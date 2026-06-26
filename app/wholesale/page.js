@@ -44,6 +44,7 @@ export default function WholesalePage() {
   const [series, setSeries] = useState(null); // 30-day window sums, index 0 = most recent
   const [acct, setAcct] = useState(null);     // { accts:[12], cases90:[12] } by rolling-90 period
   const [itemRos, setItemRos] = useState(null); // [{ key, ros:[8] }] top items, ROS over 8 periods
+  const [itemChan, setItemChan] = useState(null); // [{ channel, channel_type, cur, prev }] for selected item (graph 1)
   const [loading, setLoading] = useState(true);
   const loadId = useRef(0);
 
@@ -101,23 +102,32 @@ export default function WholesalePage() {
   // (prior-90) drives the momentum chip; benchmark = the overall Total ROS. Computed
   // client-side from cur90/prev90 — no per-item granularity needed here.
   const channelRos = useMemo(() => {
-    const rs = scopedRows;
-    if (!rs.length) return null;
+    // source rows in one shape: { channel, channel_type, cur, prev }. When an item
+    // is picked we use its per-account rolling-90 (server) so the chart shows that
+    // item across channels; otherwise account totals (client).
+    let src;
+    if (itemF !== "All") {
+      if (!itemChan) return null;                       // waiting on the per-item fetch
+      src = itemChan;
+    } else {
+      src = scopedRows.map(r => ({ channel: r.channel, channel_type: r.channel_type, cur: Number(r.cur90) || 0, prev: Number(r.prev90) || 0 }));
+    }
+    if (!src.length) return null;
     const grp = arr => {
       let cC = 0, cA = 0, pC = 0, pA = 0;
       for (const r of arr) {
-        const c = Number(r.cur90) || 0, p = Number(r.prev90) || 0;
+        const c = Number(r.cur) || 0, p = Number(r.prev) || 0;
         cC += c; if (c > 0) cA++;
         pC += p; if (p > 0) pA++;
       }
       return { ros: cA > 0 ? cC / cA / 3 : 0, prevRos: pA > 0 ? pC / pA / 3 : 0, cases: cC };
     };
-    const off = rs.filter(r => !isOn(r)), on = rs.filter(r => isOn(r));
+    const off = src.filter(r => !isOn(r)), on = src.filter(r => isOn(r));
     const byType = {};
-    for (const r of rs) { const k = r.channel_type || "Other"; (byType[k] = byType[k] || []).push(r); }
+    for (const r of src) { const k = r.channel_type || "Other"; (byType[k] = byType[k] || []).push(r); }
     const subs = Object.entries(byType).map(([k, arr]) => ({ key: k, ...grp(arr) }))
       .sort((a, b) => b.cases - a.cases).slice(0, 5);
-    const total = grp(rs);
+    const total = grp(src);
     const bars = [
       { label: "Total", ros: total.ros, prevRos: total.prevRos },
       ...(off.length ? [{ label: "Off", ros: grp(off).ros, prevRos: grp(off).prevRos }] : []),
@@ -125,7 +135,7 @@ export default function WholesalePage() {
       ...subs.map(s => ({ label: titleCase(s.key), ros: s.ros, prevRos: s.prevRos })),
     ];
     return { bars, benchmark: total.ros };
-  }, [scopedRows]);
+  }, [scopedRows, itemF, itemChan]);
 
   // load the 24-window series — one fast server-side RPC (sums inside Postgres).
   // Defaults to ALL wholesale (no params). Debounced so typing search doesn't
@@ -142,14 +152,19 @@ export default function WholesalePage() {
         if (distF !== "All") sparams.p_distributor = distF;
         if (premF !== "All") sparams.p_premise = premF;
         const params = { ...sparams, ...(itemF !== "All" ? { p_product_key: itemF } : {}) };
-        const [r30, rAcc, rItem] = await Promise.all([
-          supabase.rpc("trends_30d", params),            // graph 1: actual 30-day cases
+        const calls = [
+          supabase.rpc("trends_30d", params),            // graph 1 (cases): actual 30-day cases
           supabase.rpc("trends_accounts_90d", params),   // graph 2: rolling-90 accounts + cases
           supabase.rpc("trends_item_ros", sparams),      // graph 4: per-item ROS over 8 periods
-        ]);
+        ];
+        // graph 3 (ROS by channel): only fetch per-item breakdown when an item is picked;
+        // otherwise the channel chart is computed client-side from account totals.
+        if (itemF !== "All") calls.push(supabase.rpc("trends_item_accounts", { p_product_key: itemF, ...sparams }));
+        const [r30, rAcc, rItem, rChan] = await Promise.all(calls);
         if (r30.error) throw r30.error;
         if (rAcc.error) throw rAcc.error;
         if (rItem.error) throw rItem.error;
+        if (rChan && rChan.error) throw rChan.error;
         if (loadId.current !== myId) return; // a newer load superseded this one
         const sums = new Array(24).fill(0);
         for (const r of (r30.data || [])) { const wi = r.window_index; if (wi >= 0 && wi < 24) sums[wi] = Number(r.cases) || 0; }
@@ -168,6 +183,7 @@ export default function WholesalePage() {
         setSeries(sums);
         setAcct({ accts, cases90 });
         setItemRos(top5);
+        setItemChan(itemF !== "All" ? (rChan?.data || []) : null);
         setLoading(false);
       } catch (e) { if (loadId.current === myId) { setErr(e.message || "trend load failed"); setLoading(false); } }
     }, 300);
@@ -280,7 +296,7 @@ export default function WholesalePage() {
             )}
             {channelRos && (
               <ChannelRosCard
-                title="ROS by channel"
+                title={itemF !== "All" ? `ROS by channel · ${items.find(x => x.key === itemF)?.name || itemF}` : "ROS by channel"}
                 sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"
                 bars={channelRos.bars} benchmark={channelRos.benchmark} />
             )}
