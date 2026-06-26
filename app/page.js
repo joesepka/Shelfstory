@@ -413,34 +413,39 @@ export default function Home() {
             <div style={{ minWidth: 0 }}>
               <h1 style={{ fontFamily: "var(--font-sans)", fontSize: 26, color: "var(--text)", margin: "4px 0 4px", fontWeight: 700, letterSpacing: "-0.3px" }}>{greet}, Joe.</h1>
               <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
-              {s && <span style={{ display: "inline-block", marginTop: 8, fontSize: 10.5, fontWeight: 700, color: w.chip.c, background: w.chip.bg, padding: "3px 10px", borderRadius: 20 }}>{w.chip.t}</span>}
+              {/* reserved slot so the chip's arrival never shoves the layout down */}
+              <div style={{ minHeight: 29, marginTop: 8 }}>
+                {s && <span className="riseIn" style={{ display: "inline-block", fontSize: 10.5, fontWeight: 700, color: w.chip.c, background: w.chip.bg, padding: "3px 10px", borderRadius: 20 }}>{w.chip.t}</span>}
+              </div>
             </div>
             <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
           </div>
 
-          {/* collapsible brief */}
-          {s && brief && (
-            <div style={{ marginTop: 16 }}>
-              <div onClick={() => setBriefOpen(o => !o)}
-                className={briefOpen ? "" : "bob"}
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: 0.2 }}>
-                <span style={{ display: "inline-block", transform: briefOpen ? "rotate(90deg)" : "none", transition: "transform .18s" }}>▸</span>
-                {briefOpen ? "Hide your brief" : "Expand to see your brief"}
-              </div>
-              {briefOpen && (
-                <div style={{ marginTop: 12, animation: "briefIn .26s ease" }}>
-                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62, marginBottom: 12 }}>{brief.p1}</p>
-                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62 }}>{brief.p2}</p>
+          {/* collapsible brief — outer slot stays mounted so the toggle reserves its line */}
+          <div style={{ marginTop: 16, minHeight: 19 }}>
+            {s && brief && (
+              <div className="riseIn" style={{ animationDelay: ".06s" }}>
+                <div onClick={() => setBriefOpen(o => !o)}
+                  className={briefOpen ? "" : "bob"}
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: 0.2 }}>
+                  <span style={{ display: "inline-block", transform: briefOpen ? "rotate(90deg)" : "none", transition: "transform .18s" }}>▸</span>
+                  {briefOpen ? "Hide your brief" : "Expand to see your brief"}
                 </div>
-              )}
-            </div>
-          )}
+                {briefOpen && (
+                  <div style={{ marginTop: 12, animation: "briefIn .26s ease" }}>
+                    <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62, marginBottom: 12 }}>{brief.p1}</p>
+                    <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62 }}>{brief.p2}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <div style={{ marginTop: 18, minHeight: 64 }}>
             {!s && !err && <div style={{ fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
             {err && <div style={{ fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
             {s && (
-              <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
+              <div className="riseIn" style={{ animationDelay: ".12s", position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
                 <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
                 <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
                 <div style={{ display: "flex" }}>
@@ -450,7 +455,7 @@ export default function Home() {
                 </div>
               </div>
             )}
-            {s && <div style={{ textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 8 }}>vs prior 90 days</div>}
+            {s && <div className="riseIn" style={{ animationDelay: ".18s", textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 8 }}>vs prior 90 days</div>}
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22 }}>WHERE TO?</div>
@@ -469,6 +474,8 @@ export default function Home() {
 
       <style>{`
         @keyframes briefIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
+        @keyframes riseIn{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
+        .riseIn{animation:riseIn .5s cubic-bezier(.22,.61,.36,1) both;}
         .weatherLayer .cl{will-change:transform;animation-name:driftAcross;animation-timing-function:linear;animation-iteration-count:infinite;}
         @keyframes driftAcross{from{transform:translateX(0);}to{transform:translateX(620px);}}
         .weatherLayer .sunrays{animation:rayspin 90s linear infinite;}
@@ -483,7 +490,7 @@ export default function Home() {
         .bob{animation:bob 2.6s ease-in-out infinite;}
         @keyframes statFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
         .statfloat{display:inline-block;animation:statFloat 4.6s ease-in-out infinite;}
-        @media (prefers-reduced-motion: reduce){.cl,.bob,.sunrays,.sun,.drop,.statfloat{animation:none !important;}}
+        @media (prefers-reduced-motion: reduce){.cl,.bob,.sunrays,.sun,.drop,.statfloat,.riseIn{animation:none !important;}}
       `}</style>
     </>
   );
