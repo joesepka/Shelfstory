@@ -4,17 +4,13 @@ import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
 import { BarCard, AcctRosCard } from "../../components/Charts";
 import { isOn } from "../../lib/utils";
+import FilterSelect from "../../components/FilterSelect";
 
 // Wholesale Trends — over-time view. Same top filters as the book (minus "near me"),
 // plus Item. View toggle is 24 Month (24 x 30-day buckets) / Quarterly (8 x 90-day).
 // First graph: ACTUAL 30-day cases per period (from ai_window_dense, window 0 = most
 // recent 30 days) summed across whatever the filters select. NOT rolling-90.
 
-const scrollSel = {
-  fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid var(--border-strong)",
-  background: "var(--surface)", color: "var(--text-2)", fontFamily: "inherit", minWidth: 96, flexShrink: 0,
-  appearance: "none", WebkitAppearance: "none",
-};
 const wrap = { background: "var(--bg)", height: "100vh", maxWidth: "var(--maxw)", margin: "0 auto", display: "flex", flexDirection: "column" };
 
 // labels anchored to the data snapshot; window 0 = most recent 30 days (oldest -> newest)
@@ -178,28 +174,13 @@ export default function WholesalePage() {
       </div>
 
       {/* filters (no "near me") */}
-      <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
-        <select style={scrollSel} value={stF} onChange={e => { setStF(e.target.value); setCityF("All"); setChainF("All"); }}>
-          {states.map(s => <option key={s} value={s}>{s === "All" ? "State" : s}</option>)}
-        </select>
-        <select style={scrollSel} value={cityF} onChange={e => { setCityF(e.target.value); setChainF("All"); }}>
-          {cities.map(c => <option key={c} value={c}>{c === "All" ? "City" : c}</option>)}
-        </select>
-        <select style={scrollSel} value={chainF} onChange={e => setChainF(e.target.value)}>
-          {chains.map(c => <option key={c} value={c}>{c === "All" ? "Chain" : c}</option>)}
-        </select>
-        <select style={scrollSel} value={premF} onChange={e => setPremF(e.target.value)}>
-          <option value="All">Premise</option>
-          <option value="ON">On-premise</option>
-          <option value="OFF">Off-premise</option>
-        </select>
-        <select style={scrollSel} value={distF} onChange={e => setDistF(e.target.value)}>
-          {dists.map(d => <option key={d} value={d}>{d === "All" ? "Distributor" : d}</option>)}
-        </select>
-        <select style={scrollSel} value={itemF} onChange={e => setItemF(e.target.value)}>
-          <option value="All">Item</option>
-          {items.map(it => <option key={it.key} value={it.key}>{it.name}</option>)}
-        </select>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, padding: "10px 12px 8px", flexShrink: 0 }}>
+        <FilterSelect label="State" value={stF} options={states} onChange={v => { setStF(v); setCityF("All"); setChainF("All"); }} display={s => s === "All" ? "All states" : s} />
+        <FilterSelect label="City" value={cityF} options={cities} onChange={v => { setCityF(v); setChainF("All"); }} display={c => c === "All" ? "All cities" : c} />
+        <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : c} />
+        <FilterSelect label="Premise" value={premF} options={["All", "ON", "OFF"]} onChange={setPremF} display={p => p === "ON" ? "On-premise" : p === "OFF" ? "Off-premise" : "All premise"} />
+        <FilterSelect label="Distributor" value={distF} options={dists} onChange={setDistF} display={d => d === "All" ? "All distributors" : d} />
+        <FilterSelect label="Item" value={itemF} options={["All", ...items.map(i => i.key)]} onChange={setItemF} display={k => k === "All" ? "All items" : (items.find(i => i.key === k)?.name || k)} />
       </div>
 
       {/* view toggle: 24 Month / Quarterly */}

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
+import FilterSelect from "../../components/FilterSelect";
 
 
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
@@ -13,7 +14,6 @@ const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toU
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
 const idsHref = (arr, cap = 40) => `/book?ids=${arr.slice(0, cap).join(",")}`;
 
-const sel = { fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid var(--border-strong)", background: "var(--surface)", color: "var(--text-2)", fontFamily: "inherit", minWidth: 92, flexShrink: 0, appearance: "none", WebkitAppearance: "none" };
 
 // corner-bracket accent in the card's tone color
 function Brackets({ color }) {
@@ -369,22 +369,16 @@ function ActionsInner() {
       </div>
 
       {/* live filters — everything below recomputes from these */}
-      <div className="nobar" style={{ display: "flex", gap: 6, overflowX: "auto", padding: "10px 16px 8px", flexShrink: 0 }}>
+      <div style={{ padding: "10px 16px 8px", flexShrink: 0 }}>
         <style>{`.nobar::-webkit-scrollbar{display:none}.nobar{scrollbar-width:none;-ms-overflow-style:none}`}</style>
-        <select style={sel} value={stF} onChange={e => { setStF(e.target.value); setDistF("All"); setChainF("All"); }}>
-          {states.map(s => <option key={s} value={s}>{s === "All" ? "State" : (STNAME[s] || s)}</option>)}
-        </select>
-        <select style={sel} value={distF} onChange={e => setDistF(e.target.value)}>
-          {dists.map(d => <option key={d} value={d}>{d === "All" ? "Distributor" : titleCase(d)}</option>)}
-        </select>
-        <select style={sel} value={chF} onChange={e => setChF(e.target.value)}>
-          {channels.map(c => <option key={c} value={c}>{c === "All" ? "Channel" : c}</option>)}
-        </select>
-        <select style={sel} value={chainF} onChange={e => setChainF(e.target.value)}>
-          {chains.map(c => <option key={c} value={c}>{c === "All" ? "Chain" : titleCase(c)}</option>)}
-        </select>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
+          <FilterSelect label="State" value={stF} options={states} onChange={v => { setStF(v); setDistF("All"); setChainF("All"); }} display={s => s === "All" ? "All states" : (STNAME[s] || s)} />
+          <FilterSelect label="Distributor" value={distF} options={dists} onChange={setDistF} display={d => d === "All" ? "All distributors" : titleCase(d)} />
+          <FilterSelect label="Channel" value={chF} options={channels} onChange={setChF} display={c => c === "All" ? "All channels" : c} />
+          <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : titleCase(c)} />
+        </div>
         {anyFilter && (
-          <button onClick={clearAll} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "6px 12px", borderRadius: 8, border: "1.5px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit" }}>↺ Clear</button>
+          <button onClick={clearAll} style={{ marginTop: 6, width: "100%", fontSize: 11.5, fontWeight: 700, padding: "8px", borderRadius: 10, border: "1px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit" }}>↺ Clear all filters</button>
         )}
       </div>
 

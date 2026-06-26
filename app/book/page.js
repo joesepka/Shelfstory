@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
 import { useExplode } from "../../lib/useExplode";
+import FilterSelect from "../../components/FilterSelect";
 
 
 function label(hd) {
@@ -382,11 +383,6 @@ function TreeMap({ accounts }) {
 }
 
 const CAP = 200, TREE_CAP = 500;
-const scrollSel = {
-  fontSize: 11.5, padding: "6px 9px", borderRadius: 8, border: "0.5px solid var(--border-strong)",
-  background: "var(--surface)", color: "var(--text-2)", fontFamily: "inherit", minWidth: 96, flexShrink: 0,
-  appearance: "none", WebkitAppearance: "none",
-};
 const VIEWS = ["account", "grid", "tree"];
 
 function BookInner() {
@@ -550,26 +546,14 @@ function BookInner() {
         </div>
       </div>
 
-      <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
-        <select style={scrollSel} value={stF} onChange={e => { setStF(e.target.value); setCityF("All"); setChainF("All"); }}>
-          {states.map(s => <option key={s} value={s}>{s === "All" ? "State" : s}</option>)}
-        </select>
-        <select style={scrollSel} value={cityF} onChange={e => { setCityF(e.target.value); setChainF("All"); }}>
-          {cities.map(c => <option key={c} value={c}>{c === "All" ? "City" : c}</option>)}
-        </select>
-        <select style={scrollSel} value={chainF} onChange={e => setChainF(e.target.value)}>
-          {chains.map(c => <option key={c} value={c}>{c === "All" ? "Chain" : c}</option>)}
-        </select>
-        <select style={scrollSel} value={premF} onChange={e => setPremF(e.target.value)}>
-          <option value="All">Premise</option>
-          <option value="ON">On-premise</option>
-          <option value="OFF">Off-premise</option>
-        </select>
-        <select style={scrollSel} value={distF} onChange={e => setDistF(e.target.value)}>
-          {dists.map(d => <option key={d} value={d}>{d === "All" ? "Distributor" : d}</option>)}
-        </select>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, padding: "10px 12px 8px", flexShrink: 0 }}>
+        <FilterSelect label="State" value={stF} options={states} onChange={v => { setStF(v); setCityF("All"); setChainF("All"); }} display={s => s === "All" ? "All states" : s} />
+        <FilterSelect label="City" value={cityF} options={cities} onChange={v => { setCityF(v); setChainF("All"); }} display={c => c === "All" ? "All cities" : c} />
+        <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : c} />
+        <FilterSelect label="Premise" value={premF} options={["All", "ON", "OFF"]} onChange={setPremF} display={p => p === "ON" ? "On-premise" : p === "OFF" ? "Off-premise" : "All premise"} />
+        <FilterSelect label="Distributor" value={distF} options={dists} onChange={setDistF} display={d => d === "All" ? "All distributors" : d} />
         <button disabled title="Coming soon"
-          style={{ fontSize: 11.5, padding: "6px 12px", borderRadius: 8, whiteSpace: "nowrap", border: "0.5px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--text-3)", fontFamily: "inherit", cursor: "not-allowed", flexShrink: 0 }}>
+          style={{ fontSize: 11.5, padding: "8px 11px", borderRadius: 10, whiteSpace: "nowrap", border: "0.5px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--text-3)", fontFamily: "inherit", cursor: "not-allowed", boxSizing: "border-box" }}>
           ◎ Near me
         </button>
       </div>

@@ -39,6 +39,10 @@ a { color: inherit; text-decoration: none; }
 /* shared chart animations (components/Charts.js) */
 @keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 @keyframes dotIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* filter bottom-sheet (components/FilterSelect.js) */
+@keyframes fsFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes fsUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) {
   [style*="barGrow"], [style*="dotIn"] { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
