@@ -220,22 +220,37 @@ function DistInner() {
   const summary = useMemo(() => {
     if (!m || !health || !items || !channelRows || !chainRows) return null;
     const head = [], opp = [];
-    if (m.pct != null && m.pct <= -3) head.push({ mag: Math.abs(m.pct), t: `Volume down ${Math.abs(m.pct)}%`, d: `${Math.round(m.cur).toLocaleString()} cs — ${m.acctPct != null && m.pct - m.acctPct <= -4 ? "accounts falling faster than volume" : "rate-of-sale is the drag"}.` });
-    if (health.lapsed.n > 0) head.push({ mag: health.lapsed.pct + 8, t: `${health.lapsed.n} accounts lapsed`, d: `${health.lapsed.pct}% of volume; at-risk holds another ${health.atrisk.pct}%.` });
+    if (m.pct != null && m.pct <= -3) {
+      const fast = m.acctPct != null && (m.pct - m.acctPct) <= -4;
+      head.push({ mag: Math.abs(m.pct), t: `Volume down ${Math.abs(m.pct)}%`,
+        d: `The book moved ${Math.round(m.cur).toLocaleString()} cs over the last 90 days, off ${Math.abs(m.pct)}% from the prior quarter. ${fast ? "Accounts are dropping faster than volume, so this reads as a distribution problem first — doors are going quiet, not just slowing down." : "The account base is roughly holding, which points at rate of sale: the same doors are simply buying less each week."} Steadying the softest channels and chains below is the quickest way to put a floor under it.` });
+    }
+    if (health.lapsed.n > 0) head.push({ mag: health.lapsed.pct + 8, t: `${health.lapsed.n} accounts lapsed`,
+      d: `${health.lapsed.n} accounts that ordered last quarter have gone dark, pulling ${health.lapsed.pct}% of volume off the board. Another ${health.atrisk.pct}% sits in at-risk, one slow month from joining them. These are win-back calls — recovering even half defends the base without a single new placement.` });
     const decCh = [...channelRows].filter(r => r.gPct != null && r.gPct <= -3 && !String(r.key).startsWith("All other")).sort((a, b) => a.gPct - b.gPct)[0];
-    if (decCh) head.push({ mag: Math.abs(decCh.gPct), t: `${titleCase(decCh.key)} down ${Math.abs(decCh.gPct)}%`, d: `${decCh.cases.toLocaleString()} cs across ${decCh.accts} accts — softest channel.` });
+    if (decCh) {
+      const share = m.cur > 0 ? Math.round(100 * decCh.cases / m.cur) : 0;
+      head.push({ mag: Math.abs(decCh.gPct), t: `${titleCase(decCh.key)} down ${Math.abs(decCh.gPct)}%`,
+        d: `${titleCase(decCh.key)} is the softest channel at ${decCh.gPct}%, ${decCh.cases.toLocaleString()} cs across ${decCh.accts} accounts. At roughly ${share}% of the book it's too large a slice to let slide. Worth checking whether it's a handful of big losers or broad shelf-wide softening — the fix is very different for each.` });
+    }
     const decItem = (items.all || []).filter(it => it.gPct != null && it.gPct <= -5 && it.prev > 0).sort((a, b) => a.dCases - b.dCases)[0];
-    if (decItem) head.push({ mag: Math.abs(decItem.gPct), t: `${titleCase(decItem.name)} slipping`, d: `${decItem.dCases.toLocaleString()} cs (${decItem.gPct}%)${decItem.dDoors < 0 ? `, −${Math.abs(decItem.dDoors)} placements` : ""}.` });
+    if (decItem) head.push({ mag: Math.abs(decItem.gPct), t: `${titleCase(decItem.name)} slipping`,
+      d: `${titleCase(decItem.name)} gave back ${Math.abs(decItem.dCases).toLocaleString()} cs (${decItem.gPct}%) versus the prior 90.${decItem.dDoors < 0 ? ` It also shed ${Math.abs(decItem.dDoors)} placements, so it's coming off shelves — recoverable with resets and reorders.` : " Distribution held, so this is a velocity or pricing question at the shelf, not a lost listing."} Put it on the agenda for the next chain review.` });
     const decChain = [...chainRows].filter(r => !r.isIndie && r.gPct != null && r.gPct <= -3).sort((a, b) => a.gPct - b.gPct)[0];
-    if (decChain) head.push({ mag: Math.abs(decChain.gPct), t: `${decChain.label} down ${Math.abs(decChain.gPct)}%`, d: `${decChain.cases.toLocaleString()} cs — chain-level conversation.` });
+    if (decChain) head.push({ mag: Math.abs(decChain.gPct), t: `${decChain.label} down ${Math.abs(decChain.gPct)}%`,
+      d: `${decChain.label} is off ${Math.abs(decChain.gPct)}% (${decChain.cases.toLocaleString()} cs across ${decChain.accts} stores). Because the banner moves together, this is one corporate conversation rather than ${decChain.accts} separate store calls. A single program fix here travels the whole chain.` });
 
-    if (m.pct != null && m.acctPct != null && m.pct >= 3 && (m.pct - m.acctPct) <= -4) opp.push({ mag: Math.abs(m.pct - m.acctPct) + 5, t: "New accounts haven't ramped", d: `${health.new.n} new accts at ${health.new.pct}% of volume — velocity banked.` });
+    if (m.pct != null && m.acctPct != null && m.pct >= 3 && (m.pct - m.acctPct) <= -4) opp.push({ mag: Math.abs(m.pct - m.acctPct) + 5, t: "New accounts haven't ramped",
+      d: `${health.new.n} new accounts already make up ${health.new.pct}% of volume and haven't hit full stride yet — that upside is banked, not yet earned. Lock them in with a second SKU or an intro promo before they drift. New-account momentum is the cheapest growth on this page.` });
     const grItem = (items.all || []).filter(it => it.gPct != null && it.gPct >= 5).sort((a, b) => b.dCases - a.dCases)[0];
-    if (grItem) opp.push({ mag: grItem.gPct, t: `${titleCase(grItem.name)} momentum`, d: `+${grItem.dCases.toLocaleString()} cs (${grItem.gPct > 0 ? "+" : ""}${grItem.gPct}%)${grItem.dDoors > 0 ? `, +${grItem.dDoors} placements` : ""}.` });
+    if (grItem) opp.push({ mag: grItem.gPct, t: `${titleCase(grItem.name)} momentum`,
+      d: `${titleCase(grItem.name)} added ${grItem.dCases.toLocaleString()} cs (${grItem.gPct > 0 ? "+" : ""}${grItem.gPct}%) on the quarter.${grItem.dDoors > 0 ? ` New placements are driving it (+${grItem.dDoors}) — keep feeding distribution while velocity holds.` : " It's pure velocity — the same doors are pulling more, so push for extra facings and displays."} Lead with it in the next pitch.` });
     const grCh = [...channelRows].filter(r => r.gPct != null && r.gPct >= 4 && !String(r.key).startsWith("All other")).sort((a, b) => b.gPct - a.gPct)[0];
-    if (grCh) opp.push({ mag: grCh.gPct, t: `${titleCase(grCh.key)} up ${grCh.gPct}%`, d: `${grCh.cases.toLocaleString()} cs at ${grCh.ros.toFixed(1)} ROS — lean in.` });
+    if (grCh) opp.push({ mag: grCh.gPct, t: `${titleCase(grCh.key)} up ${grCh.gPct}%`,
+      d: `${titleCase(grCh.key)} is up ${grCh.gPct}% and running ${grCh.ros.toFixed(1)} ROS on ${grCh.cases.toLocaleString()} cs — the strongest-moving channel in the book. Steer incremental placements and promo dollars here for the best return per case. Momentum compounds, so ride it while it's hot.` });
     const indie = chainRows.find(r => r.isIndie);
-    if (indie && indie.gPct != null && indie.gPct >= 3) opp.push({ mag: indie.gPct + 2, t: `Independents up ${indie.gPct}%`, d: `${indie.cases.toLocaleString()} cs, ${indie.accts} accts — you control these.` });
+    if (indie && indie.gPct != null && indie.gPct >= 3) opp.push({ mag: indie.gPct + 2, t: `Independents up ${indie.gPct}%`,
+      d: `Independents are up ${indie.gPct}% — ${indie.cases.toLocaleString()} cs across ${indie.accts} accounts you control directly. With no corporate gatekeeper you can move fast: add SKUs, build displays, win cold-box space on the spot. This is the lever most in your own hands.` });
 
     head.sort((a, b) => b.mag - a.mag);
     opp.sort((a, b) => b.mag - a.mag);
@@ -780,9 +795,9 @@ function PrintDeck({ deckRef, dist, m, health, items, movers, verdict, channelRo
               <div style={{ fontSize: 11.5, fontWeight: 700, color: PT.warm, textTransform: "uppercase", letterSpacing: .5, marginBottom: 12 }}>Headwinds</div>
               {summary.head.length === 0 && <div style={{ fontSize: 11, color: PT.mut }}>No material headwinds — the book is clean.</div>}
               {summary.head.map((x, i) => (
-                <div key={i} style={{ display: "flex", gap: 9, marginBottom: 13 }}>
+                <div key={i} style={{ display: "flex", gap: 10, marginBottom: 17 }}>
                   <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: PT.warm, lineHeight: 1.45 }}>{i + 1}.</span>
-                  <div style={{ fontSize: 11.5, color: PT.ink2, lineHeight: 1.5 }}><b style={{ color: PT.ink }}>{x.t}.</b> {x.d}</div>
+                  <div style={{ fontSize: 12, color: PT.ink2, lineHeight: 1.6 }}><b style={{ color: PT.ink }}>{x.t}.</b> {x.d}</div>
                 </div>
               ))}
             </div>
@@ -790,9 +805,9 @@ function PrintDeck({ deckRef, dist, m, health, items, movers, verdict, channelRo
               <div style={{ fontSize: 11.5, fontWeight: 700, color: PT.green, textTransform: "uppercase", letterSpacing: .5, marginBottom: 12 }}>Opportunities</div>
               {summary.opp.length === 0 && <div style={{ fontSize: 11, color: PT.mut }}>Hold and defend.</div>}
               {summary.opp.map((x, i) => (
-                <div key={i} style={{ display: "flex", gap: 9, marginBottom: 13 }}>
+                <div key={i} style={{ display: "flex", gap: 10, marginBottom: 17 }}>
                   <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: PT.green, lineHeight: 1.45 }}>{i + 1}.</span>
-                  <div style={{ fontSize: 11.5, color: PT.ink2, lineHeight: 1.5 }}><b style={{ color: PT.ink }}>{x.t}.</b> {x.d}</div>
+                  <div style={{ fontSize: 12, color: PT.ink2, lineHeight: 1.6 }}><b style={{ color: PT.ink }}>{x.t}.</b> {x.d}</div>
                 </div>
               ))}
             </div>
