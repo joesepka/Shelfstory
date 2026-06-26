@@ -25,36 +25,100 @@ function titleCase(s) {
   if (!s) return "";
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
+function sigColor(k) {
+  return k === "warn" ? "var(--pop-warm)" : k === "up" ? "var(--accent)" : k === "opp" ? "var(--pop-cool)" : "var(--pop-cool-deep)";
+}
 function monthLabel(monthsAgo) {
   const d = new Date(SNAPSHOT);
   d.setDate(d.getDate() - 30 * monthsAgo);
   return d.toLocaleString("en-US", { month: "short" });
 }
 
+// Deterministic pre-call briefing — all computed from Supabase data, no AI.
+// Returns { lead, signals[], moves[] }: a headline sentence, computed analyst
+// signals (the differentiated reasoning), and prioritized actions.
 function buildBriefing(acc, b, items, white) {
   const chan = titleCase(acc.channel);
-  const g = items.filter((i) => i.cell_state === "growth").sort((a, b) => b.l90 - a.l90);
+  const pct = acc.prior90_pct || 0;
+  const growing = items.filter((i) => i.cell_state === "growth").sort((a, b) => (b.l90 || 0) - (a.l90 || 0));
   const lost = items.filter((i) => i.cell_state === "lost_recent");
-  const pct = acc.prior90_pct;
-  let s = "";
-  if (b && b.pct_overall <= 15) {
-    s += `A top-${b.pct_overall}% account`;
-    if (b.wt_vs_chan_pct > 0) s += `, doing ${b.wt_vs_chan_pct}% more volume than the typical ${chan} store`;
-    s += ". ";
+  const active = items.filter((i) => (i.l90 || 0) > 0);
+  const totalL90 = active.reduce((s, i) => s + (i.l90 || 0), 0);
+
+  // ---- lead: ranking + headline trend ----
+  let lead = "";
+  if (b && b.pct_overall != null && b.pct_overall <= 15) {
+    lead += `Top ${b.pct_overall}% account overall`;
+    if (b.pct_channel != null) lead += ` (top ${b.pct_channel}% in ${chan})`;
+    lead += ". ";
   }
-  if (acc.headline === "Accelerating") s += `It's heating up — L90 volume is up ${Math.abs(pct)}% vs the prior quarter. `;
-  else if (acc.headline === "At-Risk") s += `It's at risk — L90 volume down ${Math.abs(pct)}% and shedding placements. `;
-  else if (acc.headline === "Decelerating") s += `But it's cooling — L90 volume is down ${Math.abs(pct)}% from the prior quarter${acc.placements_delta < 0 ? " and it lost a placement" : ""}. `;
-  else if (acc.headline === "Stable") s += `Holding steady quarter over quarter. `;
-  else if (acc.headline === "New") s += `A new account still ramping. `;
-  else if (acc.headline === "Lapsed") s += `It's gone quiet — no orders in the last 90 days. `;
-  if (g.length) s += `${g.slice(0, 2).map((i) => i.item_name).join(" and ")} ${g.length > 1 ? "are" : "is"} accelerating. `;
-  if (lost.length) s += `${lost[0].item_name} lost a facing ~${lost[0].last_sale_w} months ago. `;
+  const trendWord = acc.headline === "Accelerating" ? `heating up — L90 volume up ${Math.abs(pct)}% vs the prior quarter`
+    : acc.headline === "At-Risk" ? `at risk — L90 down ${Math.abs(pct)}% and shedding placements`
+    : acc.headline === "Decelerating" ? `cooling — L90 down ${Math.abs(pct)}% from the prior quarter`
+    : acc.headline === "Stable" ? "holding steady quarter over quarter"
+    : acc.headline === "New" ? "a new account still ramping"
+    : acc.headline === "Lapsed" ? "gone quiet — no orders in the last 90 days"
+    : `tracking ${pct >= 0 ? "up" : "down"} ${Math.abs(pct)}%`;
+  lead += `It's ${trendWord}.`;
+
+  const signals = [];
+
+  // ---- velocity vs distribution: is the move rate-of-sale or doors? ----
+  if (acc.prev90 > 0 && acc.live_prev > 0 && acc.live_placements > 0) {
+    const rosNow = acc.cur90 / acc.live_placements;
+    const rosPrev = acc.prev90 / acc.live_prev;
+    const rosD = Math.round((100 * (rosNow - rosPrev)) / rosPrev);
+    const plcD = Math.round((100 * (acc.live_placements - acc.live_prev)) / acc.live_prev);
+    if (Math.abs(rosD) >= 4 || Math.abs(plcD) >= 4) {
+      if (rosD >= 4 && plcD <= 2) signals.push({ k: "up", t: `Velocity-led: each door is moving ${rosD}% more than last quarter — rate of sale, not new placements.` });
+      else if (plcD >= 4 && rosD <= 2) signals.push({ k: "opp", t: `Distribution-led: ${plcD}% more doors but rate of sale is flat — velocity upside still banked.` });
+      else if (plcD <= -4 && rosD >= -2) signals.push({ k: "warn", t: `Losing doors (${plcD}%) faster than volume — a distribution problem, not velocity. Win the placements back.` });
+      else if (rosD <= -4) signals.push({ k: "warn", t: `Rate of sale is the drag — same doors moving ${Math.abs(rosD)}% less. A velocity fix, not distribution.` });
+    }
+  }
+
+  // ---- recent inflection vs its own 3-month pace (early warning) ----
+  if (Array.isArray(acc.spark) && acc.spark.length >= 4) {
+    const sp = acc.spark.map(Number);
+    const newest = sp[sp.length - 1];
+    const trail = sp.slice(-4, -1);
+    const trailAvg = trail.reduce((s, x) => s + x, 0) / trail.length;
+    if (trailAvg > 0) {
+      const mo = Math.round((100 * (newest - trailAvg)) / trailAvg);
+      if (mo <= -8 && acc.headline !== "At-Risk" && acc.headline !== "Decelerating" && acc.headline !== "Lapsed")
+        signals.push({ k: "warn", t: `Early warning: the last 30 days ran ${Math.abs(mo)}% below its 3-month pace — softening before the quarter trend shows it.` });
+      else if (mo >= 12 && acc.headline !== "Accelerating")
+        signals.push({ k: "up", t: `Quietly accelerating: the last 30 days ran ${mo}% above its 3-month pace.` });
+    }
+  }
+
+  // ---- concentration risk ----
+  if (totalL90 > 0 && active.length >= 2) {
+    const top = active.slice().sort((a, b) => (b.l90 || 0) - (a.l90 || 0))[0];
+    const share = Math.round((100 * (top.l90 || 0)) / totalL90);
+    if (share >= 45) signals.push({ k: "warn", t: `Concentrated: ${share}% of volume rides on ${top.item_name} — protect that facing above all.` });
+  }
+
+  // ---- reorder timing ----
+  if (acc.last_order_w != null && acc.last_order_w >= 8 && acc.headline !== "Lapsed")
+    signals.push({ k: "warn", t: `Due for a reorder — ${acc.last_order_w} weeks since the last one.` });
+
+  // ---- SKU headroom vs channel median ----
+  if (b && b.chan_med_sk != null && acc.live_placements != null) {
+    const gapSk = b.chan_med_sk - acc.live_placements;
+    if (gapSk >= 2) signals.push({ k: "opp", t: `Room in the set: ${acc.live_placements} SKUs vs the ${chan} median of ${b.chan_med_sk} — ${gapSk} slots of headroom.` });
+  }
+
+  // ---- moves ----
   const moves = [];
-  if (lost.length) moves.push(`win back ${lost[0].item_name}`);
-  if (white.length) moves.push(`sell in ${white[0].item_name} (#${white[0].market_rank} in the market, not carried here)`);
-  if (moves.length) s += `Move: ${moves.join(", and ")}.`;
-  return s.trim();
+  if (lost.length) {
+    const avgMo = active.length ? Math.round(totalL90 / active.length / 3) : 0;
+    moves.push(`Win back ${lost[0].item_name}${avgMo > 0 ? ` — ~${avgMo} cs/mo at this account's typical SKU rate` : ""}.`);
+  }
+  if (growing.length) moves.push(`Ride ${growing.slice(0, 2).map((i) => i.item_name).join(" and ")} — already accelerating; lock the reorder.`);
+  if (white.length) moves.push(`Sell in ${white[0].item_name} — #${white[0].market_rank} in the market, not carried here.`);
+
+  return { lead: lead.trim(), signals: signals.slice(0, 3), moves: moves.slice(0, 3) };
 }
 
 function Trend({ spark, color }) {
@@ -147,6 +211,7 @@ export default function AccountOverview() {
     if (al !== bl) return al ? 1 : -1;
     return b.l90 - a.l90;
   });
+  const brief = buildBriefing(acc, bench, items, white);
 
   return (
     <div className="wrap">
@@ -167,6 +232,35 @@ export default function AccountOverview() {
           <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 7, background: "var(--surface-2)", color: "var(--text-2)" }}>Top {bench.pct_channel}% in {titleCase(acc.channel)}</span>
         </div>
       )}
+
+      <div style={{ position: "relative", background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 14 }}>
+        <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
+        <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${head.bc}`, borderRight: `1.5px solid ${head.bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", marginBottom: 6, letterSpacing: "0.3px", textTransform: "uppercase" }}>Pre-call briefing</div>
+        <div style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--text)" }}>{brief.lead}</div>
+        {brief.signals.length > 0 && (
+          <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 6 }}>
+            {brief.signals.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <span aria-hidden="true" style={{ flexShrink: 0, width: 6, height: 6, borderRadius: 3, marginTop: 5, background: sigColor(s.k) }} />
+                <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{s.t}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {brief.moves.length > 0 && (
+          <div style={{ marginTop: 11, paddingTop: 10, borderTop: "0.5px solid var(--border)" }}>
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: "0.3px", textTransform: "uppercase" }}>Move</span>
+            <div style={{ marginTop: 5, display: "flex", flexDirection: "column", gap: 5 }}>
+              {brief.moves.map((m, i) => (
+                <div key={i} style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.45, color: "var(--text)" }}>
+                  <span aria-hidden="true" style={{ color: "var(--accent-deep)", flexShrink: 0 }}>→</span><span>{m}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       <div style={{ display: "flex", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
         {[
@@ -197,13 +291,6 @@ export default function AccountOverview() {
 
       <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 2px 2px" }}>rolling-90 cases · last 12 months</div>
       <Trend spark={acc.spark} color={head.fg} />
-
-      <div style={{ position: "relative", background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: "12px 13px", margin: "10px 0 16px" }}>
-        <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
-        <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${head.bc}`, borderRight: `1.5px solid ${head.bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
-        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", marginBottom: 5, letterSpacing: "0.3px", textTransform: "uppercase" }}>Pre-call briefing</div>
-        <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--text)" }}>{buildBriefing(acc, bench, items, white)}</div>
-      </div>
 
       <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, letterSpacing: "0.3px" }}>WHAT&apos;S ON THE SHELF</div>
       {skus.map((k, i) => {
