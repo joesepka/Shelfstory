@@ -5,20 +5,12 @@ import { supabase } from "../../../lib/supabase";
 import Splash from "../../../components/Splash";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { BarCard, AcctRosCard } from "../../../components/Charts";
+import { gpct, kfmt, titleCase, healthBucket, vol, isOn, monthLabels } from "../../../lib/utils";
 
 const PREPARED_BY = "Joe Sepka";
 const DATA_THRU = "6/15/2026";
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
-const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : (c > 0 ? null : null);
-const isNew = h => String(h || "").toLowerCase().trim() === "new";
-const isLapsed = h => String(h || "").toLowerCase().trim() === "lapsed";
-const isAtRisk = h => { const x = String(h || "").toLowerCase().trim(); return x === "decelerating" || x === "at-risk" || x === "atrisk" || x === "at risk"; };
-const healthBucket = h => isNew(h) ? "new" : isLapsed(h) ? "lapsed" : isAtRisk(h) ? "atrisk" : "healthy";
-const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
-const vol = a => isNew(a.headline) ? (a.cur90 || 0) * 3 : (a.account_weight || 0);
-const isOn = r => String(r.channel || "").toUpperCase().startsWith("ON");
-const kfmt = v => v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) + "k" : Math.round(v).toLocaleString();
-function monthLabels(n) { const now = new Date(); const out = []; for (let k = n; k >= 1; k--) { const d = new Date(now.getFullYear(), now.getMonth() - k, 1); out.push(d.toLocaleString("en-US", { month: "short" })); } return out; }
 
 function OvInner() {
   const router = useRouter();
@@ -917,68 +909,6 @@ function Kpi({ label, value, pct, divider }) {
       <div style={{ fontSize: 8, letterSpacing: .3, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 700, color: "var(--text)", marginTop: 3, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{value}</div>
       <div style={{ fontSize: 9, fontWeight: 700, color: c, marginTop: 3 }}>{pct == null ? "—" : `${arrow} ${Math.abs(pct)}%`}</div>
-    </div>
-  );
-}
-function BarCard({ title, sub, data, labels, hi, unit }) {
-  const mx = Math.max(...data, 1), n = data.length;
-  return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
-        <div style={{ fontSize: 9.5, color: "var(--text-3)" }}>{Math.round(data[n - 1]).toLocaleString()} {unit}</div>
-      </div>
-      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{sub}</div>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 100, marginTop: 10 }}>
-        {data.map((v, i) => {
-          const on = i >= n - hi;
-          return (
-            <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0 }}>
-              <div style={{ fontSize: 6.5, lineHeight: 1, textAlign: "center", marginBottom: 2, color: on ? "var(--accent-deep)" : "var(--text-3)", fontWeight: on ? 700 : 400, fontFeatureSettings: '"tnum" 1' }}>{v > 0 ? kfmt(v) : ""}</div>
-              <div style={{ width: "100%", height: `${v > 0 ? Math.max(3, (v / mx) * 88) : 0}%`, background: on ? "var(--accent)" : "#C9DCD0", borderRadius: "2px 2px 0 0" }} />
-            </div>
-          );
-        })}
-      </div>
-      <div style={{ display: "flex", gap: 3, marginTop: 4 }}>{labels.map((l, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: "var(--text-3)" }}>{l}</div>)}</div>
-    </div>
-  );
-}
-function AcctRosCard({ title, sub, accts, ros, labels, hi }) {
-  const n = accts.length, mxA = Math.max(...accts, 1);
-  const mxR = Math.max(...ros, 0.1), mnR = Math.min(...ros.filter(x => x > 0), mxR);
-  const span = (mxR - mnR) || 1, pad = span * 0.6, lo = Math.max(0, mnR - pad), hi2 = mxR + pad;
-  const yOf = r => 88 - ((r - lo) / ((hi2 - lo) || 1)) * 72;
-  const xOf = i => n > 1 ? (i / (n - 1)) * 100 : 50;
-  const pts = accts.map((_, i) => `${xOf(i).toFixed(1)},${yOf(ros[i]).toFixed(1)}`).join(" ");
-  return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
-        <div style={{ fontSize: 9.5, color: "var(--text-3)" }}>{Math.round(accts[n - 1]).toLocaleString()} accts · {ros[n - 1].toFixed(1)} ROS</div>
-      </div>
-      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{sub}</div>
-      <div style={{ position: "relative", height: 104, marginTop: 10 }}>
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", gap: 3 }}>
-          {accts.map((v, i) => {
-            const on = i >= n - hi;
-            return (
-              <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0 }}>
-                <div style={{ fontSize: 6.5, lineHeight: 1, textAlign: "center", marginBottom: 2, color: on ? "var(--pop-cool-deep)" : "var(--text-3)", fontWeight: on ? 700 : 400, fontFeatureSettings: '"tnum" 1' }}>{v > 0 ? kfmt(v) : ""}</div>
-                <div style={{ width: "100%", height: `${v > 0 ? Math.max(3, (v / mxA) * 80) : 0}%`, background: on ? "var(--pop-cool)" : "#CBD9E6", borderRadius: "2px 2px 0 0" }} />
-              </div>
-            );
-          })}
-        </div>
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible" }}>
-          <polyline points={pts} fill="none" stroke="var(--pop-warm)" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        </svg>
-      </div>
-      <div style={{ display: "flex", gap: 3, marginTop: 4 }}>{labels.map((l, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: "var(--text-3)" }}>{l}</div>)}</div>
-      <div style={{ display: "flex", gap: 12, marginTop: 7, fontSize: 9, color: "var(--text-3)" }}>
-        <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--pop-cool)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />accounts</span>
-        <span><span style={{ display: "inline-block", width: 12, height: 2, background: "var(--pop-warm)", marginRight: 3, verticalAlign: "middle" }} />ROS / mo</span>
-      </div>
     </div>
   );
 }

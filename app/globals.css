@@ -36,6 +36,13 @@ a { color: inherit; text-decoration: none; }
   .ss-line, .ss-head { animation: none; stroke-dashoffset: 0; opacity: 1; }
 }
 
+/* shared chart animations (components/Charts.js) */
+@keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes dotIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  [style*="barGrow"], [style*="dotIn"] { animation: none !important; opacity: 1 !important; transform: none !important; }
+}
+
 /* top bar + toggle */
 .topbar { display:flex; align-items:center; justify-content:space-between; padding: 14px 0 10px; }
 .topbar h1 { font-size: 18px; font-weight: 600; }

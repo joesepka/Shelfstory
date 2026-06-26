@@ -86,7 +86,8 @@ function Trend({ spark, color }) {
         const newest = i === n - 1;
         return (
           <rect key={i} x={x.toFixed(1)} y={(base - h).toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)}
-            rx="2" fill={color} opacity={newest ? 1 : 0.42} />
+            rx="2" fill={color} opacity={newest ? 1 : 0.42}
+            style={{ transformBox: "fill-box", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
         );
       })}
       <text x={X(n - 1) + gap + barW / 2} y={Y(last) - 5} textAnchor="middle" fontSize="11" fontWeight="500" fill="var(--text)">{last}</text>
