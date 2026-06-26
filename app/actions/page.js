@@ -323,6 +323,31 @@ function ActionsInner() {
     return out;
   }, [fr, grid]);
 
+  // exec-level "big picture" for the unscoped view — macro movements, not accounts
+  const execBrief = useMemo(() => {
+    if (!rows) return null;
+    let cur = 0, prev = 0;
+    const byState = {}, byCh = {}, byDist = {}, lostBy = {};
+    for (const r of rows) {
+      cur += r.cur90 || 0; prev += r.prev90 || 0;
+      if (r.state) { const e = byState[r.state] ||= { cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
+      if (r.channel_type) { const e = byCh[r.channel_type] ||= { cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
+      if (r.distributor) { const e = byDist[r.distributor] ||= { cur: 0, prev: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; }
+      if (r.lost_sku) (lostBy[r.lost_sku] ||= new Set()).add(r.account_id);
+    }
+    const movers = (obj) => {
+      const arr = Object.entries(obj).map(([k, e]) => ({ k, g: gpct(e.cur, e.prev), d: Math.round(e.cur - e.prev) })).filter(x => x.g != null);
+      const up = arr.slice().sort((a, b) => b.d - a.d)[0];
+      const down = arr.slice().sort((a, b) => a.d - b.d)[0];
+      return { up: up && up.d > 0 ? up : null, down: down && down.d < 0 ? down : null };
+    };
+    let bigDist = null;
+    for (const [k, e] of Object.entries(byDist)) if (!bigDist || e.cur > bigDist.cur) bigDist = { k, cur: e.cur, g: gpct(e.cur, e.prev), share: cur ? Math.round(100 * e.cur / cur) : 0 };
+    let topLost = null;
+    for (const sku in lostBy) { const n = lostBy[sku].size; if (!topLost || n > topLost.n) topLost = { sku, n }; }
+    return { bookG: gpct(cur, prev), states: movers(byState), channels: movers(byCh), bigDist, topLost };
+  }, [rows]);
+
   if (err) return <div style={wrap}><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   const urgent = plays?.filter(p => p.section === "urgent") || [];
@@ -340,7 +365,7 @@ function ActionsInner() {
       <div style={{ padding: "14px 16px 6px", flexShrink: 0 }}>
 
         <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text)" }}>Actions to Take</div>
-        <div style={{ fontSize: 12.5, color: "var(--text-3)", marginTop: 2 }}>{plays ? `${plays.length} play${plays.length === 1 ? "" : "s"} · ${scopeLabel}` : "Reading your book…"}</div>
+        <div style={{ fontSize: 12.5, color: "var(--text-3)", marginTop: 2 }}>{!plays ? "Reading your book…" : anyFilter ? `${plays.length} play${plays.length === 1 ? "" : "s"} · ${scopeLabel}` : "The big picture — your whole book"}</div>
       </div>
 
       {/* live filters — everything below recomputes from these */}
@@ -365,21 +390,60 @@ function ActionsInner() {
 
       <div className="nobar" style={{ flex: 1, overflowY: "auto", paddingBottom: 30 }}>
         {!plays && <Splash fixed={false} />}
-        {plays && plays.length === 0 && skuGaps !== null && (skuGaps?.length || 0) === 0 && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 16 }}>No plays meet the threshold in this scope — try widening the filters.</div>}
 
-        {urgent.length > 0 && <Sec label="URGENT — DON'T LET THESE SLIP" />}
-        {render(urgent)}
+        {plays && !anyFilter && execBrief && (() => {
+          const eb = execBrief, ms = [];
+          if (eb.states.up) ms.push({ ind: "▲", c: "var(--up)", label: `${STNAME[eb.states.up.k] || eb.states.up.k} is leading`, val: `+${eb.states.up.g}% · +${Math.round(eb.states.up.d).toLocaleString()} cs`, vc: "var(--up)", on: () => setStF(eb.states.up.k) });
+          if (eb.states.down) ms.push({ ind: "▼", c: "var(--down)", label: `${STNAME[eb.states.down.k] || eb.states.down.k} is the drag`, val: `${eb.states.down.g}% · ${Math.round(eb.states.down.d).toLocaleString()} cs`, vc: "var(--down)", on: () => setStF(eb.states.down.k) });
+          if (eb.channels.up) ms.push({ ind: "▲", c: "var(--up)", label: `${titleCase(eb.channels.up.k)} channel rising`, val: `+${eb.channels.up.g}%`, vc: "var(--up)", on: () => setChF(eb.channels.up.k) });
+          if (eb.channels.down) ms.push({ ind: "▼", c: "var(--down)", label: `${titleCase(eb.channels.down.k)} channel slipping`, val: `${eb.channels.down.g}%`, vc: "var(--down)", on: () => setChF(eb.channels.down.k) });
+          if (eb.bigDist) ms.push({ ind: "◆", c: "var(--text-3)", label: `${titleCase(eb.bigDist.k)} carries ${eb.bigDist.share}% of the book`, val: `${eb.bigDist.g >= 0 ? "+" : ""}${eb.bigDist.g}%`, vc: eb.bigDist.g >= 0 ? "var(--up)" : "var(--down)", on: () => setDistF(eb.bigDist.k) });
+          if (eb.topLost) ms.push({ ind: "✕", c: "var(--pop-warm)", label: `${titleCase(eb.topLost.sku)} dropping out of placements`, val: `−${eb.topLost.n}`, vc: "var(--down)", on: null });
+          return (
+            <>
+              <Sec label="THE BIG PICTURE" />
+              <div style={{ position: "relative", background: "var(--surface)", borderRadius: 14, margin: "0 16px 10px", padding: "15px 16px 8px", boxShadow: "var(--shadow)" }}>
+                <Brackets color="var(--accent)" />
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", lineHeight: 1.25 }}>
+                  Your book is {eb.bookG >= 0 ? `up ${eb.bookG}%` : `down ${Math.abs(eb.bookG)}%`} over 90 days
+                </div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3, marginBottom: 4 }}>What's moving it — tap any line to drill in.</div>
+                {ms.map((m, i) => (
+                  <div key={i} onClick={m.on || undefined} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderBottom: i < ms.length - 1 ? "1px solid var(--border)" : "none", cursor: m.on ? "pointer" : "default" }}>
+                    <span style={{ color: m.c, fontWeight: 700, fontSize: 12, width: 12, flexShrink: 0, textAlign: "center" }}>{m.ind}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "var(--text)" }}>{m.label}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: m.vc, whiteSpace: "nowrap" }}>{m.val}</span>
+                    {m.on && <span style={{ color: "var(--accent-deep)", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>→</span>}
+                  </div>
+                ))}
+              </div>
+              {(urgent.length + fix.length) > 0 && (
+                <div style={{ fontSize: 11.5, color: "var(--text-3)", padding: "0 16px 8px", lineHeight: 1.45 }}>
+                  {urgent.length} urgent and {fix.length} execution {fix.length === 1 ? "fix" : "fixes"} are waiting across the book — drill into a state or distributor above to work them.
+                </div>
+              )}
+            </>
+          );
+        })()}
 
-        {fix.length > 0 && <Sec label="FIX EXECUTION" />}
-        {render(fix)}
+        {anyFilter && (
+          <>
+            {plays && plays.length === 0 && skuGaps !== null && (skuGaps?.length || 0) === 0 && <div style={{ color: "var(--text-3)", fontSize: 13, padding: 16 }}>No plays meet the threshold in this scope — try widening the filters.</div>}
 
-        {/* SKU GAPS — holds behind a quiet line until grid is ready, then plain tap-rows */}
-        {(skuLoading || (skuGaps && skuGaps.length > 0)) && <Sec label="SKU GAPS — TOP MOVERS NOT CARRIED" />}
-        {skuLoading && <div style={{ fontSize: 12, color: "var(--text-3)", padding: "2px 16px 8px" }}>Reading SKUs…</div>}
-        {skuGaps && skuGaps.map(p => <SkuGapRow key={p.id} play={p} go={go} />)}
+            {urgent.length > 0 && <Sec label="URGENT — DON'T LET THESE SLIP" />}
+            {render(urgent)}
 
-        {opp.length > 0 && <Sec label="OPPORTUNITIES — WHITESPACE & MOMENTUM" />}
-        {render(opp)}
+            {fix.length > 0 && <Sec label="FIX EXECUTION" />}
+            {render(fix)}
+
+            {(skuLoading || (skuGaps && skuGaps.length > 0)) && <Sec label="SKU GAPS — TOP MOVERS NOT CARRIED" />}
+            {skuLoading && <div style={{ fontSize: 12, color: "var(--text-3)", padding: "2px 16px 8px" }}>Reading SKUs…</div>}
+            {skuGaps && skuGaps.map(p => <SkuGapRow key={p.id} play={p} go={go} />)}
+
+            {opp.length > 0 && <Sec label="OPPORTUNITIES — WHITESPACE & MOMENTUM" />}
+            {render(opp)}
+          </>
+        )}
 
         <div style={{ height: 20 }} />
       </div>
