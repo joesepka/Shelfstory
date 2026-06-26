@@ -369,16 +369,14 @@ function ActionsInner() {
       </div>
 
       {/* live filters — everything below recomputes from these */}
-      <div style={{ padding: "10px 16px 8px", flexShrink: 0 }}>
+      <div className="nobar" style={{ display: "flex", gap: 6, overflowX: "auto", padding: "10px 16px 8px", flexShrink: 0 }}>
         <style>{`.nobar::-webkit-scrollbar{display:none}.nobar{scrollbar-width:none;-ms-overflow-style:none}`}</style>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 6 }}>
-          <FilterSelect label="State" value={stF} options={states} onChange={v => { setStF(v); setDistF("All"); setChainF("All"); }} display={s => s === "All" ? "All states" : (STNAME[s] || s)} />
-          <FilterSelect label="Distributor" value={distF} options={dists} onChange={setDistF} display={d => d === "All" ? "All distributors" : titleCase(d)} />
-          <FilterSelect label="Channel" value={chF} options={channels} onChange={setChF} display={c => c === "All" ? "All channels" : c} />
-          <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : titleCase(c)} />
-        </div>
+        <FilterSelect label="State" value={stF} options={states} onChange={v => { setStF(v); setDistF("All"); setChainF("All"); }} display={s => s === "All" ? "All states" : (STNAME[s] || s)} />
+        <FilterSelect label="Distributor" value={distF} options={dists} onChange={setDistF} display={d => d === "All" ? "All distributors" : titleCase(d)} />
+        <FilterSelect label="Channel" value={chF} options={channels} onChange={setChF} display={c => c === "All" ? "All channels" : c} />
+        <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : titleCase(c)} />
         {anyFilter && (
-          <button onClick={clearAll} style={{ marginTop: 6, width: "100%", fontSize: 11.5, fontWeight: 700, padding: "8px", borderRadius: 10, border: "1px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit" }}>↺ Clear all filters</button>
+          <button onClick={clearAll} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "8px 12px", borderRadius: 10, border: "1.5px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>↺ Clear</button>
         )}
       </div>
 

@@ -166,15 +166,16 @@ function SplashClouds() {
 
 function Splash({ onDone }) {
   const [progress, setProgress] = useState(0);
+  const [boom, setBoom] = useState(false);
   useEffect(() => {
     const start = Date.now();
-    const dur = 1500;
+    const dur = 1150;
     let raf;
     const tick = () => {
       const p = Math.min((Date.now() - start) / dur, 1);
       setProgress(p);
       if (p < 1) raf = requestAnimationFrame(tick);
-      else setTimeout(onDone, 250);
+      else { setTimeout(() => setBoom(true), 110); setTimeout(onDone, 580); }  // one cycle -> explode open
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
@@ -221,10 +222,10 @@ function Splash({ onDone }) {
     <div style={{
       position: "fixed", inset: 0, background: T.bg, zIndex: 50,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      transition: "opacity 0.4s ease", opacity: progress >= 1 ? 0 : 1, pointerEvents: progress >= 1 ? "none" : "auto",
+      transition: "opacity .46s ease", opacity: boom ? 0 : 1, pointerEvents: boom ? "none" : "auto",
     }}>
       <SplashClouds />
-      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", transform: boom ? "scale(2.6)" : "scale(1)", transition: "transform .48s cubic-bezier(.34,1.56,.64,1)" }}>
         <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }}>
           <path d={L} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
           <path d={R} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
@@ -252,14 +253,14 @@ function greeting() {
   return "Good evening";
 }
 
-function Stat({ label, value, unit, pct, divider }) {
+function Stat({ label, value, unit, pct, divider, delay = 0 }) {
   const c = pct == null ? FLAT : pct > 0 ? UP : pct < 0 ? DOWN : FLAT;
   const arrow = pct == null ? "" : pct > 0 ? "▲" : pct < 0 ? "▼" : "▬";
   return (
     <div style={{ flex: 1, minWidth: 0, textAlign: "center", borderLeft: divider ? "1px solid var(--border-strong)" : "none" }}>
       <div style={{ fontSize: 8.5, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, height: 22, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
       <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 2, marginTop: 3 }}>
-        <span style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{value}</span>
+        <span className="statfloat" style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1', animationDelay: `${delay}s` }}>{value}</span>
         {unit && <span style={{ fontSize: 9, color: "var(--text-3)" }}>{unit}</span>}
       </div>
       <div style={{ fontSize: 9.5, fontWeight: 700, color: c, marginTop: 5 }}>
@@ -443,9 +444,9 @@ export default function Home() {
                 <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
                 <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
                 <div style={{ display: "flex" }}>
-                  <Stat label="90D Cases" value={s.cur.toLocaleString()} pct={s.curPct} />
-                  <Stat label="Active Accts" value={s.acctNow.toLocaleString()} pct={s.acctPct} divider />
-                  <Stat label="ROS / Acct" value={s.rosNow.toFixed(1)} unit="cs" pct={s.rosPct} divider />
+                  <Stat label="90D Cases" value={s.cur.toLocaleString()} pct={s.curPct} delay={0} />
+                  <Stat label="Active Accts" value={s.acctNow.toLocaleString()} pct={s.acctPct} divider delay={0.9} />
+                  <Stat label="ROS / Acct" value={s.rosNow.toFixed(1)} unit="cs" pct={s.rosPct} divider delay={1.8} />
                 </div>
               </div>
             )}
@@ -480,7 +481,9 @@ export default function Home() {
         @keyframes poof{0%{transform:scale(1);}35%{transform:scale(1.4);opacity:.3;}100%{transform:scale(2.2);opacity:0;}}
         @keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
         .bob{animation:bob 2.6s ease-in-out infinite;}
-        @media (prefers-reduced-motion: reduce){.cl,.bob,.sunrays,.sun,.drop{animation:none !important;}}
+        @keyframes statFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
+        .statfloat{display:inline-block;animation:statFloat 4.6s ease-in-out infinite;}
+        @media (prefers-reduced-motion: reduce){.cl,.bob,.sunrays,.sun,.drop,.statfloat{animation:none !important;}}
       `}</style>
     </>
   );

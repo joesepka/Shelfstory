@@ -546,14 +546,14 @@ function BookInner() {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, padding: "10px 12px 8px", flexShrink: 0 }}>
+      <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
         <FilterSelect label="State" value={stF} options={states} onChange={v => { setStF(v); setCityF("All"); setChainF("All"); }} display={s => s === "All" ? "All states" : s} />
         <FilterSelect label="City" value={cityF} options={cities} onChange={v => { setCityF(v); setChainF("All"); }} display={c => c === "All" ? "All cities" : c} />
         <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : c} />
         <FilterSelect label="Premise" value={premF} options={["All", "ON", "OFF"]} onChange={setPremF} display={p => p === "ON" ? "On-premise" : p === "OFF" ? "Off-premise" : "All premise"} />
         <FilterSelect label="Distributor" value={distF} options={dists} onChange={setDistF} display={d => d === "All" ? "All distributors" : d} />
         <button disabled title="Coming soon"
-          style={{ fontSize: 11.5, padding: "8px 11px", borderRadius: 10, whiteSpace: "nowrap", border: "0.5px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--text-3)", fontFamily: "inherit", cursor: "not-allowed", boxSizing: "border-box" }}>
+          style={{ flexShrink: 0, fontSize: 11.5, padding: "8px 11px", borderRadius: 10, whiteSpace: "nowrap", border: "0.5px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--text-3)", fontFamily: "inherit", cursor: "not-allowed", boxSizing: "border-box" }}>
           ◎ Near me
         </button>
       </div>

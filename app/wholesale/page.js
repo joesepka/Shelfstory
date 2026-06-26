@@ -174,7 +174,7 @@ export default function WholesalePage() {
       </div>
 
       {/* filters (no "near me") */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, padding: "10px 12px 8px", flexShrink: 0 }}>
+      <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
         <FilterSelect label="State" value={stF} options={states} onChange={v => { setStF(v); setCityF("All"); setChainF("All"); }} display={s => s === "All" ? "All states" : s} />
         <FilterSelect label="City" value={cityF} options={cities} onChange={v => { setCityF(v); setChainF("All"); }} display={c => c === "All" ? "All cities" : c} />
         <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : c} />
