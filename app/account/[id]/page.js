@@ -84,9 +84,11 @@ function Trend({ spark, color }) {
         const y = Y(v);
         const h = Math.max(v > 0 ? 2 : 0, base - y);
         const newest = i === n - 1;
+        const pv = spark[i - 1];
+        const f = newest ? "var(--accent-deep)" : (pv == null || v <= 0) ? "var(--bar-neutral)" : v >= pv * 1.02 ? "var(--bar-grow)" : v <= pv * 0.97 ? "var(--bar-dip)" : "var(--bar-neutral)";
         return (
           <rect key={i} x={x.toFixed(1)} y={(base - h).toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)}
-            rx="2" fill={color} opacity={newest ? 1 : 0.42}
+            rx="2" fill={f}
             style={{ transformBox: "fill-box", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
         );
       })}

@@ -8,7 +8,7 @@
 :root {
   /* ---- Fonts (wired from next/font in layout.js) ---- */
   --font-sans:  var(--font-dm), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-serif: var(--font-dm), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; /* Story skin: sleek sans everywhere (was Fraunces serif) */
   --lapsed-card-bg: #FBEEE9;
 
   /* ---- Layout & shape ---- */
@@ -18,9 +18,9 @@
   --r-lg: 14px;
 
   /* ---- Surfaces ---- */
-  --bg:         #ffffff;   /* app canvas (warm green-grey) */
-  --surface:    #FFFFFF;   /* cards */
-  --surface-2:  #E4E8DC;   /* toggles / insets */
+  --bg:         #FBF7EE;   /* Story skin: warm cream paper */
+  --surface:    #FFFFFF;   /* cards (pop white on cream) */
+  --surface-2:  #EDE6D6;   /* toggles / insets (warm) */
 
   /* ---- Text tiers ---- */
   --text:    #2A332A;      /* primary  */
@@ -28,8 +28,8 @@
   --text-3:  #9AA593;      /* muted / captions */
 
   /* ---- Lines ---- */
-  --border:        #E7EBDF;
-  --border-strong: #DCE2D2;
+  --border:        #E7E0CF;
+  --border-strong: #DCD2BC;
 
   /* ---- Brand accent (green) ---- */
   --accent:      #5E9277;
@@ -49,6 +49,12 @@
   /* ---- Direction (deltas) ---- */
   --up:   #3E8A5E;
   --down: #C0533A;
+
+  /* ---- Chart bars (Story skin: colored by month-over-month performance) ---- */
+  --bar-grow:    #5DCAA5;   /* growing vs prior period */
+  --bar-hot:     #F2C14E;   /* notable surge */
+  --bar-dip:     #D85A30;   /* declining */
+  --bar-neutral: #CDD9CB;   /* flat / older */
 
   /* ---- Status (account health) — derived from the palette ---- */
   --growing-bg: var(--accent-soft);    --growing-ink: var(--accent-deep);

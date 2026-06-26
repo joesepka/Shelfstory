@@ -12,6 +12,15 @@ export function BarCard({ title, sub, data, labels, hi, unit }) {
   const mx = Math.max(...data, 1), n = data.length;
   const gap = n > 8 ? 2 : 3;                                   // shared with AcctRosCard so columns line up
   const showLab = i => n <= 6 || i % 3 === 0 || i === n - 1;   // only a few x labels
+  // color each bar by its move vs the prior period; latest bar = deep accent
+  const barCol = (vv, ii) => {
+    if (ii === n - 1) return "var(--accent-deep)";
+    const p = data[ii - 1];
+    if (p == null || vv <= 0) return "var(--bar-neutral)";
+    if (vv >= p * 1.02) return "var(--bar-grow)";
+    if (vv <= p * 0.97) return "var(--bar-dip)";
+    return "var(--bar-neutral)";
+  };
   return (
     <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
@@ -25,7 +34,7 @@ export function BarCard({ title, sub, data, labels, hi, unit }) {
           return (
             <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0 }}>
               <div style={{ fontSize: 6.5, lineHeight: 1, textAlign: "center", marginBottom: 2, color: on ? "var(--accent-deep)" : "var(--text-3)", fontWeight: on ? 700 : 400, fontFeatureSettings: '"tnum" 1', whiteSpace: "nowrap", overflow: "hidden" }}>{v > 0 ? kfmt(v) : ""}</div>
-              <div style={{ width: "100%", height: `${v > 0 ? Math.max(2, (v / mx) * 92) : 0}%`, background: on ? "var(--accent)" : "#C9DCD0", borderRadius: "2px 2px 0 0", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
+              <div style={{ width: "100%", height: `${v > 0 ? Math.max(2, (v / mx) * 92) : 0}%`, background: barCol(v, i), borderRadius: "2px 2px 0 0", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
             </div>
           );
         })}
@@ -42,6 +51,15 @@ export function BarCard({ title, sub, data, labels, hi, unit }) {
 export function AcctRosCard({ title, sub, accts, ros, labels, hi }) {
   const n = accts.length, mxA = Math.max(...accts, 1);
   const dense = n > 8;
+  // color account bars by move vs prior period; latest bar = deep cool
+  const acol = (vv, ii) => {
+    if (ii === n - 1) return "var(--pop-cool-deep)";
+    const p = accts[ii - 1];
+    if (p == null || vv <= 0) return "var(--bar-neutral)";
+    if (vv >= p * 1.01) return "var(--bar-grow)";
+    if (vv <= p * 0.99) return "var(--bar-dip)";
+    return "var(--bar-neutral)";
+  };
   const mxR = Math.max(...ros, 0.1), mnR = Math.min(...ros.filter(x => x > 0), mxR);
   const span = (mxR - mnR) || 1, pad = span * 0.6, lo = Math.max(0, mnR - pad), hi2 = mxR + pad;
   const yOf = r => 88 - ((r - lo) / ((hi2 - lo) || 1)) * 72;
@@ -74,7 +92,7 @@ export function AcctRosCard({ title, sub, accts, ros, labels, hi }) {
             return (
               <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0 }}>
                 <div style={{ fontSize: 6.5, lineHeight: 1, textAlign: "center", marginBottom: 2, color: on ? "var(--pop-cool-deep)" : "var(--text-3)", fontWeight: on ? 700 : 400, fontFeatureSettings: '"tnum" 1' }}>{v > 0 ? kfmt(v) : ""}</div>
-                <div style={{ width: "100%", height: `${v > 0 ? Math.max(2, (v / mxA) * 80) : 0}%`, background: on ? "var(--pop-cool)" : "#CBD9E6", borderRadius: "2px 2px 0 0", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
+                <div style={{ width: "100%", height: `${v > 0 ? Math.max(2, (v / mxA) * 80) : 0}%`, background: acol(v, i), borderRadius: "2px 2px 0 0", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
               </div>
             );
           })}

@@ -7,7 +7,7 @@ import { useExplode } from "../lib/useExplode";
 const T = {
   bg: "#FFFFFF", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
   font: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
-  serif: "Georgia, 'Times New Roman', serif",
+  serif: "var(--font-sans)",
 };
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
 const UP = "#5C9A7B", DOWN = "#C07A72", FLAT = "#A5A092";
