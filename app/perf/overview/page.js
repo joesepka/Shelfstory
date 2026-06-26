@@ -15,7 +15,8 @@ const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA:
 function OvInner() {
   const router = useRouter();
   const sp = useSearchParams();
-  const scope = { st: sp.get("st"), city: sp.get("city"), channel: sp.get("channel"), chain: sp.get("chain") };
+  const scope = { st: sp.get("st"), city: sp.get("city"), channel: sp.get("channel"), chain: sp.get("chain"), distributor: sp.get("distributor") };
+  const kind = scope.distributor ? "Distributor" : "Territory";
   const [rows, setRows] = useState(null);
   const [grid, setGrid] = useState(null);
   const [err, setErr] = useState(null);
@@ -28,6 +29,7 @@ function OvInner() {
       if (scope.city) q = q.eq("city", scope.city);
       if (scope.channel) q = q.eq("channel_type", scope.channel);
       if (scope.chain) q = q.eq("chain", scope.chain);
+      if (scope.distributor) q = q.eq("distributor", scope.distributor);
       const { data, error } = await q.limit(20000);
       if (error) { setErr(error.message); return; }
       setRows(data || []);
@@ -44,6 +46,9 @@ function OvInner() {
   }, [sp]); // eslint-disable-line
 
   const title = useMemo(() => {
+    if (scope.distributor && scope.st) return `${titleCase(scope.distributor)} · ${STNAME[scope.st] || scope.st}`;
+    if (scope.distributor && scope.channel) return `${titleCase(scope.distributor)} · ${titleCase(scope.channel)}`;
+    if (scope.distributor) return titleCase(scope.distributor);
     if (scope.chain && scope.city) return `${titleCase(scope.chain)} · ${titleCase(scope.city)}`;
     if (scope.chain && scope.st) return `${titleCase(scope.chain)} · ${scope.st}`;
     if (scope.chain) return titleCase(scope.chain);
@@ -134,6 +139,7 @@ function OvInner() {
     if (scope.chain) return ["channel", "city"];
     if (scope.channel) return ["chain", "city"];
     if (scope.city) return ["channel", "chain"];
+    if (scope.distributor) return ["channel", "chain"]; // a distributor review = by channel + chain
     return ["channel", "chain"]; // state / all territory
   }, [sp]); // eslint-disable-line
 
@@ -280,7 +286,7 @@ function OvInner() {
         pdf.addImage(img, "JPEG", 0, 0, 11, 8.5);
       }
       const safe = title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "");
-      pdf.save(`${safe || "Territory"}-Review.pdf`);
+      pdf.save(`${safe || kind}-Review.pdf`);
     } catch (e) {
       console.error("PDF export failed", e);
       alert("PDF export hit a snag — try again.");
@@ -289,7 +295,7 @@ function OvInner() {
     }
   }
 
-  if (err) return <div style={wrap}><Top title={title} back={() => router.push("/perf")} canPrint={false} /><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
+  if (err) return <div style={wrap}><Top title={title} kind={kind} back={() => router.push("/perf")} canPrint={false} /><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   return (
     <div style={wrap}>
@@ -297,7 +303,7 @@ function OvInner() {
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
 
       <div className="screen-only" style={{ display: "flex", flexDirection: "column", minHeight: "100%" }}>
-        <Top title={title} back={() => router.push("/perf")} canPrint={!!ready} onExport={exportPdf} exporting={exporting} />
+        <Top title={title} kind={kind} back={() => router.push("/perf")} canPrint={!!ready} onExport={exportPdf} exporting={exporting} />
         {!m && <div style={{ position: "relative", height: 320 }}><Splash fixed={false} /></div>}
         {m && (
           <div className="nobar" style={{ flex: 1, overflowY: "auto", padding: "0 16px 40px", WebkitOverflowScrolling: "touch" }}>
@@ -383,7 +389,7 @@ function OvInner() {
         )}
       </div>
 
-      {ready && <PrintDeck deckRef={deckRef} title={title} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} demoRows={demoRows} bookLists={bookLists} />}
+      {ready && <PrintDeck deckRef={deckRef} title={title} kind={kind} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} demoRows={demoRows} bookLists={bookLists} />}
     </div>
   );
 }
@@ -552,7 +558,7 @@ function PAcctRos({ accts, ros, labels, hi }) {
 }
 function PPanelHead({ children }) { return <div style={{ fontSize: 9.5, fontWeight: 700, color: PT.mut, textTransform: "uppercase", letterSpacing: .3, marginBottom: 7 }}>{children}</div>; }
 
-function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows, bookLists }) {
+function PrintDeck({ deckRef, title, kind, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows, bookLists }) {
   const labels = monthLabels(11);
   const topItems = (items?.all || []).slice(0, 8);
   const itemMx = Math.max(...topItems.map(it => Math.max(it.l90, it.prev)), 1);
@@ -582,7 +588,7 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
             <svg viewBox="0 0 64 48" style={{ width: 32 }}><path d="M32 40 q-9 -4 -22 -2 v-22 q13 -2 22 2 z" fill="none" stroke={PT.green} strokeWidth="2.4" strokeLinejoin="round" /><path d="M32 40 q9 -4 22 -2 v-22 q-13 -2 -22 2 z" fill="none" stroke={PT.green} strokeWidth="2.4" strokeLinejoin="round" /><polyline points="15,30 23,27 31,22 41,14" fill="none" stroke={PT.greenMid} strokeWidth="2.6" strokeLinecap="round" /></svg>
             <span style={{ fontSize: 15, fontWeight: 700, color: PT.ink }}>ShelfStory</span>
           </div>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: PT.greenMid, textTransform: "uppercase" }}>Territory Business Review</div>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 2, color: PT.greenMid, textTransform: "uppercase" }}>{kind} Business Review</div>
           <div style={{ fontSize: 46, fontWeight: 700, color: PT.ink, letterSpacing: "-2px", marginTop: 10, lineHeight: 1 }}>{title}</div>
           <div style={{ fontSize: 15, color: PT.ink2, marginTop: 12 }}>90-day performance review</div>
           <div style={{ width: 54, height: 3, background: PT.green, marginTop: 22 }} />
@@ -593,7 +599,7 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
 
       {/* TOC */}
       <div className="pslide">
-        <PHead kick={`Territory Review · ${title}`} title="Contents" />
+        <PHead kick={`${kind} Review · ${title}`} title="Contents" />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", padding: "0 0.6in" }}>
           {[["01", "Pulse", "90-day performance, trend, and what's moving"], ["02", "Items", "top sellers, current 90 days vs prior"], ["03", "Account Health", "where the book stands by status"], ["04", "Where It Sells", "breakdowns by channel, chain, area & income"], ["05", "Executive Summary", "headwinds, opportunities, and the ask"]].map((r, i) => (
             <div key={i} style={{ display: "flex", alignItems: "baseline", gap: 16, padding: "0.11in 0", borderBottom: i < 4 ? `1px solid ${PT.line}` : "none" }}>
@@ -997,19 +1003,19 @@ function BreakdownTable({ table, scope, router }) {
   );
 }
 
-function Top({ title, back, canPrint, onExport, exporting }) {
+function Top({ title, kind, back, canPrint, onExport, exporting }) {
   const disabled = !canPrint || exporting;
   return (
     <div style={{ flexShrink: 0, padding: "12px 16px 10px", borderBottom: "1px solid var(--border)" }}>
       <div onClick={back} style={{ fontSize: 12.5, color: "var(--accent-deep)", cursor: "pointer", marginBottom: 6 }}>‹ Back to explorer</div>
-      <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .5, color: "var(--text-3)", textTransform: "uppercase" }}>Market Overview</div>
+      <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .5, color: "var(--text-3)", textTransform: "uppercase" }}>{kind === "Distributor" ? "Distributor Review" : "Market Overview"}</div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 5 }}>
         <div style={{ fontSize: 23, fontWeight: 700, color: "var(--text)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
       </div>
       <div style={{ display: "flex", gap: 7, marginTop: 11 }}>
         <button onClick={onExport} disabled={disabled}
           style={{ flex: 1, fontSize: 12, fontWeight: 700, padding: "10px 0", borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", border: `0.5px solid ${disabled ? "var(--border)" : "var(--accent)"}`, background: disabled ? "var(--surface-2)" : "var(--accent-soft)", color: disabled ? "var(--text-3)" : "var(--accent-deep)" }}>
-          {exporting ? "Generating PDF…" : canPrint ? "⤓ Generate territory report" : "Building report…"}
+          {exporting ? "Generating PDF…" : canPrint ? `⤓ Generate ${kind.toLowerCase()} report` : "Building report…"}
         </button>
       </div>
     </div>

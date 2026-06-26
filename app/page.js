@@ -337,8 +337,7 @@ function buildBrief(rows) {
 // arrow, `highlight` gives the row a subtle coral wash (the priority action).
 const NAV = [
   { href: "/book", title: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list." },
-  { href: "/perf", title: "Decision Tree", color: "#3D6E93", sub: "Drill the whole book to its biggest areas of distress — and where to act." },
-  { href: "/dist", title: "Presentation", color: "#8A6310", sub: "A full, presentable per-distributor review." },
+  { href: "/perf", title: "Decision Tree", color: "#3D6E93", sub: "Drill territory, channel, chain, or distributor to the biggest distress — and a report." },
   { href: "/wholesale", title: "Historical Trends", color: "#534AB7", sub: "Depletion and inventory momentum over time." },
   { href: "/actions", title: "Actions", color: "#B0573A", sub: "Your highest-priority plays for the day.", highlight: true },
 ];

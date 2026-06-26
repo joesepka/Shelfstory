@@ -43,7 +43,7 @@ function PerfInner() {
       while (true) {
         const { data, error } = await supabase
           .from("account_list")
-          .select("account_id,state,city,channel_type,chain,headline,account_weight,cur90,prev90,live_placements,live_prev")
+          .select("account_id,state,city,channel_type,chain,distributor,headline,account_weight,cur90,prev90,live_placements,live_prev")
           .order("account_weight", { ascending: false })
           .range(from, from + 4999);
         if (error) { setErr(error.message); return; }
@@ -85,8 +85,8 @@ function PerfInner() {
     return () => { dead = true; };
   }, [scopeSig, view, scoped.length]); // eslint-disable-line
 
-  function dimKey(a) { if (view === "territory") return scope.st ? a.city : a.state; if (view === "channel") return a.channel_type; return a.chain; }
-  function driverDim() { if (view === "territory") return scope.st ? "channel" : "city"; if (view === "channel") return "chain"; return null; }
+  function dimKey(a) { if (view === "territory") return scope.st ? a.city : a.state; if (view === "channel") return a.channel_type; if (view === "distributor") return a.distributor; return a.chain; }
+  function driverDim() { if (view === "territory") return scope.st ? "channel" : "city"; if (view === "channel") return "chain"; if (view === "distributor") return "channel"; return null; }
   function driverKey(d, a) { if (d === "city") return a.city; if (d === "channel") return a.channel_type; if (d === "chain") return a.chain || "Independent"; }
 
   const acctBoxes = useMemo(() => {
@@ -132,7 +132,8 @@ function PerfInner() {
   function clickBox(b) {
     if (animating.current) return;
     let action;
-    if (view === "territory" && !scope.st && !hasFilter) action = { type: "scope", scope: { st: b.key } };
+    if (view === "distributor") action = { type: "ov", extra: { distributor: b.key } }; // straight to that distributor's review
+    else if (view === "territory" && !scope.st && !hasFilter) action = { type: "scope", scope: { st: b.key } };
     else if (view === "channel" && !hasFilter) action = { type: "scope", scope: { channel: b.key } };
     else if (view === "territory") action = { type: "ov", extra: { city: b.key } };
     else action = { type: "ov", extra: { chain: b.key } }; // chain click
@@ -146,8 +147,8 @@ function PerfInner() {
   }
   function setView(v) { if (animating.current) return; setViewOverride(v); }
 
-  function vtitle() { if (view === "territory") return scope.st ? "Cities" : "Markets"; if (view === "channel") return "Channels"; return "Chains"; }
-  function unitWord() { if (view === "territory") return scope.st ? "city" : "market"; if (view === "channel") return "channel"; return "chain"; }
+  function vtitle() { if (view === "territory") return scope.st ? "Cities" : "Markets"; if (view === "channel") return "Channels"; if (view === "distributor") return "Distributors"; return "Chains"; }
+  function unitWord() { if (view === "territory") return scope.st ? "city" : "market"; if (view === "channel") return "channel"; if (view === "distributor") return "distributor"; return "chain"; }
   function bigHeadline(b, gi) {
     const sz = Math.round(b.size).toLocaleString(), u = unitWord();
     const lead = gi === 0 ? `Your biggest ${u}` : `#${gi + 1} ${u}`;
@@ -179,8 +180,8 @@ function PerfInner() {
       </div>
 
       <div style={{ display: "flex", gap: 4, padding: "0 14px 8px", flexShrink: 0 }}>
-        {[["territory", scope.st ? "Cities" : "Territory"], ["channel", "Channel"], ["chain", "Chain"]].map(([k, t]) => (
-          <button key={k} onClick={() => setView(k)} style={{ flex: 1, fontSize: 12.5, fontWeight: 600, padding: "8px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit", background: view === k ? "var(--accent)" : "var(--surface-2)", color: view === k ? "var(--accent-ink)" : "var(--text-2)" }}>{t}</button>
+        {[["territory", scope.st ? "Cities" : "Territory"], ["channel", "Channel"], ["chain", "Chain"], ["distributor", "Distributor"]].map(([k, t]) => (
+          <button key={k} onClick={() => setView(k)} style={{ flex: 1, fontSize: 11.5, fontWeight: 600, padding: "8px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit", background: view === k ? "var(--accent)" : "var(--surface-2)", color: view === k ? "var(--accent-ink)" : "var(--text-2)" }}>{t}</button>
         ))}
       </div>
 
