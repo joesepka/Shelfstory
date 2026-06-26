@@ -79,10 +79,13 @@ function OvInner() {
     cases = cases.slice(0, NP - 1);
     accts = accts.slice(0, NP - 1);
     const ros = cases.map((c, i) => accts[i] > 0 ? c / accts[i] : 0);
+    const rosNow = aNow ? cur / aNow / 3 : 0;
+    const rosPrev = aPrev ? prev / aPrev / 3 : 0;
     return {
       cur, prev, l52, pNow, n: rows.length, aNow,
       pct: gpct(cur, prev), acctPct: gpct(aNow, aPrev), distPct: gpct(pNow, pPrev),
-      rosNow: aNow ? cur / aNow / 3 : 0, cases, accts, ros,
+      rosNow, rosPrev, rosPct: rosPrev > 0 ? Math.round(100 * (rosNow - rosPrev) / rosPrev) : null,
+      cases, accts, ros,
     };
   }, [rows]);
 
@@ -275,7 +278,7 @@ function OvInner() {
                 <div style={{ display: "flex" }}>
                   <Kpi label="90D Cases" value={Math.round(m.cur).toLocaleString()} pct={m.pct} />
                   <Kpi label="Active Accts" value={m.aNow.toLocaleString()} pct={m.acctPct} divider />
-                  <Kpi label="ROS / mo" value={m.rosNow.toFixed(1)} pct={null} divider />
+                  <Kpi label="ROS / mo" value={m.rosNow.toFixed(1)} pct={m.rosPct} divider />
                 </div>
               </div>
               <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, boxShadow: "var(--shadow)", padding: "13px 15px", marginTop: 9 }}>
@@ -553,7 +556,7 @@ function PrintDeck({ deckRef, title, m, health, items, movers, verdict, tableA, 
             <PTile label="90-day cases" value={Math.round(m.cur).toLocaleString()} delta={m.pct == null ? "—" : `${m.pct > 0 ? "▲" : "▼"} ${Math.abs(m.pct)}%`} dColor={m.pct > 0 ? PT.up : PT.down} />
             <PTile label="Active accounts" value={m.aNow.toLocaleString()} delta={m.acctPct == null ? "—" : `${m.acctPct > 0 ? "▲" : "▼"} ${Math.abs(m.acctPct)}%`} dColor={m.acctPct > 0 ? PT.up : PT.down} />
             <PTile label="Placements" value={m.pNow.toLocaleString()} delta={m.distPct == null ? "—" : `${m.distPct > 0 ? "▲" : "▼"} ${Math.abs(m.distPct)}%`} dColor={m.distPct > 0 ? PT.up : PT.down} />
-            <PTile label="Cases/mo · avg acct" value={m.rosNow.toFixed(1)} delta="rate of sale" dColor={PT.mut} />
+            <PTile label="Cases/mo · avg acct" value={m.rosNow.toFixed(1)} delta={m.rosPct == null ? "rate of sale" : `${m.rosPct > 0 ? "▲" : m.rosPct < 0 ? "▼" : "▬"} ${Math.abs(m.rosPct)}%`} dColor={m.rosPct == null ? PT.mut : m.rosPct > 0 ? PT.up : m.rosPct < 0 ? PT.down : PT.mut} />
           </div>
           <div style={{ display: "flex", gap: 10, flex: 1, minHeight: 0 }}>
             <div style={{ flex: 1.55, display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
