@@ -203,7 +203,7 @@ function DistInner() {
   const bookLists = useMemo(() => {
     if (!scoped.length) return null;
     const tagFor = h => { const x = String(h || "").toLowerCase(); return x === "lapsed" ? "lapsed" : x === "at-risk" ? "at-risk" : x === "decelerating" ? "softening" : x === "new" ? "new" : x === "accelerating" ? "accelerating" : ""; };
-    const wd = scoped.map(a => ({ account_id: a.account_id, account_name: a.account_name, city: a.city, chain: a.chain, channel_type: a.channel_type, cur90: a.cur90 || 0, prev90: a.prev90 || 0, delta: Math.round((a.cur90 || 0) - (a.prev90 || 0)), tag: tagFor(a.headline) }));
+    const wd = scoped.map(a => ({ account_id: a.account_id, account_name: a.account_name, city: a.city, chain: a.chain, channel_type: a.channel_type, cur90: a.cur90 || 0, prev90: a.prev90 || 0, delta: Math.round((a.cur90 || 0) - (a.prev90 || 0)), weight: Math.round(a.account_weight || 0), plcDelta: (a.live_placements || 0) - (a.live_prev || 0), tag: tagFor(a.headline), lapsed: String(a.headline || "").toLowerCase() === "lapsed" }));
     let growers = wd.filter(a => a.delta > 0).sort((x, y) => y.delta - x.delta).slice(0, 10);
     let growMode = "growing";
     if (growers.length === 0) { growers = wd.filter(a => a.delta >= 0 && a.cur90 > 0).sort((x, y) => y.cur90 - x.cur90).slice(0, 10); growMode = "top"; }
@@ -255,7 +255,7 @@ function DistInner() {
       const slides = Array.from(deckRef.current.querySelectorAll(".pslide"));
       const pdf = new jsPDF({ orientation: "landscape", unit: "in", format: [11, 8.5] });
       for (let i = 0; i < slides.length; i++) {
-        const canvas = await html2canvas(slides[i], { scale: 2, backgroundColor: "#FBF7EE", useCORS: true, logging: false, windowWidth: slides[i].scrollWidth, windowHeight: slides[i].scrollHeight });
+        const canvas = await html2canvas(slides[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true, logging: false, windowWidth: slides[i].scrollWidth, windowHeight: slides[i].scrollHeight });
         const img = canvas.toDataURL("image/jpeg", 0.92);
         if (i > 0) pdf.addPage([11, 8.5], "landscape");
         pdf.addImage(img, "JPEG", 0, 0, 11, 8.5);
@@ -376,21 +376,21 @@ function DistInner() {
 /* ================= PRINT DECK ================= */
 const PRINT_CSS = `
 .print-deck { position: absolute; left: -20000px; top: 0; width: 11in; }
-.pslide { width: 11in; height: 8.5in; min-height: 8.5in; max-height: 8.5in; overflow: hidden; position: relative; box-sizing: border-box; display: flex; flex-direction: column; background: #FBF7EE; font-family: var(--font-sans), system-ui, sans-serif; }
+.pslide { width: 11in; height: 8.5in; min-height: 8.5in; max-height: 8.5in; overflow: hidden; position: relative; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; font-family: var(--font-sans), system-ui, sans-serif; }
 `;
 
-// Deck palette — matches the app's cream-paper "Story" skin (cream paper, warm-white
-// cards, value-shaded green/blue/purple bars, coral ROS line). Hardcoded (not CSS vars)
-// because html2canvas captures these slides off-screen.
+// Deck palette — white pages (clean to print), light cards, the app's value-shaded
+// green/blue/purple bars + corner brackets. Hardcoded (not CSS vars) because
+// html2canvas captures these slides off-screen.
 const PT = {
-  paper: "#FBF7EE", card: "#FFFDF8",
-  ink: "#2B2B2B", ink2: "#54604F", mut: "#9A968C", line: "#EDE9DF", lineStrong: "#E3DDD0",
+  paper: "#FFFFFF", card: "#F7F8F5", lapsed: "#FBECEA",
+  ink: "#2B2B2B", ink2: "#54604F", mut: "#9AA593", line: "#E7EBDF", lineStrong: "#DCE2D2",
   green: "#3F6E4A", greenMid: "#5E9277", greenSoft: "#E1EFE2",
   blue: "#3D6E93", blueMid: "#5E8FC0", blueSoft: "#E2EBF4",
   amber: "#8A6310", amberSoft: "#F5EBD3",
   warm: "#B0573A", warmSoft: "#F6E2D8", up: "#3E8A5E", down: "#C0533A",
   purple: "#534AB7", purpleDeep: "#463A76", purpleSoft: "#EEEDFE",
-  tile: "#FFFDF8", panel: "#FFFDF8",
+  tile: "#F7F8F5", panel: "#F7F8F5",
 };
 
 // top-left corner bracket — the app's signature card accent
@@ -409,7 +409,7 @@ function PDemoBars({ title, bars, benchmark }) {
   return (
     <div style={{ flex: 1 }}>
       <div style={{ fontSize: 9, color: PT.mut, marginBottom: 6 }}>{title}</div>
-      <div style={{ position: "relative", display: "flex", alignItems: "flex-end", gap: 7, height: "0.62in" }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "flex-end", gap: 7, height: "0.95in" }}>
         {benchmark > 0 && <div style={{ position: "absolute", left: 0, right: 0, top: `${benchTop}%`, borderTop: `1.2px dashed ${PT.purpleDeep}`, opacity: 0.5 }} />}
         {bars.map((b, i) => (
           <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%" }}>
@@ -434,10 +434,13 @@ function PAcctList({ title, sub, accent, rows, empty }) {
       <div style={{ fontSize: 8.5, color: PT.mut, marginBottom: 6 }}>{sub}</div>
       {(!rows || rows.length === 0) && <div style={{ fontSize: 10, color: PT.mut, fontStyle: "italic" }}>{empty}</div>}
       {rows && rows.map((a, i) => (
-        <div key={a.account_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "4.5px 0", borderBottom: i < rows.length - 1 ? `1px solid ${PT.line}` : "none" }}>
+        <div key={a.account_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, padding: "5px 7px", borderRadius: 4, background: a.lapsed ? PT.lapsed : "transparent", borderBottom: i < rows.length - 1 ? `1px solid ${PT.line}` : "none" }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 10.5, fontWeight: 600, color: PT.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleCase(a.account_name)}</div>
-            <div style={{ fontSize: 8.5, color: PT.mut, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.city}{a.chain ? ` · ${titleCase(a.chain)}` : a.channel_type ? ` · ${titleCase(a.channel_type)}` : ""}</div>
+            <div style={{ fontSize: 8.5, color: PT.mut, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              {a.city}{a.chain ? ` · ${titleCase(a.chain)}` : a.channel_type ? ` · ${titleCase(a.channel_type)}` : ""} · {a.weight.toLocaleString()} cs/yr
+              {a.plcDelta < 0 && <span style={{ color: PT.down, fontWeight: 700 }}> · ▼{Math.abs(a.plcDelta)} SKU</span>}
+            </div>
           </div>
           <div style={{ textAlign: "right", flexShrink: 0 }}>
             <div style={{ fontSize: 10.5, fontWeight: 700, color: a.mainColor }}>{a.mainVal}</div>
@@ -722,10 +725,10 @@ function PrintDeck({ deckRef, dist, m, health, items, movers, verdict, channelRo
               );
             })}
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 26, fontSize: 9.5, color: PT.ink2, flexShrink: 0 }}>
-            <span><b style={{ color: PT.green, fontSize: 13 }}>{health.goodPct}%</b> healthy book · new + healthy</span>
-            <span style={{ color: PT.lineStrong }}>|</span>
-            <span><b style={{ color: PT.warm, fontSize: 13 }}>{health.badPct}%</b> needs attention · at-risk + lapsed</span>
+          <div style={{ display: "flex", gap: 24, flexShrink: 0 }}>
+            <div style={{ flex: 1, textAlign: "center", fontSize: 9.5, color: PT.ink2 }}><b style={{ color: PT.green, fontSize: 13 }}>{health.goodPct}%</b> healthy book · new + healthy</div>
+            <div style={{ width: 1, flexShrink: 0 }} />
+            <div style={{ flex: 1, textAlign: "center", fontSize: 9.5, color: PT.ink2 }}><b style={{ color: PT.warm, fontSize: 13 }}>{health.badPct}%</b> needs attention · at-risk + lapsed</div>
           </div>
           <div style={{ display: "flex", gap: 24, flex: 1, minHeight: 0, borderTop: `1px solid ${PT.lineStrong}`, paddingTop: 12 }}>
             <PAcctList accent={PT.green} rows={bookLists.growers} empty="No growth drivers this quarter."
@@ -774,28 +777,24 @@ function PrintDeck({ deckRef, dist, m, health, items, movers, verdict, channelRo
         <div style={{ flex: 1, padding: "0.2in 0.34in", display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: PT.warm, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>Headwinds</div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: PT.warm, textTransform: "uppercase", letterSpacing: .5, marginBottom: 12 }}>Headwinds</div>
               {summary.head.length === 0 && <div style={{ fontSize: 11, color: PT.mut }}>No material headwinds — the book is clean.</div>}
-              <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-                {summary.head.map((x, i) => (
-                  <div key={i} style={{ background: PT.warmSoft, borderRadius: 6, padding: "0.15in 0.17in" }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: PT.warm }}>{x.t}</div>
-                    <div style={{ fontSize: 11, color: PT.warm, opacity: .9, marginTop: 3 }}>{x.d}</div>
-                  </div>
-                ))}
-              </div>
+              {summary.head.map((x, i) => (
+                <div key={i} style={{ display: "flex", gap: 9, marginBottom: 13 }}>
+                  <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: PT.warm, lineHeight: 1.45 }}>{i + 1}.</span>
+                  <div style={{ fontSize: 11.5, color: PT.ink2, lineHeight: 1.5 }}><b style={{ color: PT.ink }}>{x.t}.</b> {x.d}</div>
+                </div>
+              ))}
             </div>
             <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: PT.green, textTransform: "uppercase", letterSpacing: .5, marginBottom: 10 }}>Opportunities</div>
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: PT.green, textTransform: "uppercase", letterSpacing: .5, marginBottom: 12 }}>Opportunities</div>
               {summary.opp.length === 0 && <div style={{ fontSize: 11, color: PT.mut }}>Hold and defend.</div>}
-              <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
-                {summary.opp.map((x, i) => (
-                  <div key={i} style={{ background: PT.greenSoft, borderRadius: 6, padding: "0.15in 0.17in" }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: PT.green }}>{x.t}</div>
-                    <div style={{ fontSize: 11, color: PT.green, opacity: .9, marginTop: 3 }}>{x.d}</div>
-                  </div>
-                ))}
-              </div>
+              {summary.opp.map((x, i) => (
+                <div key={i} style={{ display: "flex", gap: 9, marginBottom: 13 }}>
+                  <span style={{ flexShrink: 0, fontSize: 12.5, fontWeight: 700, color: PT.green, lineHeight: 1.45 }}>{i + 1}.</span>
+                  <div style={{ fontSize: 11.5, color: PT.ink2, lineHeight: 1.5 }}><b style={{ color: PT.ink }}>{x.t}.</b> {x.d}</div>
+                </div>
+              ))}
             </div>
           </div>
           <div style={{ borderTop: `2px solid ${PT.green}`, marginTop: 14, paddingTop: 10, fontSize: 12, color: PT.ink2 }}>
@@ -995,8 +994,8 @@ function Top({ dist, distributors, pickDist, canPrint, onExport, exporting }) {
       </div>
       <div style={{ display: "flex", gap: 7, marginTop: 11 }}>
         <button onClick={onExport} disabled={disabled}
-          style={{ flex: 1, fontSize: 11.5, fontWeight: 700, padding: "8px 0", borderRadius: 8, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", border: "0.5px solid var(--border-strong)", background: disabled ? "var(--surface-2)" : "var(--surface)", color: disabled ? "var(--text-3)" : "var(--text-2)" }}>
-          {exporting ? "Generating PDF…" : canPrint ? "⤓ Export PDF deck" : "Building report…"}
+          style={{ flex: 1, fontSize: 12, fontWeight: 700, padding: "10px 0", borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer", fontFamily: "inherit", border: `0.5px solid ${disabled ? "var(--border)" : "var(--accent)"}`, background: disabled ? "var(--surface-2)" : "var(--accent-soft)", color: disabled ? "var(--text-3)" : "var(--accent-deep)" }}>
+          {exporting ? "Generating PDF…" : canPrint ? "⤓ Generate distributor report" : "Building report…"}
         </button>
       </div>
     </div>

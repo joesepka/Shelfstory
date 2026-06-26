@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
@@ -167,19 +167,23 @@ function SplashClouds() {
 function Splash({ onDone }) {
   const [progress, setProgress] = useState(0);
   const [boom, setBoom] = useState(false);
+  // pin onDone so a parent re-render (e.g. book data loading) can't restart the
+  // animation — it must draw exactly ONE cycle, then explode open.
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
   useEffect(() => {
     const start = Date.now();
     const dur = 1150;
-    let raf;
+    let raf, boomT, doneT;
     const tick = () => {
       const p = Math.min((Date.now() - start) / dur, 1);
       setProgress(p);
       if (p < 1) raf = requestAnimationFrame(tick);
-      else { setTimeout(() => setBoom(true), 110); setTimeout(onDone, 580); }  // one cycle -> explode open
+      else { boomT = setTimeout(() => setBoom(true), 110); doneT = setTimeout(() => onDoneRef.current(), 580); }  // one cycle -> explode open
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [onDone]);
+    return () => { cancelAnimationFrame(raf); clearTimeout(boomT); clearTimeout(doneT); };
+  }, []);
 
   const cx = 170, cy = 150, s = 1.6;
   const pts = [
@@ -335,7 +339,7 @@ const NAV = [
   { href: "/perf", title: "Performance Overview", sub: "The whole book at a glance — drill territory, channel, and chains, then generate a market report." },
   { href: "/actions", title: "Actions to Take", sub: "Your highest-priority plays — win-backs, at-risk saves, distribution gaps, and momentum to ride." },
   { href: "/dist", title: "Distributor Review", sub: "A full review for any distributor — pulse, account health, items, channels, and an exportable executive summary." },
-  { href: "/wholesale", title: "Wholesale Trends", sub: "Depletion and inventory momentum across your wholesale network — pacing, gaps, and where to push. (Coming soon.)" },
+  { href: "/wholesale", title: "Wholesale Trends", sub: "Depletion and inventory momentum across your wholesale network — pacing, gaps, and where to push." },
 ];
 
 export default function Home() {
