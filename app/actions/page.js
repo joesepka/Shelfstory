@@ -220,7 +220,7 @@ function ActionsInner() {
       out.push({
         id: "leak", tag: "DISTRIBUTION LEAK", tone: "amber", section: "fix",
         impact: `${topLost.lst.length} placements lost`, impactTone: "risk",
-        title: `${titleCase(topLost.sku)} is slipping${domCh ? ` in ${domCh}` : ""}`,
+        title: `${titleCase(topLost.sku)} is slipping${(domCh && chainF === "All") ? ` in ${domCh}` : ""}`,
         detail: `${titleCase(topLost.sku)} dropped out of ${topLost.lst.length} placements recently${domCh && chG != null ? ` — yet ${domCh} overall is ${chG >= 0 ? "up " + chG + "%" : "down " + Math.abs(chG) + "%"}. ${chG >= 0 ? "SKU down while its channel's up means execution, not demand." : ""}` : "."}`,
         expandLabel: "see where it dropped",
         targets: topLost.lst.sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0)).slice(0, 5).map(r => ({ name: r.account_name, sub: `${r.city} · ${r.channel_type || ""}`, metric: "lost", href: `/book?ids=${r.account_id}` })),
@@ -266,7 +266,7 @@ function ActionsInner() {
     }
 
     return out;
-  }, [fr]);
+  }, [fr, chainF]);
 
   // SKU-gap rows computed separately — depend on grid; null until grid loads
   const skuGaps = useMemo(() => {

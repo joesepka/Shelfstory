@@ -13,7 +13,7 @@ const HEAD = {
   "Decelerating": { bg: "var(--watch-bg)",   fg: "var(--watch-ink)",   bc: "var(--pop-warm)" },
   "At-Risk":      { bg: "var(--atrisk-bg)",  fg: "var(--atrisk-ink)",  bc: "var(--pop-warm)" },
   "New":          { bg: "var(--new-bg)",     fg: "var(--new-ink)",     bc: "var(--pop-cool)" },
-  "Lapsed":       { bg: "transparent",       fg: "var(--lapsed-ink)",  bc: "var(--pop-warm)" },
+  "Lapsed":       { bg: "#8B3A2B",            fg: "#fff",               bc: "var(--pop-warm)" },
 };
 const SK = {
   growth:      ["var(--growing-bg)", "var(--growing-ink)", "accelerating"],

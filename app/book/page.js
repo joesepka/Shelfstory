@@ -13,7 +13,7 @@ function label(hd) {
     case "at-risk": case "atrisk": case "at risk": return { t: "At risk", c: "var(--atrisk-ink)", bg: "var(--atrisk-bg)" };
     case "decelerating": return { t: "Softening", c: "var(--watch-ink)", bg: "var(--watch-bg)" };
     case "new": return { t: "New", c: "var(--new-ink)", bg: "var(--new-bg)" };
-    case "lapsed": return { t: "Lapsed", c: "var(--lapsed-ink)", bg: "var(--stable-bg)" };
+    case "lapsed": return { t: "Lapsed", c: "#fff", bg: "#8B3A2B" };
     default: return null;
   }
 }
