@@ -37,7 +37,6 @@ export default function WholesalePage() {
   const [snap, setSnap] = useState(null);
   const [err, setErr] = useState(null);
 
-  const [q, setQ] = useState("");
   const [stF, setStF] = useState("All");
   const [cityF, setCityF] = useState("All");
   const [chainF, setChainF] = useState("All");
@@ -96,9 +95,8 @@ export default function WholesalePage() {
     if (chainF !== "All") f = f.filter(r => r.chain === chainF);
     if (distF !== "All") f = f.filter(r => r.distributor === distF);
     if (premF !== "All") f = f.filter(r => premF === "ON" ? isOn(r) : !isOn(r));
-    if (q.trim()) { const qq = q.trim().toLowerCase(); f = f.filter(r => String(r.account_name || "").toLowerCase().includes(qq)); }
     return f.map(r => r.account_id);
-  }, [rows, stF, cityF, chainF, distF, premF, q]);
+  }, [rows, stF, cityF, chainF, distF, premF]);
 
   // load the 24-window series — one fast server-side RPC (sums inside Postgres).
   // Defaults to ALL wholesale (no params). Debounced so typing search doesn't
@@ -115,7 +113,6 @@ export default function WholesalePage() {
         if (distF !== "All") params.p_distributor = distF;
         if (premF !== "All") params.p_premise = premF;
         if (itemF !== "All") params.p_product_key = itemF;
-        if (q.trim()) params.p_name = q.trim();
         const [r30, rAcc] = await Promise.all([
           supabase.rpc("trends_30d", params),            // graph 1: actual 30-day cases
           supabase.rpc("trends_accounts_90d", params),   // graph 2: rolling-90 accounts + cases
@@ -133,7 +130,7 @@ export default function WholesalePage() {
       } catch (e) { if (loadId.current === myId) { setErr(e.message || "trend load failed"); setLoading(false); } }
     }, 300);
     return () => clearTimeout(t);
-  }, [stF, cityF, chainF, distF, premF, itemF, q]);
+  }, [stF, cityF, chainF, distF, premF, itemF]);
 
   const noMatch = !!rows && scopedIds.length === 0;
 
@@ -168,9 +165,8 @@ export default function WholesalePage() {
     if (cityF !== "All") parts.push(cityF); else if (stF !== "All") parts.push(stF);
     if (premF !== "All") parts.push(premF === "ON" ? "On-premise" : "Off-premise");
     if (itemF !== "All") { const it = items.find(x => x.key === itemF); parts.push(it ? it.name : itemF); }
-    if (q.trim()) parts.push(`"${q.trim()}"`);
     return parts.length ? parts.join(" · ") : "All wholesale";
-  }, [distF, chainF, cityF, stF, premF, itemF, q, items]);
+  }, [distF, chainF, cityF, stF, premF, itemF, items]);
 
   return (
     <div style={wrap}>
@@ -179,18 +175,6 @@ export default function WholesalePage() {
       <div style={{ padding: "12px 14px 2px", flexShrink: 0 }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px" }}>Wholesale Trends</div>
         <div style={{ fontSize: 11.5, color: "var(--text-3)", marginTop: 1 }}>Actual 30-day depletions over time — filter, then scroll.</div>
-      </div>
-
-      {/* search */}
-      <div style={{ padding: "8px 12px 2px", flexShrink: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 11, padding: "9px 12px", boxShadow: "var(--shadow-sm)" }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9AA593" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-            <circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" />
-          </svg>
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search accounts by name…"
-            style={{ border: "none", background: "none", outline: "none", fontFamily: "inherit", fontSize: 13, color: "var(--text)", width: "100%" }} />
-          {q && <span onClick={() => setQ("")} style={{ cursor: "pointer", color: "var(--text-3)", fontWeight: 700, fontSize: 13 }}>✕</span>}
-        </div>
       </div>
 
       {/* filters (no "near me") */}

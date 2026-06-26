@@ -20,7 +20,7 @@ const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "laps
 function isDeclining(hd) { return DECLINING.has(String(hd || "").toLowerCase().trim()); }
 function isNew(hd) { return String(hd || "").toLowerCase().trim() === "new"; }
 function isLapsed(hd) { return String(hd || "").toLowerCase().trim() === "lapsed"; }
-function groupOf(hd) { return isNew(hd) ? "new" : isDeclining(hd) ? "atrisk" : "healthy"; }
+function groupOf(hd) { return isNew(hd) ? "new" : isLapsed(hd) ? "lapsed" : isDeclining(hd) ? "atrisk" : "healthy"; }
 function titleCase(s) { return String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase()); }
 function pctColor(p) { if (p == null) return "var(--text-3)"; if (p > 1) return "var(--up)"; if (p < -1) return "var(--down)"; return "var(--text-3)"; }
 // bracket accent color by status (green growing · orange risk · blue new · muted steady)
@@ -498,14 +498,14 @@ function BookInner() {
 
   const bal = useMemo(() => {
     if (!geo) return null;
-    const g = { healthy: { n: 0, vol: 0 }, new: { n: 0, vol: 0 }, atrisk: { n: 0, vol: 0 } };
+    const g = { healthy: { n: 0, vol: 0 }, new: { n: 0, vol: 0 }, atrisk: { n: 0, vol: 0 }, lapsed: { n: 0, vol: 0 } };
     for (const r of geo) {
       const k = groupOf(r.headline);
       g[k].n++;
       g[k].vol += isNew(r.headline) ? (r.cur90 || 0) * 3 : (r.account_weight || 0);
     }
-    const tot = g.healthy.vol + g.new.vol + g.atrisk.vol || 1;
-    return { ...g, tot, hp: Math.round(100 * g.healthy.vol / tot), np: Math.round(100 * g.new.vol / tot), rp: Math.round(100 * g.atrisk.vol / tot) };
+    const tot = g.healthy.vol + g.new.vol + g.atrisk.vol + g.lapsed.vol || 1;
+    return { ...g, tot, hp: Math.round(100 * g.healthy.vol / tot), np: Math.round(100 * g.new.vol / tot), rp: Math.round(100 * g.atrisk.vol / tot), lp: Math.round(100 * g.lapsed.vol / tot) };
   }, [geo]);
 
   const shownFull = useMemo(() => {
@@ -600,10 +600,16 @@ function BookInner() {
               <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.hp}%</span>
             </div>
             <div onClick={() => toggleHealth("atrisk")}
-              style={{ width: `${bal.rp}%`, background: "var(--pop-warm)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 30, overflow: "hidden",
+              style={{ width: `${bal.rp}%`, background: "var(--pop-warm)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 28, overflow: "hidden",
                 opacity: healthFilter && healthFilter !== "atrisk" ? 0.32 : 1,
                 boxShadow: healthFilter === "atrisk" ? "inset 0 0 0 2px rgba(255,255,255,.72)" : "none", transition: "opacity .15s" }}>
               <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.rp}%</span>
+            </div>
+            <div onClick={() => toggleHealth("lapsed")}
+              style={{ width: `${bal.lp}%`, background: "#8B3A2B", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 26, overflow: "hidden",
+                opacity: healthFilter && healthFilter !== "lapsed" ? 0.32 : 1,
+                boxShadow: healthFilter === "lapsed" ? "inset 0 0 0 2px rgba(255,255,255,.72)" : "none", transition: "opacity .15s" }}>
+              <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.lp}%</span>
             </div>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10.5, color: "var(--text-2)" }}>
@@ -615,6 +621,9 @@ function BookInner() {
             </span>
             <span onClick={() => toggleHealth("atrisk")} style={{ cursor: "pointer" }}>
               <span style={{ color: "var(--pop-warm)", fontWeight: 700 }}>●</span> At Risk <b style={{ color: "var(--text)" }}>{bal.atrisk.n.toLocaleString()}</b>
+            </span>
+            <span onClick={() => toggleHealth("lapsed")} style={{ cursor: "pointer" }}>
+              <span style={{ color: "#8B3A2B", fontWeight: 700 }}>●</span> Lapsed <b style={{ color: "var(--text)" }}>{bal.lapsed.n.toLocaleString()}</b>
             </span>
           </div>
           {healthFilter && (

@@ -453,9 +453,13 @@ export default function Home() {
           </div>
 
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22 }}>WHERE TO?</div>
-          {NAV.map(c => (
-            <NavCard key={c.href} title={c.title} sub={c.sub}
-              onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+            {NAV.filter(c => c.href !== "/actions").map(c => (
+              <NavCard key={c.href} title={c.title} sub={c.sub} onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} grid />
+            ))}
+          </div>
+          {NAV.filter(c => c.href === "/actions").map(c => (
+            <NavCard key={c.href} title={c.title} sub={c.sub} onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} />
           ))}
 
           <div style={{ height: 28 }} />
@@ -482,17 +486,18 @@ export default function Home() {
   );
 }
 
-function NavCard({ title, sub, onClick, popStyle }) {
+function NavCard({ title, sub, onClick, popStyle, grid }) {
   return (
     <div className="navcard" onClick={onClick} style={{
-      background: "rgba(255,255,255,0.5)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "11px 15px", marginTop: 8,
+      background: "rgba(255,255,255,0.5)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "12px 14px",
+      marginTop: grid ? 0 : 8, height: grid ? "100%" : "auto", boxSizing: "border-box",
       boxShadow: "var(--shadow)", cursor: "pointer", ...(popStyle || {}),
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
-        <div style={{ fontSize: 15.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
-        <div className="openchip" style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-deep)", whiteSpace: "nowrap" }}>open ›</div>
+        <div style={{ fontSize: grid ? 14.5 : 15.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
+        {!grid && <div className="openchip" style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-deep)", whiteSpace: "nowrap" }}>open ›</div>}
       </div>
-      <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 3, lineHeight: 1.35 }}>{sub}</div>
+      <div style={{ fontSize: 12, color: "var(--text-2)", marginTop: 3, lineHeight: 1.35 }}>{sub}</div>
     </div>
   );
 }
