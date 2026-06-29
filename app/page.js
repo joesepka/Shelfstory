@@ -367,34 +367,15 @@ function expandTrees(cnt, total, drawN, h) {
   return out.map(state => ({ state, h }));
 }
 
-// six-level health verdict (the instant Great→Bad read) — word + color + ground tint
-const LEVELS = {
-  great:    { word: "Great",    color: "#2f7d54", ground: "#bcd9a8" },
-  good:     { word: "Good",     color: "#4a9068", ground: "#c6dcae" },
-  steady:   { word: "Steady",   color: "#7c8a55", ground: "#d4d6b4" },
-  cautious: { word: "Cautious", color: "#b58420", ground: "#e3cf94" },
-  atrisk:   { word: "At risk",  color: "#cf7a3a", ground: "#e3b48f" },
-  bad:      { word: "Bad",      color: "#b0573a", ground: "#d79a82" },
-};
-function tierLevel(pct, cnt, n) {
-  if (!n) return LEVELS.steady;
-  const healthy = ((cnt.thriving || 0) + (cnt.bearing || 0) + (cnt.sapling || 0)) / n;
-  const strug = ((cnt.wilting || 0) + (cnt.bare || 0)) / n;
-  const score = healthy - strug + (pct == null ? 0 : Math.max(-0.25, Math.min(0.25, pct / 40)));
-  const key = score >= 0.6 ? "great" : score >= 0.35 ? "good" : score >= 0.12 ? "steady" : score >= -0.12 ? "cautious" : score >= -0.4 ? "atrisk" : "bad";
-  return LEVELS[key];
-}
-
-// one-line nuance under the verdict — what's actually happening in the tier
-function tierDesc(pct, cnt, n) {
-  if (!n) return "No accounts";
-  const lap = (cnt.bare || 0) / n, risk = (cnt.wilting || 0) / n, fresh = (cnt.sapling || 0) / n;
-  if (lap >= 0.25) return "Losing accounts";
-  if (pct != null && pct <= -5) return "Slowing down";
-  if (risk >= 0.3) return "Several at risk";
-  if (fresh >= 0.3) return "Lots of new accounts";
-  if (pct != null && pct >= 8) return "Gaining momentum";
-  return "Holding steady";
+// stacked health-composition bar (the instant mix read): healthy greens → gold → rust
+const HB = [["thriving", "#4a9068"], ["bearing", "#6aa06a"], ["sapling", "#5bb47e"], ["wilting", "#c2922e"], ["bare", "#b0573a"]];
+function HealthBar({ health }) {
+  const tot = HB.reduce((s, [k]) => s + (health[k] || 0), 0) || 1;
+  return (
+    <div style={{ display: "flex", height: 7, borderRadius: 3, overflow: "hidden", width: "100%", marginTop: 6 }}>
+      {HB.map(([k, c]) => { const w = (health[k] || 0) / tot * 100; return w > 0 ? <div key={k} style={{ width: `${w}%`, background: c }} /> : null; })}
+    </div>
+  );
 }
 
 // light-grey section glyphs for the four-square nav (replaces the colored dots)
@@ -447,9 +428,9 @@ export default function Home() {
   const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
     const TIERS = [
-      { key: "upper", label: "Upper tier", h: 52, cap: 6 },
-      { key: "mid", label: "Mid tier", h: 32, cap: 13 },
-      { key: "tail", label: "Long tail", h: 20, cap: 22 },
+      { key: "upper", label: "Upper tier", h: 48, cap: 6 },
+      { key: "mid", label: "Mid tier", h: 30, cap: 12 },
+      { key: "tail", label: "Long tail", h: 18, cap: 24 },
     ];
     const mk = (label, key, list) => {
       let cur = 0, prev = 0, acctNow = 0, acctPrev = 0;
@@ -465,10 +446,8 @@ export default function Home() {
         const g = groups[t.key];
         let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
         for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[plantState(r.headline)]++; }
-        const vol = g.reduce((s, r) => s + (r.account_weight || 0), 0);
         const drawN = Math.min(t.cap, g.length);
-        const tpct = gpct(c, p);
-        return { key: t.key, label: t.label, n: g.length, cur: c, volPct: Math.round((100 * vol) / totW), pct: tpct, level: tierLevel(tpct, cnt, g.length), desc: tierDesc(tpct, cnt, g.length), trees: expandTrees(cnt, g.length, drawN, t.h) };
+        return { key: t.key, label: t.label, n: g.length, cur: c, pct: gpct(c, p), health: cnt, trees: expandTrees(cnt, g.length, drawN, t.h) };
       });
       return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, tiers };
     };
@@ -490,7 +469,12 @@ export default function Home() {
     <>
       {showSplash && <Splash onDone={() => setShowSplash(false)} />}
 
-      <main style={{ position: "relative", minHeight: "100vh", background: "var(--bg)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto" }}>
+      <main style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,var(--bg) 500px)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
+        {/* sky clouds, drifting behind everything */}
+        <svg className="cl cl1" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 58, left: -24, width: 124, opacity: 0.8, zIndex: 0 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+        <svg className="cl cl2" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 104, right: -12, width: 90, opacity: 0.6, zIndex: 0 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* top row: greeting + logo */}
         <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginTop: 8 }}>
           <div style={{ minWidth: 0 }}>
@@ -550,27 +534,18 @@ export default function Home() {
             </div>
             <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days · swipe for states, highest volume first</div>
 
-            {/* tier landscape — outside the box, blending into the background */}
-            <div key={"sc" + cur.key} className="sceneFade" style={{ position: "relative", height: 264, marginTop: 8, marginLeft: -24, marginRight: -24, overflow: "hidden" }}>
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,#cfe6f6 0%,#dcebdf 46%,var(--bg) 84%)" }} />
-              <svg className="cl cl1" viewBox="0 0 320 110" style={{ position: "absolute", top: 10, width: 116, opacity: 0.85 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
-              <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 34, width: 80, opacity: 0.6 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
-              <div style={{ position: "absolute", left: 12, right: 12, top: 10, bottom: 8, display: "flex" }}>
-                {cur.tiers.map(t => (
-                  <div key={t.key} className="tcol">
-                    <div className="tcap"><b>{t.n.toLocaleString()}</b> accts<div className="tvol">{t.cur.toLocaleString()} cs · 90D</div></div>
-                    <div className="tbot">
-                      <div className="ttrees">
-                        {t.trees.length ? t.trees.map((tr, i) => <TreeGlyph key={i} state={tr.state} h={tr.h} />) : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}
-                      </div>
-                      <div className="tground" style={{ background: t.level.ground }} />
-                      <div className="tverdict" style={{ color: t.level.color }}>{t.level.word}</div>
-                      <div className="tnm">{t.label} · {deltaTiny(t.pct)}</div>
-                      <div className="tdesc">{t.desc}</div>
-                    </div>
+            {/* tier landscape (Variation 2): trees + health-composition bar */}
+            <div key={"sc" + cur.key} className="sceneFade tierrow">
+              {cur.tiers.map(t => (
+                <div key={t.key} className="tcol">
+                  <div className="thdr">{t.label} {deltaTiny(t.pct)}</div>
+                  <div className="ttrees">
+                    {t.trees.length ? t.trees.map((tr, i) => <TreeGlyph key={i} state={tr.state} h={tr.h} />) : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}
                   </div>
-                ))}
-              </div>
+                  <HealthBar health={t.health} />
+                  <div className="tcounts"><b>{t.n.toLocaleString()}</b> accts<div className="tvol">{t.cur.toLocaleString()} cs · 90D</div></div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -592,6 +567,7 @@ export default function Home() {
         </div>
 
         <div style={{ height: 28 }} />
+        </div>
       </main>
 
       <style>{`
@@ -604,16 +580,13 @@ export default function Home() {
         .cl1{animation-duration:44s;}
         .cl2{animation-duration:62s;animation-delay:-14s;}
         @keyframes floatCloud{from{transform:translateX(-140px);}to{transform:translateX(480px);}}
-        .tcol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;align-items:center;text-align:center;padding:0 3px;}
-        .tcap{line-height:1.25;font-size:11px;color:var(--text-2);}
-        .tcap b{font-size:15px;color:var(--text);font-weight:700;}
-        .tvol{font-size:10.5px;color:var(--text-3);margin-top:1px;}
-        .tbot{width:100%;}
-        .ttrees{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:1px 2px;}
-        .tground{width:100%;height:7px;border-radius:2px;margin-top:4px;}
-        .tverdict{font-size:14px;font-weight:700;letter-spacing:-0.2px;margin-top:5px;line-height:1;}
-        .tnm{font-size:10px;font-weight:600;color:var(--text-3);margin-top:3px;}
-        .tdesc{font-size:10px;color:var(--text-3);margin-top:1px;line-height:1.2;}
+        .tierrow{display:flex;align-items:stretch;height:172px;margin-top:14px;}
+        .tcol{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 4px;}
+        .thdr{font-size:11px;font-weight:600;color:var(--accent-deep);line-height:1.2;}
+        .ttrees{flex:1;width:100%;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:1px 2px;margin-top:6px;}
+        .tcounts{font-size:11px;color:var(--text-2);margin-top:6px;line-height:1.2;}
+        .tcounts b{font-size:14px;color:var(--text);font-weight:700;}
+        .tvol{font-size:10px;color:var(--text-3);margin-top:1px;}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}
