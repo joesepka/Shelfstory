@@ -207,6 +207,17 @@ function ItemBoxes({ name, months, total, lastOrdered, lost, onClose }) {
   );
 }
 
+// pre-call briefing tint by health: light green growing · white steady ·
+// yellow at-risk/softening · light red lapsed
+function briefBg(hd) {
+  switch (String(hd || "").toLowerCase()) {
+    case "accelerating": return "#e3f3db";
+    case "lapsed": return "#f4d9cf";
+    case "at-risk": case "atrisk": case "decelerating": return "#f6ead0";
+    default: return "var(--surface)";
+  }
+}
+
 export default function AccountOverview() {
   const { id } = useParams();
   const router = useRouter();
@@ -338,7 +349,7 @@ export default function AccountOverview() {
         </div>
       )}
 
-      <div style={{ position: "relative", background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 14 }}>
+      <div style={{ position: "relative", background: briefBg(acc.headline), borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 14 }}>
         <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
         <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${head.bc}`, borderRight: `1.5px solid ${head.bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", marginBottom: 6, letterSpacing: "0.3px", textTransform: "uppercase" }}>Pre-call briefing</div>

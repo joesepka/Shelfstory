@@ -5,6 +5,7 @@ import Splash from "../../components/Splash";
 import { BarCard, AcctRosCard, ChannelRosCard, ItemRosLines } from "../../components/Charts";
 import { isOn, titleCase } from "../../lib/utils";
 import FilterSelect from "../../components/FilterSelect";
+import { getScope } from "../../lib/scope";
 
 // Wholesale Trends — over-time view. Same top filters as the book (minus "near me"),
 // plus Item. View toggle is 24 Month (24 x 30-day buckets) / Quarterly (8 x 90-day).
@@ -47,6 +48,8 @@ export default function WholesalePage() {
   const [itemChan, setItemChan] = useState(null); // [{ channel, channel_type, cur, prev }] for selected item (graph 1)
   const [loading, setLoading] = useState(true);
   const loadId = useRef(0);
+
+  useEffect(() => { const sc = getScope(); if (sc) setStF(sc); }, []);   // remembered scope from home
 
   // account universe (for filter options + scope) + snapshot date + item names
   useEffect(() => {

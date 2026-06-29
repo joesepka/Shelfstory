@@ -1,9 +1,10 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
 import TreeGlyph, { plantState } from "../components/TreeGlyph";
+import { getScope, setScope } from "../lib/scope";
 
 const T = {
   bg: "var(--bg)", ink: "var(--text)", muted: "var(--text-3)", line: "var(--border)", primary: "var(--accent)",
@@ -352,30 +353,43 @@ function deltaTiny(p) {
   return <span style={{ color: c, fontWeight: 700 }}>{p > 0 ? "▲" : p < 0 ? "▼" : "▬"}{Math.abs(p)}%</span>;
 }
 
-// trees-per-account (scaled): expand a tier's health counts into `drawN` trees,
-// proportional to its mix, interleaved so colors read as a blend. Few big trees in
-// the upper tier, a thicket of small ones in the long tail.
-function expandTrees(cnt, total, drawN, h) {
-  if (!total || drawN <= 0) return [];
-  const order = ["thriving", "bearing", "sapling", "wilting", "bare"];
-  const c = order.map(k => ({ k, n: Math.round(((cnt[k] || 0) / total) * drawN) }));
-  let sum = c.reduce((s, x) => s + x.n, 0), i = 0;
-  while (sum < drawN) { c[i % c.length].n++; sum++; i++; }
-  i = 0; while (sum > drawN && i < 400) { const x = c[i % c.length]; if (x.n > 0) { x.n--; sum--; } i++; }
-  const pools = c.map(x => Array(x.n).fill(x.k)); const out = []; let go = true;
-  while (go) { go = false; for (const q of pools) { if (q.length) { out.push(q.pop()); go = true; } } }
-  return out.map(state => ({ state, h }));
+// a tier's overall health → a vitality (0..1, drives the single tree's fullness)
+// and a color carried strongly through the canopy (green → gold → rust).
+function tierScore(pct, cnt, n) {
+  if (!n) return { vit: 0.5, color: "#6aa06a" };
+  const healthy = ((cnt.thriving || 0) + (cnt.bearing || 0) + (cnt.sapling || 0)) / n;
+  const strug = ((cnt.wilting || 0) + (cnt.bare || 0)) / n;
+  const score = healthy - strug + (pct == null ? 0 : Math.max(-0.25, Math.min(0.25, pct / 40)));
+  const vit = Math.max(0.05, Math.min(1, 0.5 + score * 0.55));
+  const color = score >= 0.5 ? "#2f7d54" : score >= 0.2 ? "#4a9068" : score >= -0.05 ? "#6aa06a" : score >= -0.35 ? "#c98f1f" : "#b0573a";
+  return { vit, color };
 }
 
-// stacked health-composition bar (the instant mix read): healthy greens → gold → rust
-const HB = [["thriving", "#4a9068"], ["bearing", "#6aa06a"], ["sapling", "#5bb47e"], ["wilting", "#c2922e"], ["bare", "#b0573a"]];
-function HealthBar({ health }) {
-  const tot = HB.reduce((s, [k]) => s + (health[k] || 0), 0) || 1;
-  return (
-    <div style={{ display: "flex", height: 7, borderRadius: 3, overflow: "hidden", width: "100%", marginTop: 6 }}>
-      {HB.map(([k, c]) => { const w = (health[k] || 0) / tot * 100; return w > 0 ? <div key={k} style={{ width: `${w}%`, background: c }} /> : null; })}
-    </div>
-  );
+// one-line nuance under the tree — what's actually happening in the tier
+function tierDesc(pct, cnt, n) {
+  if (!n) return "No accounts";
+  const lap = (cnt.bare || 0) / n, risk = (cnt.wilting || 0) / n, fresh = (cnt.sapling || 0) / n;
+  if (lap >= 0.25) return "Losing accounts";
+  if (pct != null && pct <= -5) return "Slowing down";
+  if (risk >= 0.3) return "Several at risk";
+  if (fresh >= 0.3) return "Lots of new accounts";
+  if (pct != null && pct >= 8) return "Gaining momentum";
+  return "Holding steady";
+}
+
+// turn a tier's health mix into `slots` representative tree states (largest-remainder,
+// ordered healthy → struggling) so the grove mirrors the real composition.
+function allocStates(cnt, total, slots) {
+  if (!total || slots <= 0) return [];
+  const order = ["thriving", "bearing", "sapling", "wilting", "bare"];
+  const c = order.map(k => ({ k, n: Math.round(((cnt[k] || 0) / total) * slots) }));
+  let sum = c.reduce((s, x) => s + x.n, 0), i = 0;
+  while (sum < slots) { c[i % c.length].n++; sum++; i++; }
+  i = 0; while (sum > slots && i < 400) { const x = c[i % c.length]; if (x.n > 0) { x.n--; sum--; } i++; }
+  const out = [];
+  for (const x of c) for (let j = 0; j < x.n; j++) out.push(x.k);
+  out.sort((p, q) => order.indexOf(p) - order.indexOf(q));
+  return out;
 }
 
 // light-grey section glyphs for the four-square nav (replaces the colored dots)
@@ -396,6 +410,7 @@ export default function Home() {
   const [briefOpen, setBriefOpen] = useState(false);
   const [slide, setSlide] = useState(0);
   const touchX = useRef(null);
+  const scopeInit = useRef(false);
   const { burst, styleFor } = useExplode();
 
   useEffect(() => {
@@ -427,27 +442,27 @@ export default function Home() {
   // tail by cumulative L52W volume), each tier depicted by a few health trees.
   const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
-    const TIERS = [
-      { key: "upper", label: "Upper tier", h: 48, cap: 6 },
-      { key: "mid", label: "Mid tier", h: 30, cap: 12 },
-      { key: "tail", label: "Long tail", h: 18, cap: 24 },
-    ];
+    const TIERS = [{ key: "top", label: "Top tier" }, { key: "tail", label: "Long tail" }];
     const mk = (label, key, list) => {
       let cur = 0, prev = 0, acctNow = 0, acctPrev = 0;
       for (const r of list) { const c = r.cur90 || 0, p = r.prev90 || 0; cur += c; prev += p; if (c > 0) acctNow++; if (p > 0) acctPrev++; }
       const rosNow = acctNow ? cur / acctNow : 0, rosPrev = acctPrev ? prev / acctPrev : 0;
-      // split by cumulative L52W volume (account_weight): 0–25% upper, 25–75% mid, 75–100% tail
+      // split by cumulative L52W volume (account_weight): top 30% of volume vs the long tail
       const sorted = [...list].sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0));
       const totW = sorted.reduce((s, r) => s + (r.account_weight || 0), 0) || 1;
-      const groups = { upper: [], mid: [], tail: [] };
+      const groups = { top: [], tail: [] };
       let cum = 0;
-      for (const r of sorted) { const startF = cum / totW; cum += r.account_weight || 0; (startF < 0.25 ? groups.upper : startF < 0.75 ? groups.mid : groups.tail).push(r); }
+      for (const r of sorted) { const startF = cum / totW; cum += r.account_weight || 0; (startF < 0.30 ? groups.top : groups.tail).push(r); }
       const tiers = TIERS.map(t => {
         const g = groups[t.key];
         let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
         for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[plantState(r.headline)]++; }
-        const drawN = Math.min(t.cap, g.length);
-        return { key: t.key, label: t.label, n: g.length, cur: c, pct: gpct(c, p), health: cnt, trees: expandTrees(cnt, g.length, drawN, t.h) };
+        const pct = gpct(c, p);
+        const a3 = allocStates(cnt, g.length, 3);
+        const cc = {}; a3.forEach(s => { cc[s] = (cc[s] || 0) + 1; });
+        const front = a3.length ? Object.keys(cc).sort((x, y) => cc[y] - cc[x])[0] : null;
+        const flanks = [...a3]; if (front) flanks.splice(flanks.indexOf(front), 1);
+        return { key: t.key, label: t.label, n: g.length, cur: c, pct, desc: tierDesc(pct, cnt, g.length), rpm: g.length ? c / g.length / 3 : 0, front, flanks, tail: allocStates(cnt, g.length, 10) };
       });
       return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, tiers };
     };
@@ -458,10 +473,19 @@ export default function Home() {
   }, [rows]);
   const cur = slides ? slides[Math.min(slide, slides.length - 1)] : null;
 
+  // restore the remembered scope on load — jump home to that state
+  useEffect(() => {
+    if (!slides || scopeInit.current) return;
+    scopeInit.current = true;
+    const s = getScope();
+    if (s) { const idx = slides.findIndex(x => x.key === s); if (idx > 0) setSlide(idx); }
+  }, [slides]);
+
   function navTo(href) {
     burst(href, () => router.push(href)); // explode the cards, then navigate
   }
-  function go(d) { if (!slides) return; const n = slides.length; setSlide(x => (x + d + n) % n); }
+  function pick(i) { if (!slides) return; setSlide(i); setScope(slides[i].key === "ALL" ? "" : slides[i].key); }
+  function go(d) { if (!slides) return; const n = slides.length; pick((slide + d + n) % n); }
   function onTouchStart(e) { touchX.current = e.touches[0].clientX; }
   function onTouchEnd(e) { if (touchX.current == null) return; const dx = e.changedTouches[0].clientX - touchX.current; touchX.current = null; if (dx < -40) go(1); else if (dx > 40) go(-1); }
 
@@ -528,23 +552,36 @@ export default function Home() {
             </div>
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 9 }}>
               {slides.slice(0, 9).map((sl, i) => (
-                <span key={i} onClick={() => setSlide(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
+                <span key={i} onClick={() => pick(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
               ))}
               {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
             </div>
             <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days · swipe for states, highest volume first</div>
 
-            {/* tier landscape (Variation 2): trees + health-composition bar */}
-            <div key={"sc" + cur.key} className="sceneFade tierrow">
-              {cur.tiers.map(t => (
-                <div key={t.key} className="tcol">
-                  <div className="thdr">{t.label} {deltaTiny(t.pct)}</div>
-                  <div className="ttrees">
-                    {t.trees.length ? t.trees.map((tr, i) => <TreeGlyph key={i} state={tr.state} h={tr.h} />) : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}
+            {/* tier landscape: Top tier and Long tail side by side */}
+            <div key={"sc" + cur.key} className="sceneFade tierrow2">
+              {cur.tiers.map((t, idx) => (
+                <Fragment key={t.key}>
+                  {idx > 0 && <div className="t2div" aria-hidden="true" />}
+                  <div className="tcol2">
+                    <div className="t2hdr">{t.label} {deltaTiny(t.pct)}</div>
+                    <div className="t2desc">{t.desc}</div>
+                    <div className="t2tree">
+                      {t.n === 0 ? <span className="t2dash">—</span> : t.key === "top" ? (
+                        <div className="grove">
+                          <span className="bk" style={{ marginRight: -10 }}><TreeGlyph state={t.flanks[0] || t.front} h={52} pct={t.pct} /></span>
+                          <span className="ft"><TreeGlyph state={t.front} h={84} pct={t.pct} /></span>
+                          <span className="bk" style={{ marginLeft: -10 }}><TreeGlyph state={t.flanks[1] || t.front} h={52} pct={t.pct} /></span>
+                        </div>
+                      ) : (
+                        <div className="grove gtail">
+                          {t.tail.map((s, i) => <TreeGlyph key={i} state={s} h={24} pct={t.pct} />)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="t2counts"><span className="t2rpm">{Math.round(t.rpm).toLocaleString()} cs/acct·mo</span><div className="t2sub"><b>{t.n.toLocaleString()}</b> accts · {t.cur.toLocaleString()} cs · 90D</div></div>
                   </div>
-                  <HealthBar health={t.health} />
-                  <div className="tcounts"><b>{t.n.toLocaleString()}</b> accts<div className="tvol">{t.cur.toLocaleString()} cs · 90D</div></div>
-                </div>
+                </Fragment>
               ))}
             </div>
           </div>
@@ -580,13 +617,21 @@ export default function Home() {
         .cl1{animation-duration:44s;}
         .cl2{animation-duration:62s;animation-delay:-14s;}
         @keyframes floatCloud{from{transform:translateX(-140px);}to{transform:translateX(480px);}}
-        .tierrow{display:flex;align-items:stretch;height:172px;margin-top:14px;}
-        .tcol{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 4px;}
-        .thdr{font-size:11px;font-weight:600;color:var(--accent-deep);line-height:1.2;}
-        .ttrees{flex:1;width:100%;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:1px 2px;margin-top:6px;}
-        .tcounts{font-size:11px;color:var(--text-2);margin-top:6px;line-height:1.2;}
-        .tcounts b{font-size:14px;color:var(--text);font-weight:700;}
-        .tvol{font-size:10px;color:var(--text-3);margin-top:1px;}
+        .tierrow2{display:flex;gap:10px;margin-top:16px;align-items:stretch;height:172px;}
+        .t2div{width:1px;background:#c6cabf;align-self:stretch;flex-shrink:0;}
+        .tcol2{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;padding:0 6px;}
+        .t2hdr{font-size:13px;font-weight:600;color:var(--text);line-height:1.2;}
+        .t2desc{font-size:11px;color:var(--text-3);margin-top:1px;line-height:1.2;min-height:14px;}
+        .t2tree{flex:1;display:flex;align-items:flex-end;justify-content:center;margin:6px 0 4px;width:100%;}
+        .grove{display:flex;align-items:flex-end;justify-content:center;}
+        .grove.gtail{flex-wrap:wrap;gap:0 1px;}
+        .grove .ft{position:relative;z-index:2;}
+        .grove .bk{position:relative;z-index:1;}
+        .t2dash{font-size:12px;color:var(--text-3);}
+        .t2counts{line-height:1.25;}
+        .t2rpm{font-size:13px;font-weight:700;color:var(--accent-deep);}
+        .t2sub{font-size:10px;color:var(--text-3);margin-top:1px;}
+        .t2sub b{font-weight:700;color:var(--text-2);}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}

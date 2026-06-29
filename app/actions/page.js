@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
 import FilterSelect from "../../components/FilterSelect";
+import { getScope } from "../../lib/scope";
 
 
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
@@ -81,6 +82,8 @@ function ActionsInner() {
   const [chF, setChF] = useState("All");      // channel_type
   const [chainF, setChainF] = useState("All");
   const go = href => router.push(href);
+
+  useEffect(() => { const sc = getScope(); if (sc) setStF(sc); }, []);   // remembered scope from home
 
   useEffect(() => {
     (async () => {

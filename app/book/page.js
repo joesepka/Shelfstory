@@ -6,6 +6,7 @@ import Splash from "../../components/Splash";
 import { useExplode } from "../../lib/useExplode";
 import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
+import { getScope } from "../../lib/scope";
 
 
 function label(hd) {
@@ -32,6 +33,14 @@ function bracketColor(hd) {
   if (h === "new") return "var(--pop-cool)";
   if (DECLINING.has(h)) return "var(--pop-warm)";
   return "var(--text-3)";
+}
+// tap-feedback tint by health severity — green (healthy / accelerating) ·
+// yellow (decelerating) · red (at-risk / lapsed)
+function cardTapBg(hd) {
+  const h = String(hd || "").toLowerCase().trim();
+  if (h === "at-risk" || h === "atrisk" || h === "at risk" || h === "lapsed") return "#f4d9cf";
+  if (h === "decelerating") return "#f6ead0";
+  return "#dcefda";
 }
 function lastSold(iso) {
   if (!iso) return null;
@@ -401,6 +410,7 @@ function BookInner() {
 
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
+  const [tapId, setTapId] = useState(null);
   const [view, setView] = useState(VIEWS.includes(urlView) ? urlView : "account");
   const [q, setQ] = useState("");
   const [stF, setStF] = useState("All");
@@ -419,6 +429,7 @@ function BookInner() {
 
   useEffect(() => {
     if (linkState && linkState !== "All") setStF(linkState);
+    else { const sc = getScope(); if (sc) setStF(sc); }   // remembered scope from home
     if (linkCity) setCityF(linkCity);
     if (linkChain) setChainF(linkChain);
     if (linkDist) setDistF(linkDist);
@@ -653,8 +664,8 @@ function BookInner() {
           const href = `/account/${r.account_id}`;
           return (
             <a key={r.account_id} href={href}
-              onClick={(e) => { e.preventDefault(); burst(r.account_id, () => router.push(href)); }}
-              style={{ position: "relative", display: "block", background: lapsed ? "var(--lapsed-card-bg)" : "var(--surface)", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)", ...(styleFor(r.account_id) || {}) }}>
+              onClick={(e) => { e.preventDefault(); setTapId(r.account_id); burst(r.account_id, () => router.push(href)); }}
+              style={{ position: "relative", display: "block", background: tapId === r.account_id ? cardTapBg(r.headline) : lapsed ? "var(--lapsed-card-bg)" : (pct != null && pct >= 30 ? "#e3f3db" : "var(--surface)"), transition: "background .15s ease", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)", ...(styleFor(r.account_id) || {}) }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${bc}`, borderLeft: `2px solid ${bc}`, borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${bc}`, borderRight: `1.5px solid ${bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
 

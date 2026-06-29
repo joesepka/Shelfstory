@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
+import { getScope } from "../../lib/scope";
 
 function gpct(cur, prev) { return prev > 0 ? Math.round(100 * (cur - prev) / prev) : (cur > 0 ? 999 : null); }
 function fmtPct(g) { if (g == null || g === 999) return "new"; return (g > 0 ? "+" : "") + g + "%"; }
@@ -36,6 +37,8 @@ function PerfInner() {
   const [items, setItems] = useState(null);
   const [pop, setPop] = useState(null);             // {key, phase:'out'|'boom'}
   const animating = useRef(false);
+
+  useEffect(() => { const sc = getScope(); if (sc) setScope({ st: sc }); }, []);   // remembered scope from home
 
   useEffect(() => {
     (async () => {
