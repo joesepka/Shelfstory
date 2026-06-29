@@ -352,22 +352,31 @@ function deltaTiny(p) {
   return <span style={{ color: c, fontWeight: 700 }}>{p > 0 ? "▲" : p < 0 ? "▼" : "▬"}{Math.abs(p)}%</span>;
 }
 
-// allocate up to 3 trees to a tier, proportional to its health mix (healthy→struggling)
-function allocTrees(cnt, total, baseH) {
-  if (!total) return [];
+// trees-per-account (scaled): expand a tier's health counts into `drawN` trees,
+// proportional to its mix, interleaved so colors read as a blend. Few big trees in
+// the upper tier, a thicket of small ones in the long tail.
+function expandTrees(cnt, total, drawN, h) {
+  if (!total || drawN <= 0) return [];
   const order = ["thriving", "bearing", "sapling", "wilting", "bare"];
-  const entries = order.map(k => ({ k, v: cnt[k] || 0 })).filter(e => e.v > 0);
-  if (!entries.length) return [];
-  const a = entries.map(e => ({ k: e.k, raw: (e.v / total) * 3, n: 0, frac: 0 }));
-  a.forEach(x => { x.n = Math.floor(x.raw); x.frac = x.raw - x.n; });
-  let used = a.reduce((s, x) => s + x.n, 0);
-  a.sort((x, y) => y.frac - x.frac);
-  for (let i = 0; used < 3 && i < a.length; i++) { a[i].n++; used++; }
-  const out = [];
-  for (const x of a) for (let j = 0; j < x.n; j++) out.push(x.k);
-  if (!out.length) out.push(entries[0].k);
-  out.sort((p, q) => order.indexOf(p) - order.indexOf(q));
-  return out.slice(0, 3).map(state => ({ state, h: baseH }));
+  const c = order.map(k => ({ k, n: Math.round(((cnt[k] || 0) / total) * drawN) }));
+  let sum = c.reduce((s, x) => s + x.n, 0), i = 0;
+  while (sum < drawN) { c[i % c.length].n++; sum++; i++; }
+  i = 0; while (sum > drawN && i < 400) { const x = c[i % c.length]; if (x.n > 0) { x.n--; sum--; } i++; }
+  const pools = c.map(x => Array(x.n).fill(x.k)); const out = []; let go = true;
+  while (go) { go = false; for (const q of pools) { if (q.length) { out.push(q.pop()); go = true; } } }
+  return out.map(state => ({ state, h }));
+}
+
+// one-line read on a tier's health, from its momentum + mix
+function tierDesc(pct, cnt, n) {
+  if (!n) return "No accounts";
+  const lap = (cnt.bare || 0) / n, risk = (cnt.wilting || 0) / n, fresh = (cnt.sapling || 0) / n;
+  if (lap >= 0.25) return "Losing accounts";
+  if (pct != null && pct <= -5) return "Slowing down";
+  if (risk >= 0.3) return "Several at risk";
+  if (fresh >= 0.3) return "Lots of new accounts";
+  if (pct != null && pct >= 5) return "Healthy overall";
+  return "Holding steady";
 }
 
 // light-grey section glyphs for the four-square nav (replaces the colored dots)
@@ -420,9 +429,9 @@ export default function Home() {
   const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
     const TIERS = [
-      { key: "upper", label: "Upper tier", h: 50 },
-      { key: "mid", label: "Mid tier", h: 38 },
-      { key: "tail", label: "Long tail", h: 28 },
+      { key: "upper", label: "Upper tier", h: 52, cap: 6 },
+      { key: "mid", label: "Mid tier", h: 32, cap: 13 },
+      { key: "tail", label: "Long tail", h: 20, cap: 22 },
     ];
     const mk = (label, key, list) => {
       let cur = 0, prev = 0, acctNow = 0, acctPrev = 0;
@@ -439,7 +448,9 @@ export default function Home() {
         let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
         for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[plantState(r.headline)]++; }
         const vol = g.reduce((s, r) => s + (r.account_weight || 0), 0);
-        return { key: t.key, label: t.label, n: g.length, volPct: Math.round((100 * vol) / totW), pct: gpct(c, p), trees: allocTrees(cnt, g.length, t.h) };
+        const drawN = Math.min(t.cap, g.length);
+        const tpct = gpct(c, p);
+        return { key: t.key, label: t.label, n: g.length, cur: c, volPct: Math.round((100 * vol) / totW), pct: tpct, desc: tierDesc(tpct, cnt, g.length), trees: expandTrees(cnt, g.length, drawN, t.h) };
       });
       return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, tiers };
     };
@@ -522,18 +533,21 @@ export default function Home() {
             <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days · swipe for states, highest volume first</div>
 
             {/* tier landscape — outside the box, blending into the background */}
-            <div key={"sc" + cur.key} className="sceneFade" style={{ position: "relative", height: 186, marginTop: 8, marginLeft: -24, marginRight: -24, overflow: "hidden" }}>
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,#cfe6f6 0%,#dcebdf 48%,var(--bg) 86%)" }} />
-              <svg className="cl cl1" viewBox="0 0 320 110" style={{ position: "absolute", top: 12, width: 120, opacity: 0.85 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
-              <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 40, width: 86, opacity: 0.6 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
-              <div style={{ position: "absolute", left: 16, right: 16, bottom: 12, display: "flex", justifyContent: "space-around", alignItems: "flex-end" }}>
+            <div key={"sc" + cur.key} className="sceneFade" style={{ position: "relative", height: 244, marginTop: 8, marginLeft: -24, marginRight: -24, overflow: "hidden" }}>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,#cfe6f6 0%,#dcebdf 46%,var(--bg) 84%)" }} />
+              <svg className="cl cl1" viewBox="0 0 320 110" style={{ position: "absolute", top: 10, width: 116, opacity: 0.85 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+              <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 34, width: 80, opacity: 0.6 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+              <div style={{ position: "absolute", left: 12, right: 12, top: 10, bottom: 8, display: "flex" }}>
                 {cur.tiers.map(t => (
-                  <div key={t.key} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
-                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, minHeight: 52 }}>
-                      {t.trees.length ? t.trees.map((tr, i) => <TreeGlyph key={i} state={tr.state} h={tr.h} />) : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}
+                  <div key={t.key} className="tcol">
+                    <div className="tcap"><b>{t.n.toLocaleString()}</b> accts<div className="tvol">{t.cur.toLocaleString()} cs · 90D</div></div>
+                    <div className="tbot">
+                      <div className="ttrees">
+                        {t.trees.length ? t.trees.map((tr, i) => <TreeGlyph key={i} state={tr.state} h={tr.h} />) : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}
+                      </div>
+                      <div className="tnm">{t.label} {deltaTiny(t.pct)}</div>
+                      <div className="tdesc">{t.desc}</div>
                     </div>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-2)", marginTop: 5 }}>{t.label}</div>
-                    <div style={{ fontSize: 9.5, color: "var(--text-3)", marginTop: 1 }}>{t.n.toLocaleString()} · {t.volPct}% vol · {deltaTiny(t.pct)}</div>
                   </div>
                 ))}
               </div>
@@ -570,6 +584,14 @@ export default function Home() {
         .cl1{animation-duration:44s;}
         .cl2{animation-duration:62s;animation-delay:-14s;}
         @keyframes floatCloud{from{transform:translateX(-140px);}to{transform:translateX(480px);}}
+        .tcol{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;align-items:center;text-align:center;padding:0 3px;}
+        .tcap{line-height:1.25;font-size:11px;color:var(--text-2);}
+        .tcap b{font-size:15px;color:var(--text);font-weight:700;}
+        .tvol{font-size:10.5px;color:var(--text-3);margin-top:1px;}
+        .tbot{width:100%;}
+        .ttrees{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:1px 2px;}
+        .tnm{font-size:11px;font-weight:700;color:var(--accent-deep);margin-top:6px;}
+        .tdesc{font-size:10px;color:var(--text-3);margin-top:1px;line-height:1.25;}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}

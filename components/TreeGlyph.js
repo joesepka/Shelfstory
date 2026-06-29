@@ -60,12 +60,12 @@ export default function TreeGlyph({ headline, pct, h = 40, state }) {
   if (st === "bare") {
     return (
       <svg style={G} viewBox="0 0 32 44" aria-hidden="true">
-        <rect x="14.5" y="18" width="3" height="26" rx="1.2" fill={C.soil} />
+        <rect x="14.5" y="18" width="3" height="26" rx="1.2" fill="#9a6a52" />
         {BRANCHES.map(([x, y], i) => (
-          <line key={i} x1="16" y1="20" x2={x} y2={y} stroke={C.soil} strokeWidth="1.7" strokeLinecap="round" />
+          <line key={i} x1="16" y1="20" x2={x} y2={y} stroke="#b0573a" strokeWidth="1.8" strokeLinecap="round" />
         ))}
         {FALLEN.slice(0, 3).map(([x, y], i) => (
-          <ellipse key={i} cx={x} cy={y} rx="2.1" ry="1.2" fill={C.rust} opacity="0.85" />
+          <ellipse key={i} cx={x} cy={y} rx="2.1" ry="1.2" fill="#9e3f28" opacity="0.9" />
         ))}
       </svg>
     );
