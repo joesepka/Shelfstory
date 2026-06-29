@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
-import TreeGlyph from "../components/TreeGlyph";
+import TreeGlyph, { plantState } from "../components/TreeGlyph";
 
 const T = {
   bg: "var(--bg)", ink: "var(--text)", muted: "var(--text-3)", line: "var(--border)", primary: "var(--accent)",
@@ -344,10 +344,39 @@ const NAV = [
 ];
 
 const chevBtn = { border: "none", background: "var(--surface-2)", color: "var(--text-2)", width: 20, height: 20, borderRadius: 10, fontSize: 13, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 };
-function deltaPill(p) {
-  const c = p == null ? "var(--text-3)" : p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)";
-  const bg = p == null ? "var(--surface-2)" : p > 0 ? "var(--accent-soft)" : p < 0 ? "var(--pop-warm-soft)" : "var(--surface-2)";
-  return <span style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: c, background: bg, padding: "3px 9px", borderRadius: 20 }}>{p == null ? "—" : `${p > 0 ? "▲" : p < 0 ? "▼" : "▬"} ${Math.abs(p)}%`}</span>;
+
+// small ∆ chip used by the tier captions
+function deltaTiny(p) {
+  if (p == null) return <span style={{ color: "var(--text-3)" }}>—</span>;
+  const c = p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)";
+  return <span style={{ color: c, fontWeight: 700 }}>{p > 0 ? "▲" : p < 0 ? "▼" : "▬"}{Math.abs(p)}%</span>;
+}
+
+// allocate up to 3 trees to a tier, proportional to its health mix (healthy→struggling)
+function allocTrees(cnt, total, baseH) {
+  if (!total) return [];
+  const order = ["thriving", "bearing", "sapling", "wilting", "bare"];
+  const entries = order.map(k => ({ k, v: cnt[k] || 0 })).filter(e => e.v > 0);
+  if (!entries.length) return [];
+  const a = entries.map(e => ({ k: e.k, raw: (e.v / total) * 3, n: 0, frac: 0 }));
+  a.forEach(x => { x.n = Math.floor(x.raw); x.frac = x.raw - x.n; });
+  let used = a.reduce((s, x) => s + x.n, 0);
+  a.sort((x, y) => y.frac - x.frac);
+  for (let i = 0; used < 3 && i < a.length; i++) { a[i].n++; used++; }
+  const out = [];
+  for (const x of a) for (let j = 0; j < x.n; j++) out.push(x.k);
+  if (!out.length) out.push(entries[0].k);
+  out.sort((p, q) => order.indexOf(p) - order.indexOf(q));
+  return out.slice(0, 3).map(state => ({ state, h: baseH }));
+}
+
+// light-grey section glyphs for the four-square nav (replaces the colored dots)
+function NavIcon({ href }) {
+  const p = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "#aab2a3", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+  if (href === "/book") return <svg {...p}><rect x="3" y="4" width="7" height="7" rx="1.2" /><rect x="14" y="4" width="7" height="7" rx="1.2" /><rect x="3" y="14" width="7" height="7" rx="1.2" /><rect x="14" y="14" width="7" height="7" rx="1.2" /></svg>;
+  if (href === "/perf") return <svg {...p}><circle cx="5" cy="6" r="2" /><circle cx="19" cy="6" r="2" /><circle cx="12" cy="19" r="2" /><path d="M12 17 V11 M12 11 H5 V8 M12 11 H19 V8" /></svg>;
+  if (href === "/wholesale") return <svg {...p}><path d="M4 4 V20 H20" /><polyline points="7 15 11 11 14 13 19 7" /></svg>;
+  return <svg {...p}><path d="M13 3 L5 13 H11 L10 21 L19 10 H13 Z" /></svg>;
 }
 
 export default function Home() {
@@ -386,17 +415,33 @@ export default function Home() {
   const brief = useMemo(() => buildBrief(rows), [rows]);
 
   // swipeable header: the whole book, then each state high→low by 90-day volume.
-  // each slide carries a small "landscape" — its top accounts as trees (height by
-  // volume, foliage by health).
+  // each slide carries its 3 stats AND a 3-tier volume landscape (upper / mid / long
+  // tail by cumulative L52W volume), each tier depicted by a few health trees.
   const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
+    const TIERS = [
+      { key: "upper", label: "Upper tier", h: 50 },
+      { key: "mid", label: "Mid tier", h: 38 },
+      { key: "tail", label: "Long tail", h: 28 },
+    ];
     const mk = (label, key, list) => {
-      let cur = 0, prev = 0;
-      for (const r of list) { cur += r.cur90 || 0; prev += r.prev90 || 0; }
-      const top = list.slice(0, 7);                       // rows already sorted by weight desc
-      const maxW = Math.max(...top.map(r => r.account_weight || 0), 1);
-      const trees = top.map(r => ({ headline: r.headline, pct: r.prior90_pct, h: 26 + Math.round(Math.sqrt((r.account_weight || 0) / maxW) * 40) }));
-      return { label, key, cur, prev, pct: gpct(cur, prev), n: list.length, trees };
+      let cur = 0, prev = 0, acctNow = 0, acctPrev = 0;
+      for (const r of list) { const c = r.cur90 || 0, p = r.prev90 || 0; cur += c; prev += p; if (c > 0) acctNow++; if (p > 0) acctPrev++; }
+      const rosNow = acctNow ? cur / acctNow : 0, rosPrev = acctPrev ? prev / acctPrev : 0;
+      // split by cumulative L52W volume (account_weight): 0–25% upper, 25–75% mid, 75–100% tail
+      const sorted = [...list].sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0));
+      const totW = sorted.reduce((s, r) => s + (r.account_weight || 0), 0) || 1;
+      const groups = { upper: [], mid: [], tail: [] };
+      let cum = 0;
+      for (const r of sorted) { const startF = cum / totW; cum += r.account_weight || 0; (startF < 0.25 ? groups.upper : startF < 0.75 ? groups.mid : groups.tail).push(r); }
+      const tiers = TIERS.map(t => {
+        const g = groups[t.key];
+        let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
+        for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[plantState(r.headline)]++; }
+        const vol = g.reduce((s, r) => s + (r.account_weight || 0), 0);
+        return { key: t.key, label: t.label, n: g.length, volPct: Math.round((100 * vol) / totW), pct: gpct(c, p), trees: allocTrees(cnt, g.length, t.h) };
+      });
+      return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, tiers };
     };
     const byState = {};
     for (const r of rows) { if (!r.state) continue; (byState[r.state] || (byState[r.state] = [])).push(r); }
@@ -450,42 +495,51 @@ export default function Home() {
         {!slides && !err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
         {err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
 
-        {/* swipeable 90-day scene — whole book, then each state high→low by volume */}
+        {/* swipeable stat box (whole book, then each state high→low by volume) +
+            a tier landscape below that blends into the page background */}
         {cur && (
-          <div className="riseIn" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
-            style={{ marginTop: 18, position: "relative", borderRadius: 18, overflow: "hidden", border: "0.5px solid var(--border)", boxShadow: "var(--shadow)", background: "var(--surface)", animationDelay: ".1s" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "13px 16px 9px" }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <button aria-label="Previous state" onClick={() => go(-1)} style={chevBtn}>‹</button>
-                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cur.label}</span>
-                  <button aria-label="Next state" onClick={() => go(1)} style={chevBtn}>›</button>
-                </div>
-                <div style={{ fontFamily: "var(--font-serif)", fontSize: 34, fontWeight: 600, color: "var(--text)", lineHeight: 1, marginTop: 3 }}>{cur.cur.toLocaleString()}</div>
-                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>90-day cases · vs prior 90</div>
+          <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+            <div className="riseIn" style={{ position: "relative", marginTop: 18, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "11px 10px 13px", animationDelay: ".1s" }}>
+              <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
+              <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
+              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 9 }}>
+                <button aria-label="Previous state" onClick={() => go(-1)} style={chevBtn}>‹</button>
+                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)" }}>{cur.label}</span>
+                <button aria-label="Next state" onClick={() => go(1)} style={chevBtn}>›</button>
               </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                {deltaPill(cur.pct)}
-                <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 5 }}>{cur.n.toLocaleString()} acct{cur.n === 1 ? "" : "s"}</div>
+              <div key={cur.key} className="sceneFade" style={{ display: "flex" }}>
+                <Stat label="90D Cases" value={cur.cur.toLocaleString()} pct={cur.curPct} delay={0} />
+                <Stat label="Active Accts" value={cur.acctNow.toLocaleString()} pct={cur.acctPct} divider delay={0.9} />
+                <Stat label="ROS / Acct" value={cur.rosNow.toFixed(1)} unit="cs" pct={cur.rosPct} divider delay={1.8} />
               </div>
             </div>
-            <div style={{ position: "relative", height: 132, background: "linear-gradient(180deg,#bfe1f5 0%,#dceefb 60%,#eaf5fb 100%)", overflow: "hidden" }}>
-              <svg className="cl cl1" viewBox="0 0 320 110" style={{ position: "absolute", top: 16, width: 116, opacity: 0.9 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
-              <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 42, width: 84, opacity: 0.65 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
-              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 32, background: "linear-gradient(180deg,#cdb98f,#b39a72)" }} />
-              <div key={cur.key} className="sceneFade" style={{ position: "absolute", left: 0, right: 0, bottom: 22, display: "flex", alignItems: "flex-end", justifyContent: "space-around", padding: "0 12px" }}>
-                {cur.trees.map((t, i) => <TreeGlyph key={i} headline={t.headline} pct={t.pct} h={t.h} />)}
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, padding: "8px 0 9px" }}>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 9 }}>
               {slides.slice(0, 9).map((sl, i) => (
                 <span key={i} onClick={() => setSlide(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
               ))}
               {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
             </div>
+            <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days · swipe for states, highest volume first</div>
+
+            {/* tier landscape — outside the box, blending into the background */}
+            <div key={"sc" + cur.key} className="sceneFade" style={{ position: "relative", height: 186, marginTop: 8, marginLeft: -24, marginRight: -24, overflow: "hidden" }}>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,#cfe6f6 0%,#dcebdf 48%,var(--bg) 86%)" }} />
+              <svg className="cl cl1" viewBox="0 0 320 110" style={{ position: "absolute", top: 12, width: 120, opacity: 0.85 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+              <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 40, width: 86, opacity: 0.6 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+              <div style={{ position: "absolute", left: 16, right: 16, bottom: 12, display: "flex", justifyContent: "space-around", alignItems: "flex-end" }}>
+                {cur.tiers.map(t => (
+                  <div key={t.key} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", gap: 2, minHeight: 52 }}>
+                      {t.trees.length ? t.trees.map((tr, i) => <TreeGlyph key={i} state={tr.state} h={tr.h} />) : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}
+                    </div>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--text-2)", marginTop: 5 }}>{t.label}</div>
+                    <div style={{ fontSize: 9.5, color: "var(--text-3)", marginTop: 1 }}>{t.n.toLocaleString()} · {t.volPct}% vol · {deltaTiny(t.pct)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
-        {cur && <div style={{ textAlign: "center", fontSize: 10, color: "var(--text-3)", marginTop: 7 }}>swipe to move between states · highest volume first</div>}
 
         {/* where to — four square */}
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22, marginBottom: 8 }}>WHERE TO?</div>
@@ -494,8 +548,8 @@ export default function Home() {
             <div key={c.href} onClick={() => navTo(c.href)}
               style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "13px 13px 12px", minHeight: 96, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} />
-                <span style={{ fontSize: 16, color: c.color, lineHeight: 1 }}>→</span>
+                <NavIcon href={c.href} />
+                <span style={{ fontSize: 15, color: c.color, lineHeight: 1 }}>→</span>
               </div>
               <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 10, letterSpacing: "-0.2px" }}>{c.title}</div>
               <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.sub}</div>
