@@ -361,7 +361,7 @@ function ActionsInner() {
   const clearAll = () => { setStF("All"); setDistF("All"); setChF("All"); setChainF("All"); };
 
   return (
-    <div style={wrap}>
+    <div className="pagefade" style={wrap}>
       <div style={{ padding: "14px 16px 6px", flexShrink: 0 }}>
 
         <div style={{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px" }}>Actions to take</div>

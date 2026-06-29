@@ -271,7 +271,7 @@ export default function WholesalePage() {
   }, [distF, chainF, cityF, stF, premF, itemF, items]);
 
   return (
-    <div style={wrap}>
+    <div className="pagefade" style={wrap}>
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
 
       <div style={{ padding: "12px 14px 2px", flexShrink: 0 }}>
@@ -307,7 +307,7 @@ export default function WholesalePage() {
               <div style={{ fontSize: 11.5, color: "var(--text-3)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scopeLabel}{rows ? ` · ${scopedIds.length.toLocaleString()} accounts` : ""}</div>
               <div style={{ display: "flex", gap: 3, flexShrink: 0, background: "var(--surface-2)", borderRadius: 9, padding: 2 }}>
                 {[["month", "12 mo"], ["quarter", "Qtr"]].map(([k, t]) => (
-                  <button key={k} onClick={() => setMode(k)}
+                  <button key={k} onClick={() => setMode(k)} className="tapd"
                     style={{ fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 7, cursor: "pointer", border: "none", fontFamily: "inherit",
                       background: mode === k ? "var(--surface)" : "transparent", color: mode === k ? "var(--text)" : "var(--text-3)", boxShadow: mode === k ? "var(--shadow-sm)" : "none" }}>
                     {t}

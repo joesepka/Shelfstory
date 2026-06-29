@@ -312,7 +312,7 @@ export default function AccountOverview() {
   const brief = buildBriefing(acc, bench, items, white);
 
   return (
-    <div className="wrap">
+    <div className="wrap pagefade">
       <div style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "14px 0 10px" }}>
         <div style={{ flexShrink: 0, marginTop: 1 }}><TreeGlyph headline={acc.headline} pct={pct} h={50} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>

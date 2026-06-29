@@ -524,7 +524,7 @@ function BookInner() {
   const fullBleed = view === "grid" || view === "tree";
 
   return (
-    <div style={wrap}>
+    <div className="pagefade" style={wrap}>
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
 
       {linkScope && (
@@ -561,7 +561,7 @@ function BookInner() {
 
       <div style={{ display: "flex", gap: 4, padding: "0 12px 8px", flexShrink: 0 }}>
         {[["account", "Account"], ["grid", "Grid"], ["tree", "Tree"]].map(([k, t]) => (
-          <button key={k} onClick={() => changeView(k)}
+          <button key={k} onClick={() => changeView(k)} className="tapd"
             style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: "7px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit",
               background: view === k ? "var(--text-2)" : "var(--surface-2)", color: view === k ? "#fff" : "var(--text-2)" }}>
             {t}

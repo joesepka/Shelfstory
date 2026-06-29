@@ -298,7 +298,7 @@ function OvInner() {
   if (err) return <div style={wrap}><Top title={title} kind={kind} back={() => router.push("/perf")} canPrint={false} /><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   return (
-    <div style={wrap}>
+    <div className="pagefade" style={wrap}>
       <style>{PRINT_CSS}</style>
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
 

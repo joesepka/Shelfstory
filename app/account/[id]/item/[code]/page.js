@@ -64,7 +64,7 @@ export default function ItemHistory() {
   const lo = vals.length ? Math.min(...vals) : hi;
 
   return (
-    <div className="wrap">
+    <div className="wrap pagefade">
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0 10px" }}>
         <button
           onClick={() => router.back()}

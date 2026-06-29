@@ -14,9 +14,9 @@ export default function FilterSelect({ label, value, options, onChange, display,
   const pick = (o) => { onChange(o); setOpen(false); };
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={label}
+      <button type="button" onClick={() => setOpen(true)} aria-label={label} className="fsel"
         style={{ flexShrink: 0, minWidth: 104, maxWidth: 190, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 5,
-          fontSize: 11.5, fontWeight: active ? 700 : 500, padding: "8px 11px", borderRadius: 10, cursor: "pointer", fontFamily: "inherit",
+          fontSize: 11.5, fontWeight: active ? 700 : 500, padding: "8px 13px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
           border: active ? "1px solid var(--accent)" : "0.5px solid var(--border-strong)",
           background: active ? "var(--accent-soft)" : "var(--surface)", color: active ? "var(--accent-deep)" : "var(--text-2)" }}>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active ? fmt(value) : label}</span>

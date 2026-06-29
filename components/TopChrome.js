@@ -11,16 +11,16 @@ export default function TopChrome() {
       position: "fixed", inset: 0, zIndex: 60, pointerEvents: "none",
       maxWidth: 520, margin: "0 auto",
     }}>
-      <button onClick={() => router.back()} aria-label="Back"
+      <button onClick={() => router.back()} aria-label="Back" className="backbtn"
         style={{
           position: "absolute", left: 14, bottom: 18, pointerEvents: "auto",
-          height: 42, borderRadius: 21, border: "none", cursor: "pointer",
-          background: "#fff", color: "#5C584E",
-          boxShadow: "0 3px 12px rgba(0,0,0,.22)", fontSize: 15, fontWeight: 700, lineHeight: 1,
-          display: "flex", alignItems: "center", justifyContent: "center", gap: 3,
-          fontFamily: "inherit", padding: "0 18px 0 13px",
+          height: 40, borderRadius: 20, border: "0.5px solid var(--border-strong)", cursor: "pointer",
+          background: "var(--surface)", color: "var(--text-2)",
+          boxShadow: "0 4px 16px rgba(40,55,35,.18)", fontSize: 13.5, fontWeight: 700, lineHeight: 1,
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+          fontFamily: "inherit", padding: "0 16px 0 11px",
         }}>
-        <span style={{ fontSize: 22, marginTop: -2 }}>‹</span> back
+        <span style={{ fontSize: 19, marginTop: -1 }}>‹</span> Back
       </button>
     </div>
   );

@@ -163,7 +163,7 @@ function PerfInner() {
   if (err) return <div style={wrap}><p style={{ color: "var(--down)", padding: 20, fontSize: 13 }}>Couldn’t load. {err}</p></div>;
 
   return (
-    <div style={wrap}>
+    <div className="pagefade" style={wrap}>
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}
         @keyframes pfIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}`}</style>
 
