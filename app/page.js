@@ -90,17 +90,23 @@ const WEATHER = {
   },
 };
 
-// small top-right wordmark: open book + rising trendline
+// small top-right wordmark: open book + a rising line that sprouts a leaf
+function LogoMark({ size = 30 }) {
+  return (
+    <svg viewBox="0 0 64 48" style={{ width: size, height: "auto" }} aria-hidden="true">
+      <path d="M32 40 q-9 -4 -22 -2 v-22 q13 -2 22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
+      <path d="M32 40 q9 -4 22 -2 v-22 q-13 -2 -22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
+      <polyline points="16,31 24,28 31,23 39,16" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M39 16 q-2 -6 -8 -6 q1 6 8 6 z" fill={TREND} />
+      <path d="M39 16 q5 -4 11 -3 q-3 6 -11 3 z" fill={TREND} />
+    </svg>
+  );
+}
 function HeaderLogo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-      <svg viewBox="0 0 64 48" style={{ width: 30, height: "auto" }} aria-hidden="true">
-        <path d="M32 40 q-9 -4 -22 -2 v-22 q13 -2 22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
-        <path d="M32 40 q9 -4 22 -2 v-22 q-13 -2 -22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
-        <polyline points="15,30 23,27 31,22 41,14" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M37 14 L41 14 L41 18" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <span style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>ShelfStory</span>
+      <LogoMark size={30} />
+      <span style={{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.2px" }}>ShelfStory</span>
     </div>
   );
 }
@@ -146,19 +152,19 @@ function Weather({ w, poofing }) {
   );
 }
 
-// neutral splash clouds (data not loaded yet, so weather is unknown at splash time)
+// soft white clouds drifting on the splash sky
 function SplashClouds() {
   const clouds = [
-    { vb: "0 0 360 120", w: 360, top: 40, left: -60, color: "#D9D2C2" },
-    { vb: "0 0 320 110", w: 300, top: 150, left: 120, color: "#E0DAC9" },
-    { vb: "0 0 300 110", w: 320, top: 300, left: -40, color: "#DCD6C6" },
-    { vb: "0 0 260 100", w: 240, top: 430, left: 160, color: "#DAD3C3" },
-    { vb: "0 0 220 100", w: 260, top: 520, left: -30, color: "#DCD6C6" },
+    { vb: "0 0 360 120", w: 360, top: 40, left: -60, color: "#ffffff" },
+    { vb: "0 0 320 110", w: 300, top: 150, left: 120, color: "#ffffff" },
+    { vb: "0 0 300 110", w: 320, top: 300, left: -40, color: "#ffffff" },
+    { vb: "0 0 260 100", w: 240, top: 430, left: 160, color: "#ffffff" },
+    { vb: "0 0 220 100", w: 260, top: 520, left: -30, color: "#ffffff" },
   ];
   return (
     <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}>
       {clouds.map((c, i) => (
-        <svg key={i} viewBox="0 0 320 110" style={{ position: "absolute", width: c.w, top: c.top, left: c.left, opacity: 0.4 }}>
+        <svg key={i} viewBox="0 0 320 110" style={{ position: "absolute", width: c.w, top: c.top, left: c.left, opacity: 0.7 }}>
           <path d={CLOUD_PATH} fill={c.color} />
         </svg>
       ))}
@@ -166,87 +172,26 @@ function SplashClouds() {
   );
 }
 
+// simple loader: the ShelfStory mark + wordmark on the sky, a gentle fade in/out
 function Splash({ onDone }) {
-  const [progress, setProgress] = useState(0);
-  const [boom, setBoom] = useState(false);
-  // pin onDone so a parent re-render (e.g. book data loading) can't restart the
-  // animation — it must draw exactly ONE cycle, then explode open.
+  const [out, setOut] = useState(false);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   useEffect(() => {
-    const start = Date.now();
-    const dur = 720;
-    let raf, boomT, doneT;
-    const tick = () => {
-      const p = Math.min((Date.now() - start) / dur, 1);
-      setProgress(p);
-      if (p < 1) raf = requestAnimationFrame(tick);
-      else { boomT = setTimeout(() => setBoom(true), 60); doneT = setTimeout(() => onDoneRef.current(), 380); }  // one cycle -> open
-    };
-    raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); clearTimeout(boomT); clearTimeout(doneT); };
+    const t1 = setTimeout(() => setOut(true), 760);
+    const t2 = setTimeout(() => onDoneRef.current(), 1080);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
-
-  const cx = 170, cy = 150, s = 1.6;
-  const pts = [
-    { x: cx - 40 * s, y: cy + 22 * s },
-    { x: cx - 22 * s, y: cy + 26 * s },
-    { x: cx - 4 * s, y: cy + 16 * s },
-    { x: cx + 16 * s, y: cy + 10 * s },
-    { x: cx + 44 * s, y: cy - 14 * s },
-  ];
-  const totalSeg = pts.length - 1;
-  const segFloat = progress * totalSeg;
-  const fullSeg = Math.floor(segFloat);
-  const frac = segFloat - fullSeg;
-
-  const drawnPts = [pts[0]];
-  for (let i = 1; i <= fullSeg && i < pts.length; i++) drawnPts.push(pts[i]);
-  let tip = drawnPts[drawnPts.length - 1];
-  if (fullSeg < totalSeg) {
-    const a = pts[fullSeg], b = pts[fullSeg + 1];
-    tip = { x: a.x + (b.x - a.x) * frac, y: a.y + (b.y - a.y) * frac };
-    drawnPts.push(tip);
-  } else {
-    tip = pts[pts.length - 1];
-  }
-  const linePath = "M " + drawnPts.map(p => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" L ");
-
-  const prev = drawnPts[drawnPts.length - 2] || drawnPts[0];
-  const ang = Math.atan2(tip.y - prev.y, tip.x - prev.x);
-  const ah = 9 * s;
-  const b1 = ang + (150 * Math.PI) / 180;
-  const b2 = ang - (150 * Math.PI) / 180;
-  const arrow = progress > 0.05
-    ? `M ${(tip.x + ah * Math.cos(b1)).toFixed(1)} ${(tip.y + ah * Math.sin(b1)).toFixed(1)} L ${tip.x.toFixed(1)} ${tip.y.toFixed(1)} L ${(tip.x + ah * Math.cos(b2)).toFixed(1)} ${(tip.y + ah * Math.sin(b2)).toFixed(1)}`
-    : "";
-
-  const L = `M ${cx} ${cy} q ${-36 * s} ${-14 * s} ${-56 * s} ${-7 * s} v ${46 * s} q ${22 * s} ${-8 * s} ${56 * s} ${7 * s} z`;
-  const R = `M ${cx} ${cy} q ${36 * s} ${-14 * s} ${56 * s} ${-7 * s} v ${46 * s} q ${-22 * s} ${-8 * s} ${-56 * s} ${7 * s} z`;
-
   return (
     <div style={{
-      position: "fixed", inset: 0, background: T.bg, zIndex: 50,
+      position: "fixed", inset: 0, background: "linear-gradient(180deg,#b6dcf1 0%,#cce4f4 24%,#d7e6df 62%,var(--bg) 100%)", zIndex: 50,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      transition: "opacity .32s ease", opacity: boom ? 0 : 1, pointerEvents: boom ? "none" : "auto",
+      transition: "opacity .34s ease", opacity: out ? 0 : 1, pointerEvents: out ? "none" : "auto",
     }}>
       <SplashClouds />
-      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", transform: boom ? "scale(1.7)" : "scale(1)", transition: "transform .4s cubic-bezier(.4,0,.2,1)" }}>
-        <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }}>
-          <path d={L} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
-          <path d={R} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
-          {drawnPts.length > 1 && (
-            <path d={linePath} stroke={TREND} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          )}
-          {pts.slice(0, fullSeg + 1).map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r={2.6} fill={TREND} />
-          ))}
-          {arrow && <path d={arrow} stroke={TREND} strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
-        </svg>
-        <div style={{ fontFamily: T.serif, fontSize: 26, color: T.ink, letterSpacing: 1, marginTop: 18 }}>ShelfStory</div>
-        <div style={{ width: 130, height: 4, background: T.line, borderRadius: 2, marginTop: 22, overflow: "hidden" }}>
-          <div style={{ width: `${progress * 100}%`, height: "100%", background: TREND, borderRadius: 2 }} />
-        </div>
+      <div className="splashIn" style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <LogoMark size={94} />
+        <div style={{ fontFamily: "var(--font-serif)", fontSize: 30, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.4px", marginTop: 12 }}>ShelfStory</div>
       </div>
     </div>
   );
@@ -401,6 +346,62 @@ function NavIcon({ href }) {
   return <svg {...p}><path d="M13 3 L5 13 H11 L10 21 L19 10 H13 Z" /></svg>;
 }
 
+// ---- Wedge: the whole book as a left-tall, right-tapering health wedge ----
+const COLW = { thriving: "#4a9068", bearing: "#6aa06a", wilting: "#c2922e", bare: "#b0573a", sapling: "#5bb47e" };
+const WWORD = { thriving: "Growing", bearing: "Steady", wilting: "At risk", bare: "Lapsed", sapling: "New" };
+
+function WedgeView({ wedge, onOpen }) {
+  const [hot, setHot] = useState(-1);
+  const ref = useRef(null);
+  const slices = useMemo(() => {
+    const arr = (wedge.indiv || []).map(a => ({ ...a, kind: "acct" }));
+    if (wedge.pool) wedge.pool.samp.forEach(s => arr.push({ w: s.w, state: s.state, kind: "pool" }));
+    return arr;
+  }, [wedge]);
+  const L = 14, R = 346, BASE = 122;
+  const n = Math.max(1, slices.length);
+  const sw = (R - L) / n;
+  const vmax = slices.length ? Math.max(...slices.map(s => s.w), 1) : 1;
+  const Hh = w => Math.max(3, (w / vmax) * 104);
+  const idxAt = e => { const r = ref.current.getBoundingClientRect(); const vx = (e.clientX - r.left) / r.width * 360; return Math.max(0, Math.min(slices.length - 1, Math.floor((vx - L) / sw))); };
+  const it = hot >= 0 && hot < slices.length ? slices[hot] : null;
+  const hx = it ? L + hot * sw : 0, hh = it ? Hh(it.w) : 0, hy = BASE - hh;
+  const leftRos = wedge.indiv && wedge.indiv.length ? Math.round(wedge.indiv[0].cur / 3) : 0;
+  const rightRos = wedge.pool ? Math.round(wedge.pool.cur / wedge.pool.n / 3) : (wedge.indiv && wedge.indiv.length ? Math.round(wedge.indiv[wedge.indiv.length - 1].cur / 3) : 0);
+  return (
+    <div>
+      <svg ref={ref} viewBox="0 0 360 150" width="100%" style={{ display: "block", touchAction: "none", cursor: "crosshair", marginTop: 12 }}
+        onPointerMove={e => { e.preventDefault(); setHot(idxAt(e)); }}
+        onPointerDown={e => { e.preventDefault(); setHot(idxAt(e)); }}
+        onPointerUp={e => { e.preventDefault(); const s = slices[idxAt(e)]; if (s) onOpen(s); }}
+        onPointerLeave={() => setHot(-1)} aria-hidden="true">
+        <line x1={L} y1={BASE} x2={R} y2={BASE} stroke="#cdb98f" strokeWidth="2" />
+        {slices.map((s, i) => { const h = Hh(s.w); return <rect key={i} x={(L + i * sw).toFixed(2)} y={(BASE - h).toFixed(2)} width={(sw + 0.6).toFixed(2)} height={h.toFixed(2)} fill={COLW[s.state]} opacity={it && i === hot ? 1 : 0.92} />; })}
+        {it && <rect x={(hx - 0.5).toFixed(2)} y={(hy - 3).toFixed(2)} width={(sw + 1.6).toFixed(2)} height={(hh + 3).toFixed(2)} fill="none" stroke="#2c3a26" strokeWidth="1.6" rx="1" />}
+        {it && <circle cx={(hx + sw / 2).toFixed(2)} cy={(hy - 3).toFixed(2)} r="3.4" fill={COLW[it.state]} />}
+        <text x={L} y="14" fontSize="11" fill="#7d8478">{leftRos.toLocaleString()} cs/acct·mo</text>
+        <text x={R} y={BASE - 3} fontSize="11" fill="#7d8478" textAnchor="end">{rightRos}</text>
+        {it && (() => {
+          const lab = it.kind === "acct" ? (it.name && it.name.length > 20 ? it.name.slice(0, 19) + "…" : (it.name || "Account")) : "Long tail";
+          const lx = Math.max(54, Math.min(306, hx + sw / 2));
+          const ly = Math.max(20, hy - 7);
+          const w = lab.length * 5.4 + 12;
+          return <g key="lab">
+            <rect x={(lx - w / 2).toFixed(1)} y={(ly - 12).toFixed(1)} width={w.toFixed(1)} height="15" rx="4" fill="#fbfdf8" stroke="#c2d6b4" strokeWidth="0.5" />
+            <text x={lx.toFixed(1)} y={(ly - 1.5).toFixed(1)} fontSize="9.5" fontWeight="600" fill="#2c3a26" textAnchor="middle">{lab}</text>
+          </g>;
+        })()}
+      </svg>
+      <div className="wedgeRo">
+        {it ? (it.kind === "acct"
+          ? <span><span className="rdot" style={{ background: COLW[it.state] }} /><b>{it.name}</b> · {it.cur.toLocaleString()} cs · 90D · {Math.round(it.cur / 3).toLocaleString()} cs/acct·mo · <span style={{ color: COLW[it.state], fontWeight: 700 }}>{WWORD[it.state]}</span></span>
+          : <span><span className="rdot" style={{ background: "var(--soil-dk)" }} /><b>Long tail</b> · {wedge.pool.n.toLocaleString()} accounts · {wedge.pool.cur.toLocaleString()} cs · 90D · tap to open</span>)
+          : <span className="wedgeHint">Drag across the book to scan · tap to open an account</span>}
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
@@ -438,33 +439,27 @@ export default function Home() {
   const brief = useMemo(() => buildBrief(rows), [rows]);
 
   // swipeable header: the whole book, then each state high→low by 90-day volume.
-  // each slide carries its 3 stats AND a 3-tier volume landscape (upper / mid / long
-  // tail by cumulative L52W volume), each tier depicted by a few health trees.
+  // each slide carries its 3 stats AND a "wedge" of the whole book — top 40 accounts
+  // as individual slices (tall→short by volume), the rest pooled into the tapering tail.
   const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
-    const TIERS = [{ key: "top", label: "Top tier" }, { key: "tail", label: "Long tail" }];
     const mk = (label, key, list) => {
       let cur = 0, prev = 0, acctNow = 0, acctPrev = 0;
       for (const r of list) { const c = r.cur90 || 0, p = r.prev90 || 0; cur += c; prev += p; if (c > 0) acctNow++; if (p > 0) acctPrev++; }
       const rosNow = acctNow ? cur / acctNow : 0, rosPrev = acctPrev ? prev / acctPrev : 0;
-      // split by cumulative L52W volume (account_weight): top 30% of volume vs the long tail
       const sorted = [...list].sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0));
-      const totW = sorted.reduce((s, r) => s + (r.account_weight || 0), 0) || 1;
-      const groups = { top: [], tail: [] };
-      let cum = 0;
-      for (const r of sorted) { const startF = cum / totW; cum += r.account_weight || 0; (startF < 0.30 ? groups.top : groups.tail).push(r); }
-      const tiers = TIERS.map(t => {
-        const g = groups[t.key];
-        let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
-        for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[plantState(r.headline)]++; }
-        const pct = gpct(c, p);
-        const a3 = allocStates(cnt, g.length, 3);
-        const cc = {}; a3.forEach(s => { cc[s] = (cc[s] || 0) + 1; });
-        const front = a3.length ? Object.keys(cc).sort((x, y) => cc[y] - cc[x])[0] : null;
-        const flanks = [...a3]; if (front) flanks.splice(flanks.indexOf(front), 1);
-        return { key: t.key, label: t.label, n: g.length, cur: c, pct, desc: tierDesc(pct, cnt, g.length), rpm: g.length ? c / g.length / 3 : 0, front, flanks, tail: allocStates(cnt, g.length, 10) };
-      });
-      return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, tiers };
+      const TOP = 40;
+      const indiv = sorted.slice(0, TOP).map(r => ({ id: r.account_id, name: r.account_name, w: r.account_weight || 0, cur: r.cur90 || 0, pct: r.prior90_pct, state: plantState(r.headline) }));
+      const tailRows = sorted.slice(TOP);
+      let pool = null;
+      if (tailRows.length) {
+        const tw = tailRows.reduce((s, r) => s + (r.account_weight || 0), 0);
+        const tcur = tailRows.reduce((s, r) => s + (r.cur90 || 0), 0);
+        const S = Math.min(tailRows.length, Math.min(46, Math.max(5, Math.round(tailRows.length / 6)))), samp = [];
+        for (let k = 0; k < S; k++) { const idx = Math.round((S <= 1 ? 0 : k / (S - 1)) * (tailRows.length - 1)); const r = tailRows[idx]; samp.push({ w: r.account_weight || 0, state: plantState(r.headline) }); }
+        pool = { n: tailRows.length, w: tw, cur: tcur, samp };
+      }
+      return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, wedge: { indiv, pool } };
     };
     const byState = {};
     for (const r of rows) { if (!r.state) continue; (byState[r.state] || (byState[r.state] = [])).push(r); }
@@ -488,6 +483,7 @@ export default function Home() {
   function go(d) { if (!slides) return; const n = slides.length; pick((slide + d + n) % n); }
   function onTouchStart(e) { touchX.current = e.touches[0].clientX; }
   function onTouchEnd(e) { if (touchX.current == null) return; const dx = e.changedTouches[0].clientX - touchX.current; touchX.current = null; if (dx < -40) go(1); else if (dx > 40) go(-1); }
+  function onWedgePick(s) { if (!s) return; if (s.kind === "acct" && s.id) router.push(`/account/${s.id}`); else router.push("/book"); }
 
   return (
     <>
@@ -539,10 +535,9 @@ export default function Home() {
             <div className="riseIn" style={{ position: "relative", marginTop: 18, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "11px 10px 13px", animationDelay: ".1s" }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 8, marginBottom: 9 }}>
-                <button aria-label="Previous state" onClick={() => go(-1)} style={chevBtn}>‹</button>
-                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-3)" }}>{cur.label}</span>
-                <button aria-label="Next state" onClick={() => go(1)} style={chevBtn}>›</button>
+              <div style={{ textAlign: "center", marginBottom: 10 }}>
+                <div style={{ fontFamily: "var(--font-serif)", fontSize: 19, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.2px", lineHeight: 1.1 }}>{cur.label}</div>
+                {slides.length > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", letterSpacing: "0.03em", marginTop: 2 }}>swipe to change state →</div>}
               </div>
               <div key={cur.key} className="sceneFade" style={{ display: "flex" }}>
                 <Stat label="90D Cases" value={cur.cur.toLocaleString()} pct={cur.curPct} delay={0} />
@@ -556,33 +551,11 @@ export default function Home() {
               ))}
               {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
             </div>
-            <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days · swipe for states, highest volume first</div>
+            <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days</div>
 
-            {/* tier landscape: Top tier and Long tail side by side */}
-            <div key={"sc" + cur.key} className="sceneFade tierrow2">
-              {cur.tiers.map((t, idx) => (
-                <Fragment key={t.key}>
-                  {idx > 0 && <div className="t2div" aria-hidden="true" />}
-                  <div className="tcol2">
-                    <div className="t2hdr">{t.label} {deltaTiny(t.pct)}</div>
-                    <div className="t2desc">{t.desc}</div>
-                    <div className="t2tree">
-                      {t.n === 0 ? <span className="t2dash">—</span> : t.key === "top" ? (
-                        <div className="grove">
-                          <span className="bk" style={{ marginRight: -10 }}><TreeGlyph state={t.flanks[0] || t.front} h={52} pct={t.pct} /></span>
-                          <span className="ft"><TreeGlyph state={t.front} h={84} pct={t.pct} /></span>
-                          <span className="bk" style={{ marginLeft: -10 }}><TreeGlyph state={t.flanks[1] || t.front} h={52} pct={t.pct} /></span>
-                        </div>
-                      ) : (
-                        <div className="grove gtail">
-                          {t.tail.map((s, i) => <TreeGlyph key={i} state={s} h={24} pct={t.pct} />)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="t2counts"><span className="t2rpm">{Math.round(t.rpm).toLocaleString()} cs/acct·mo</span><div className="t2sub"><b>{t.n.toLocaleString()}</b> accts · {t.cur.toLocaleString()} cs · 90D</div></div>
-                  </div>
-                </Fragment>
-              ))}
+            {/* whole-book wedge — top 40 accounts + pooled tail; drag to scan, tap to open */}
+            <div key={"sc" + cur.key} className="sceneFade">
+              <WedgeView wedge={cur.wedge} onOpen={onWedgePick} />
             </div>
           </div>
         )}
@@ -613,25 +586,16 @@ export default function Home() {
         .riseIn{animation:riseIn .5s cubic-bezier(.22,.61,.36,1) both;}
         .sceneFade{animation:sceneFade .45s ease both;}
         @keyframes sceneFade{from{opacity:0;transform:translateY(4px) scale(.98);}to{opacity:1;transform:none;}}
+        .splashIn{animation:splashIn .5s cubic-bezier(.22,.61,.36,1) both;}
+        @keyframes splashIn{from{opacity:0;transform:translateY(8px) scale(.97);}to{opacity:1;transform:none;}}
         .cl{will-change:transform;animation:floatCloud 50s linear infinite;}
         .cl1{animation-duration:44s;}
         .cl2{animation-duration:62s;animation-delay:-14s;}
         @keyframes floatCloud{from{transform:translateX(-140px);}to{transform:translateX(480px);}}
-        .tierrow2{display:flex;gap:10px;margin-top:16px;align-items:stretch;height:172px;}
-        .t2div{width:1px;background:#c6cabf;align-self:stretch;flex-shrink:0;}
-        .tcol2{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;padding:0 6px;}
-        .t2hdr{font-size:13px;font-weight:600;color:var(--text);line-height:1.2;}
-        .t2desc{font-size:11px;color:var(--text-3);margin-top:1px;line-height:1.2;min-height:14px;}
-        .t2tree{flex:1;display:flex;align-items:flex-end;justify-content:center;margin:6px 0 4px;width:100%;}
-        .grove{display:flex;align-items:flex-end;justify-content:center;}
-        .grove.gtail{flex-wrap:wrap;gap:0 1px;}
-        .grove .ft{position:relative;z-index:2;}
-        .grove .bk{position:relative;z-index:1;}
-        .t2dash{font-size:12px;color:var(--text-3);}
-        .t2counts{line-height:1.25;}
-        .t2rpm{font-size:13px;font-weight:700;color:var(--accent-deep);}
-        .t2sub{font-size:10px;color:var(--text-3);margin-top:1px;}
-        .t2sub b{font-weight:700;color:var(--text-2);}
+        .wedgeRo{margin-top:10px;background:var(--surface);border:0.5px solid var(--border);border-radius:12px;padding:9px 11px;font-size:12px;color:var(--text-2);min-height:20px;line-height:1.4;}
+        .wedgeRo b{color:var(--text);font-weight:700;}
+        .rdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
+        .wedgeHint{color:var(--text-3);}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}
