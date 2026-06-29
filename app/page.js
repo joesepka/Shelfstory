@@ -370,7 +370,13 @@ function WedgeView({ wedge, onOpen }) {
   const rightRos = wedge.pool ? Math.round(wedge.pool.cur / wedge.pool.n / 3) : (wedge.indiv && wedge.indiv.length ? Math.round(wedge.indiv[wedge.indiv.length - 1].cur / 3) : 0);
   return (
     <div>
-      <svg ref={ref} viewBox="0 0 360 150" width="100%" style={{ display: "block", touchAction: "none", cursor: "crosshair", marginTop: 12 }}
+      <div className="wedgeRo" style={{ marginTop: 12 }}>
+        {it ? (it.kind === "acct"
+          ? <span><span className="rdot" style={{ background: COLW[it.state] }} /><b>{it.name}</b> · {it.cur.toLocaleString()} cs · 90D · {Math.round(it.cur / 3).toLocaleString()} cs/acct·mo · <span style={{ color: COLW[it.state], fontWeight: 700 }}>{WWORD[it.state]}</span></span>
+          : <span><span className="rdot" style={{ background: "var(--soil-dk)" }} /><b>Long tail</b> · {wedge.pool.n.toLocaleString()} accounts · {wedge.pool.cur.toLocaleString()} cs · 90D · tap to open</span>)
+          : <span className="wedgeHint">Drag across the book to scan · tap to open an account</span>}
+      </div>
+      <svg ref={ref} viewBox="0 0 360 150" width="100%" style={{ display: "block", touchAction: "none", cursor: "crosshair", marginTop: 6 }}
         onPointerMove={e => { e.preventDefault(); setHot(idxAt(e)); }}
         onPointerDown={e => { e.preventDefault(); setHot(idxAt(e)); }}
         onPointerUp={e => { e.preventDefault(); const s = slices[idxAt(e)]; if (s) onOpen(s); }}
@@ -392,12 +398,6 @@ function WedgeView({ wedge, onOpen }) {
           </g>;
         })()}
       </svg>
-      <div className="wedgeRo">
-        {it ? (it.kind === "acct"
-          ? <span><span className="rdot" style={{ background: COLW[it.state] }} /><b>{it.name}</b> · {it.cur.toLocaleString()} cs · 90D · {Math.round(it.cur / 3).toLocaleString()} cs/acct·mo · <span style={{ color: COLW[it.state], fontWeight: 700 }}>{WWORD[it.state]}</span></span>
-          : <span><span className="rdot" style={{ background: "var(--soil-dk)" }} /><b>Long tail</b> · {wedge.pool.n.toLocaleString()} accounts · {wedge.pool.cur.toLocaleString()} cs · 90D · tap to open</span>)
-          : <span className="wedgeHint">Drag across the book to scan · tap to open an account</span>}
-      </div>
     </div>
   );
 }

@@ -124,8 +124,21 @@ function buildBriefing(acc, b, items, white) {
   return { lead: lead.trim(), signals: signals.slice(0, 3), moves: moves.slice(0, 3) };
 }
 
-function Trend({ spark, color }) {
+// trend bars tinted by the account's health — green growing · gold slowing · red lapsed
+function graphColor(hd) {
+  switch (String(hd || "").toLowerCase()) {
+    case "accelerating": return "#4a9068";
+    case "new": return "#5bb47e";
+    case "decelerating": return "#c2922e";
+    case "at-risk": case "atrisk": case "at risk": return "#cf7a3a";
+    case "lapsed": return "#b0573a";
+    default: return "#6aa06a";
+  }
+}
+
+function Trend({ spark, color, barColor }) {
   if (!spark || spark.length < 2) return null;
+  const bc = barColor || "#6aa06a";
   const n = spark.length;
   const W = 620, H = 156, padL = 34, padR = 12, padT = 16, padB = 26;
   const top = Math.max(...spark) || 1;
@@ -152,10 +165,11 @@ function Trend({ spark, color }) {
         const x = X(i) + gap;
         const y = Y(v);
         const h = Math.max(v > 0 ? 2 : 0, base - y);
-        const f = greenBar(v, loV, top);
+        const norm = top > loV ? (v - loV) / (top - loV) : 1;
+        const op = (0.5 + 0.5 * Math.max(0, Math.min(1, norm))).toFixed(2);
         return (
           <rect key={i} x={x.toFixed(1)} y={(base - h).toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)}
-            rx="2" fill={f}
+            rx="2" fill={bc} fillOpacity={op}
             style={{ transformBox: "fill-box", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
         );
       })}
@@ -428,7 +442,7 @@ export default function AccountOverview() {
         ) : (
           <>
             <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 2px 2px" }}>rolling-90 cases · last 12 months</div>
-            <Trend spark={acc.spark} color={head.fg} />
+            <Trend spark={acc.spark} color={head.fg} barColor={graphColor(acc.headline)} />
           </>
         )}
       </div>
