@@ -364,7 +364,7 @@ function ActionsInner() {
     <div style={wrap}>
       <div style={{ padding: "14px 16px 6px", flexShrink: 0 }}>
 
-        <div style={{ fontSize: 24, fontWeight: 700, color: "var(--text)" }}>Actions to Take</div>
+        <div style={{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px" }}>Actions to take</div>
         <div style={{ fontSize: 12.5, color: "var(--text-3)", marginTop: 2 }}>{!plays ? "Reading your book…" : anyFilter ? `${plays.length} play${plays.length === 1 ? "" : "s"} · ${scopeLabel}` : "The big picture — your whole book"}</div>
       </div>
 

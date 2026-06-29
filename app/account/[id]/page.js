@@ -316,7 +316,7 @@ export default function AccountOverview() {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "14px 0 10px" }}>
         <div style={{ flexShrink: 0, marginTop: 1 }}><TreeGlyph headline={acc.headline} pct={pct} h={50} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.15, color: "var(--text)" }}>{acc.account_name}</div>
+          <div style={{ fontFamily: "var(--font-serif)", fontSize: 19, fontWeight: 600, lineHeight: 1.15, color: "var(--text)" }}>{acc.account_name}</div>
           <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>
             {acc.city}{acc.state ? `, ${acc.state}` : ""} · {titleCase(acc.channel)} · {acc.chain || "Independent"}
           </div>

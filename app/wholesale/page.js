@@ -275,7 +275,7 @@ export default function WholesalePage() {
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
 
       <div style={{ padding: "12px 14px 2px", flexShrink: 0 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px" }}>Wholesale Trends</div>
+        <div style={{ fontFamily: "var(--font-serif)", fontSize: 20, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px" }}>Wholesale Trends</div>
         <div style={{ fontSize: 11.5, color: "var(--text-3)", marginTop: 1 }}>Actual 30-day depletions over time — filter, then scroll.</div>
       </div>
 
@@ -287,17 +287,6 @@ export default function WholesalePage() {
         <FilterSelect label="Premise" value={premF} options={["All", "ON", "OFF"]} onChange={setPremF} display={p => p === "ON" ? "On-premise" : p === "OFF" ? "Off-premise" : "All premise"} />
         <FilterSelect label="Distributor" value={distF} options={dists} onChange={setDistF} display={d => d === "All" ? "All distributors" : d} />
         <FilterSelect label="Item" value={itemF} options={["All", ...items.map(i => i.key)]} onChange={setItemF} display={k => k === "All" ? "All items" : (items.find(i => i.key === k)?.name || k)} />
-      </div>
-
-      {/* view toggle: 24 Month / Quarterly */}
-      <div style={{ display: "flex", gap: 4, padding: "0 12px 10px", flexShrink: 0 }}>
-        {[["month", "12 Month"], ["quarter", "Quarterly"]].map(([k, t]) => (
-          <button key={k} onClick={() => setMode(k)}
-            style={{ flex: 1, fontSize: 12, fontWeight: 600, padding: "7px 0", borderRadius: 8, cursor: "pointer", border: "none", fontFamily: "inherit",
-              background: mode === k ? "var(--text-2)" : "var(--surface-2)", color: mode === k ? "#fff" : "var(--text-2)" }}>
-            {t}
-          </button>
-        ))}
       </div>
 
       {/* scroll area: charts */}
@@ -314,7 +303,18 @@ export default function WholesalePage() {
 
         {!err && !noMatch && !loading && display && (
           <>
-            <div style={{ fontSize: 11.5, color: "var(--text-3)", margin: "12px 2px 0" }}>{scopeLabel}{rows ? ` · ${scopedIds.length.toLocaleString()} accounts` : ""}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, margin: "12px 2px 6px" }}>
+              <div style={{ fontSize: 11.5, color: "var(--text-3)", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{scopeLabel}{rows ? ` · ${scopedIds.length.toLocaleString()} accounts` : ""}</div>
+              <div style={{ display: "flex", gap: 3, flexShrink: 0, background: "var(--surface-2)", borderRadius: 9, padding: 2 }}>
+                {[["month", "12 mo"], ["quarter", "Qtr"]].map(([k, t]) => (
+                  <button key={k} onClick={() => setMode(k)}
+                    style={{ fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 7, cursor: "pointer", border: "none", fontFamily: "inherit",
+                      background: mode === k ? "var(--surface)" : "transparent", color: mode === k ? "var(--text)" : "var(--text-3)", boxShadow: mode === k ? "var(--shadow-sm)" : "none" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
             <BarCard
               title="30-day cases"
               sub={mode === "quarter" ? "Actual cases · last 4 quarters (90-day buckets)" : "Actual cases · last 12 months (30-day buckets)"}

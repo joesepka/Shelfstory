@@ -1023,7 +1023,7 @@ function Top({ title, kind, back, canPrint, onExport, exporting }) {
 }
 
 function SecTag({ n, label }) { return <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .5, color: "var(--text-3)", textTransform: "uppercase", paddingTop: 18 }}>{n} · {label}</div>; }
-function H1({ children }) { return <div style={{ fontSize: 19, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px", marginTop: 2 }}>{children}</div>; }
+function H1({ children }) { return <div style={{ fontFamily: "var(--font-serif)", fontSize: 20, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px", marginTop: 2 }}>{children}</div>; }
 function Bracket({ cool }) {
   const c = cool ? "var(--pop-cool)" : "var(--accent)";
   return (<><span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 14, height: 14, borderTop: `2px solid ${c}`, borderLeft: `2px solid ${c}`, borderTopLeftRadius: 7 }} /><span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 11, height: 11, borderBottom: `1.5px solid ${c}`, borderRight: `1.5px solid ${c}`, borderBottomRightRadius: 7, opacity: 0.4 }} /></>);

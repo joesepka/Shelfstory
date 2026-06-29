@@ -3,12 +3,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
-import TreeGlyph, { plantState } from "../components/TreeGlyph";
+import TreeGlyph from "../components/TreeGlyph";
 
 const T = {
-  bg: "var(--bg)", ink: "#2B2B2B", muted: "#9A968C", line: "#E6E3DB", primary: "#D8463A",
-  font: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif",
-  serif: "var(--font-sans)",
+  bg: "var(--bg)", ink: "var(--text)", muted: "var(--text-3)", line: "var(--border)", primary: "var(--accent)",
+  font: "var(--font-sans)",
+  serif: "var(--font-serif)",
 };
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
 const UP = "#5C9A7B", DOWN = "#C07A72", FLAT = "#A5A092";
@@ -174,13 +174,13 @@ function Splash({ onDone }) {
   onDoneRef.current = onDone;
   useEffect(() => {
     const start = Date.now();
-    const dur = 1150;
+    const dur = 720;
     let raf, boomT, doneT;
     const tick = () => {
       const p = Math.min((Date.now() - start) / dur, 1);
       setProgress(p);
       if (p < 1) raf = requestAnimationFrame(tick);
-      else { boomT = setTimeout(() => setBoom(true), 110); doneT = setTimeout(() => onDoneRef.current(), 580); }  // one cycle -> explode open
+      else { boomT = setTimeout(() => setBoom(true), 60); doneT = setTimeout(() => onDoneRef.current(), 380); }  // one cycle -> open
     };
     raf = requestAnimationFrame(tick);
     return () => { cancelAnimationFrame(raf); clearTimeout(boomT); clearTimeout(doneT); };
@@ -227,10 +227,10 @@ function Splash({ onDone }) {
     <div style={{
       position: "fixed", inset: 0, background: T.bg, zIndex: 50,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      transition: "opacity .46s ease", opacity: boom ? 0 : 1, pointerEvents: boom ? "none" : "auto",
+      transition: "opacity .32s ease", opacity: boom ? 0 : 1, pointerEvents: boom ? "none" : "auto",
     }}>
       <SplashClouds />
-      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", transform: boom ? "scale(2.6)" : "scale(1)", transition: "transform .48s cubic-bezier(.34,1.56,.64,1)" }}>
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", transform: boom ? "scale(1.7)" : "scale(1)", transition: "transform .4s cubic-bezier(.4,0,.2,1)" }}>
         <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }}>
           <path d={L} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
           <path d={R} stroke={BOOK} strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.85} />
@@ -343,14 +343,12 @@ const NAV = [
   { href: "/actions", title: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true },
 ];
 
-// account-health rollup buckets (mirror the book's groups); each carries the
-// representative tree state for its mini glyph.
-const HEALTH_BUCKETS = [
-  { key: "healthy", label: "Healthy", state: "thriving", c: "var(--accent)" },
-  { key: "atrisk", label: "At risk", state: "wilting", c: "var(--pop-warm)" },
-  { key: "new", label: "New", state: "sapling", c: "var(--pop-cool)" },
-  { key: "lapsed", label: "Lapsed", state: "bare", c: "#8B3A2B" },
-];
+const chevBtn = { border: "none", background: "var(--surface-2)", color: "var(--text-2)", width: 20, height: 20, borderRadius: 10, fontSize: 13, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 };
+function deltaPill(p) {
+  const c = p == null ? "var(--text-3)" : p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)";
+  const bg = p == null ? "var(--surface-2)" : p > 0 ? "var(--accent-soft)" : p < 0 ? "var(--pop-warm-soft)" : "var(--surface-2)";
+  return <span style={{ display: "inline-block", fontSize: 12, fontWeight: 700, color: c, background: bg, padding: "3px 9px", borderRadius: 20 }}>{p == null ? "—" : `${p > 0 ? "▲" : p < 0 ? "▼" : "▬"} ${Math.abs(p)}%`}</span>;
+}
 
 export default function Home() {
   const router = useRouter();
@@ -359,7 +357,8 @@ export default function Home() {
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
   const [briefOpen, setBriefOpen] = useState(false);
-  const [poofing, setPoofing] = useState(false);
+  const [slide, setSlide] = useState(0);
+  const touchX = useRef(null);
   const { burst, styleFor } = useExplode();
 
   useEffect(() => {
@@ -369,7 +368,7 @@ export default function Home() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,cur90,prev90,live_placements,live_prev,state,city,chain,headline,account_weight,last_order_w")
+            .select("account_id,cur90,prev90,state,city,chain,headline,account_weight,prior90_pct,last_order_w")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
@@ -384,44 +383,34 @@ export default function Home() {
 
   useEffect(() => { setGreet(greeting()); }, []);
 
-  const s = useMemo(() => {
-    if (!rows) return null;
-    let cur = 0, prev = 0, placeNow = 0, placePrev = 0, acctNow = 0, acctPrev = 0;
-    for (const r of rows) {
-      cur += r.cur90 || 0; prev += r.prev90 || 0;
-      placeNow += r.live_placements || 0; placePrev += r.live_prev || 0;
-      if ((r.cur90 || 0) > 0) acctNow++;
-      if ((r.prev90 || 0) > 0) acctPrev++;
-    }
-    const rosNow = acctNow ? cur / acctNow : 0;
-    const rosPrev = acctPrev ? prev / acctPrev : 0;
-    return {
-      cur, curPct: gpct(cur, prev),
-      acctNow, acctPct: gpct(acctNow, acctPrev),
-      placeNow, placePct: gpct(placeNow, placePrev),
-      rosNow, rosPct: rosPrev > 0 ? Math.round(100 * (rosNow - rosPrev) / rosPrev) : null,
-    };
-  }, [rows]);
-
   const brief = useMemo(() => buildBrief(rows), [rows]);
 
-  // account-health rollup: count each bucket from the headline → plant state.
-  const health = useMemo(() => {
+  // swipeable header: the whole book, then each state high→low by 90-day volume.
+  // each slide carries a small "landscape" — its top accounts as trees (height by
+  // volume, foliage by health).
+  const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
-    const n = { healthy: 0, atrisk: 0, new: 0, lapsed: 0 };
-    for (const r of rows) {
-      const st = plantState(r.headline);
-      if (st === "sapling") n.new++;
-      else if (st === "bare") n.lapsed++;
-      else if (st === "wilting") n.atrisk++;
-      else n.healthy++;
-    }
-    return HEALTH_BUCKETS.map(b => ({ ...b, n: n[b.key] }));
+    const mk = (label, key, list) => {
+      let cur = 0, prev = 0;
+      for (const r of list) { cur += r.cur90 || 0; prev += r.prev90 || 0; }
+      const top = list.slice(0, 7);                       // rows already sorted by weight desc
+      const maxW = Math.max(...top.map(r => r.account_weight || 0), 1);
+      const trees = top.map(r => ({ headline: r.headline, pct: r.prior90_pct, h: 26 + Math.round(Math.sqrt((r.account_weight || 0) / maxW) * 40) }));
+      return { label, key, cur, prev, pct: gpct(cur, prev), n: list.length, trees };
+    };
+    const byState = {};
+    for (const r of rows) { if (!r.state) continue; (byState[r.state] || (byState[r.state] = [])).push(r); }
+    const states = Object.keys(byState).map(st => mk(STNAME[st] || st, st, byState[st])).sort((a, b) => b.cur - a.cur);
+    return [mk("All accounts", "ALL", rows), ...states];
   }, [rows]);
+  const cur = slides ? slides[Math.min(slide, slides.length - 1)] : null;
 
   function navTo(href) {
     burst(href, () => router.push(href)); // explode the cards, then navigate
   }
+  function go(d) { if (!slides) return; const n = slides.length; setSlide(x => (x + d + n) % n); }
+  function onTouchStart(e) { touchX.current = e.touches[0].clientX; }
+  function onTouchEnd(e) { if (touchX.current == null) return; const dx = e.changedTouches[0].clientX - touchX.current; touchX.current = null; if (dx < -40) go(1); else if (dx > 40) go(-1); }
 
   return (
     <>
@@ -439,7 +428,7 @@ export default function Home() {
 
         {/* collapsible brief */}
         <div style={{ marginTop: 16, minHeight: 19 }}>
-          {s && brief && (
+          {brief && (
             <div className="riseIn" style={{ animationDelay: ".06s" }}>
               <div onClick={() => setBriefOpen(o => !o)}
                 className={briefOpen ? "" : "bob"}
@@ -449,54 +438,70 @@ export default function Home() {
               </div>
               {briefOpen && (
                 <div style={{ marginTop: 12, animation: "briefIn .26s ease" }}>
-                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62, marginBottom: 12 }}>{brief.p1}</p>
-                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62 }}>{brief.p2}</p>
+                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62, marginBottom: 12 }}>{brief.p1.map((el, i) => <span key={i}>{el}</span>)}</p>
+                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62 }}>{brief.p2.map((el, i) => <span key={i}>{el}</span>)}</p>
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* stat band */}
-        <div style={{ marginTop: 18, minHeight: 64 }}>
-          {!s && !err && <div style={{ fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
-          {err && <div style={{ fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
-          {s && (
-            <div className="riseIn" style={{ animationDelay: ".12s", position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
-              <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
-              <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
-              <div style={{ display: "flex" }}>
-                <Stat label="90D Cases" value={s.cur.toLocaleString()} pct={s.curPct} delay={0} />
-                <Stat label="Active Accts" value={s.acctNow.toLocaleString()} pct={s.acctPct} divider delay={0.9} />
-                <Stat label="ROS / Acct" value={s.rosNow.toFixed(1)} unit="cs" pct={s.rosPct} divider delay={1.8} />
+        {/* loading / error */}
+        {!slides && !err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
+        {err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
+
+        {/* swipeable 90-day scene — whole book, then each state high→low by volume */}
+        {cur && (
+          <div className="riseIn" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+            style={{ marginTop: 18, position: "relative", borderRadius: 18, overflow: "hidden", border: "0.5px solid var(--border)", boxShadow: "var(--shadow)", background: "var(--surface)", animationDelay: ".1s" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", padding: "13px 16px 9px" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                  <button aria-label="Previous state" onClick={() => go(-1)} style={chevBtn}>‹</button>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{cur.label}</span>
+                  <button aria-label="Next state" onClick={() => go(1)} style={chevBtn}>›</button>
+                </div>
+                <div style={{ fontFamily: "var(--font-serif)", fontSize: 34, fontWeight: 600, color: "var(--text)", lineHeight: 1, marginTop: 3 }}>{cur.cur.toLocaleString()}</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 4 }}>90-day cases · vs prior 90</div>
+              </div>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                {deltaPill(cur.pct)}
+                <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 5 }}>{cur.n.toLocaleString()} acct{cur.n === 1 ? "" : "s"}</div>
               </div>
             </div>
-          )}
-          {s && <div className="riseIn" style={{ animationDelay: ".18s", textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 8 }}>vs prior 90 days</div>}
-        </div>
-
-        {/* account health — the tree language, glanceable */}
-        {health && (
-          <div className="riseIn" style={{ marginTop: 20, animationDelay: ".2s" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginBottom: 8 }}>ACCOUNT HEALTH</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-              {health.map(b => (
-                <div key={b.key} onClick={() => navTo(`/book?health=${b.key}`)}
-                  style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "10px 6px 9px", textAlign: "center", boxShadow: "var(--shadow-sm)" }}>
-                  <div style={{ display: "flex", justifyContent: "center", height: 36 }}><TreeGlyph state={b.state} h={34} /></div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginTop: 3, fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{b.n.toLocaleString()}</div>
-                  <div style={{ fontSize: 9.5, fontWeight: 700, color: b.c }}>{b.label}</div>
-                </div>
+            <div style={{ position: "relative", height: 132, background: "linear-gradient(180deg,#bfe1f5 0%,#dceefb 60%,#eaf5fb 100%)", overflow: "hidden" }}>
+              <svg className="cl cl1" viewBox="0 0 320 110" style={{ position: "absolute", top: 16, width: 116, opacity: 0.9 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+              <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 42, width: 84, opacity: 0.65 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+              <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 32, background: "linear-gradient(180deg,#cdb98f,#b39a72)" }} />
+              <div key={cur.key} className="sceneFade" style={{ position: "absolute", left: 0, right: 0, bottom: 22, display: "flex", alignItems: "flex-end", justifyContent: "space-around", padding: "0 12px" }}>
+                {cur.trees.map((t, i) => <TreeGlyph key={i} headline={t.headline} pct={t.pct} h={t.h} />)}
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, padding: "8px 0 9px" }}>
+              {slides.slice(0, 9).map((sl, i) => (
+                <span key={i} onClick={() => setSlide(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
               ))}
+              {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
             </div>
           </div>
         )}
+        {cur && <div style={{ textAlign: "center", fontSize: 10, color: "var(--text-3)", marginTop: 7 }}>swipe to move between states · highest volume first</div>}
 
-        {/* where to */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22, marginBottom: 2 }}>WHERE TO?</div>
-        {NAV.map(c => (
-          <EditorialRow key={c.href} name={c.title} sub={c.sub} color={c.color} highlight={c.highlight} onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} />
-        ))}
+        {/* where to — four square */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22, marginBottom: 8 }}>WHERE TO?</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          {NAV.map(c => (
+            <div key={c.href} onClick={() => navTo(c.href)}
+              style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "13px 13px 12px", minHeight: 96, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: c.color }} />
+                <span style={{ fontSize: 16, color: c.color, lineHeight: 1 }}>→</span>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 10, letterSpacing: "-0.2px" }}>{c.title}</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.sub}</div>
+            </div>
+          ))}
+        </div>
 
         <div style={{ height: 28 }} />
       </main>
@@ -505,6 +510,12 @@ export default function Home() {
         @keyframes briefIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
         @keyframes riseIn{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
         .riseIn{animation:riseIn .5s cubic-bezier(.22,.61,.36,1) both;}
+        .sceneFade{animation:sceneFade .45s ease both;}
+        @keyframes sceneFade{from{opacity:0;transform:translateY(4px) scale(.98);}to{opacity:1;transform:none;}}
+        .cl{will-change:transform;animation:floatCloud 50s linear infinite;}
+        .cl1{animation-duration:44s;}
+        .cl2{animation-duration:62s;animation-delay:-14s;}
+        @keyframes floatCloud{from{transform:translateX(-140px);}to{transform:translateX(480px);}}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}
