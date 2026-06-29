@@ -6,74 +6,83 @@
    ===================================================================== */
 
 :root {
+  /* ===== THE GROVE skin — living, growing book ===== */
   /* ---- Fonts (wired from next/font in layout.js) ---- */
-  --font-sans:  var(--font-dm), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: var(--font-dm), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; /* Story skin: sleek sans everywhere (was Fraunces serif) */
-  --lapsed-card-bg: #FBEEE9;
+  --font-sans:  var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: var(--font-fraunces), Georgia, serif;
+  --font-mono:  var(--font-spline), "SF Mono", ui-monospace, monospace;
+  --lapsed-card-bg: #f1ddd2;
 
   /* ---- Layout & shape ---- */
   --maxw: 520px;
-  --r-sm: 9px;
-  --r-md: 11px;
-  --r-lg: 14px;
+  --r-sm: 10px;
+  --r-md: 13px;
+  --r-lg: 16px;
 
-  /* ---- Surfaces ---- */
-  --bg:         #FFFFFF;   /* clean white paper */
-  --surface:    #FFFFFF;   /* cards (border + shadow define them on white) */
-  --surface-2:  #EDE6D6;   /* toggles / insets (warm) */
+  /* ---- Surfaces (cream-green grove) ---- */
+  --bg:         #eef4e6;
+  --surface:    #fbfdf8;   /* cards */
+  --surface-2:  #e3eedb;   /* insets / toggles */
 
-  /* ---- Text tiers ---- */
-  --text:    #2A332A;      /* primary  */
-  --text-2:  #54604F;      /* secondary */
-  --text-3:  #9AA593;      /* muted / captions */
+  /* ---- Text tiers (forest ink) ---- */
+  --text:    #2c3a26;
+  --text-2:  #5a6a50;
+  --text-3:  #85937a;
 
   /* ---- Lines ---- */
-  --border:        #E7E0CF;
-  --border-strong: #DCD2BC;
+  --border:        #c2d6b4;
+  --border-strong: #a9c599;
 
-  /* ---- Brand accent (green) ---- */
-  --accent:      #5E9277;
-  --accent-deep: #3F6E4A;
-  --accent-soft: #E1EFE2;
-  --accent-bg:   var(--accent);   /* active chip / segment fill */
-  --accent-ink:  #FFFFFF;         /* text on accent fill */
+  /* ---- Brand accent (leaf) ---- */
+  --accent:      #4a9068;
+  --accent-deep: #3f8a5e;
+  --accent-soft: #d8ecd0;
+  --accent-bg:   var(--accent);
+  --accent-ink:  #ffffff;
 
-  /* ---- Pop accents (rotate by context to avoid color fatigue) ---- */
-  --pop-warm:      #C56A4A;   /* attention: risk, loss, alerts */
-  --pop-warm-deep: #B0573A;
-  --pop-warm-soft: #F6E2D8;
-  --pop-cool:      #5E8FC0;   /* opportunity / analysis / "new" */
-  --pop-cool-deep: #3D6E93;
-  --pop-cool-soft: #E2EBF4;
+  /* ---- Pop accents: rust (attention/loss) + sky (new/analysis) ---- */
+  --pop-warm:      #b0573a;
+  --pop-warm-deep: #9a4a30;
+  --pop-warm-soft: #f1ddd2;
+  --pop-cool:      #5e8fc0;
+  --pop-cool-deep: #3d6e93;
+  --pop-cool-soft: #dde9f3;
+
+  /* ---- Grove extras (plant language) ---- */
+  --gold:       #c2922e;   /* wilting / softening */
+  --gold-bg:    #f3e8c8;
+  --leaf-lt:    #6aa06a;
+  --leaf-bright:#5bb47e;
+  --sapling:    #7bc49a;   /* new / bright young */
+  --soil:       #b49b73;   /* trunks / ground */
+  --soil-dk:    #9a7b52;
+  --fruit:      #cfe6c0;   /* carrying-SKU dots */
 
   /* ---- Direction (deltas) ---- */
-  --up:   #3E8A5E;
-  --down: #C0533A;
+  --up:   #4a9068;
+  --down: #b0573a;
 
-  /* ---- Chart bars (Story skin: colored by month-over-month performance) ---- */
-  --bar-grow:    #5DCAA5;   /* growing vs prior period */
-  --bar-hot:     #F2C14E;   /* notable surge */
-  --bar-dip:     #D85A30;   /* declining */
-  --bar-neutral: #CDD9CB;   /* flat / older */
+  /* ---- Chart bars (grove: green grow / gold soft / rust dip) ---- */
+  --bar-grow:    #6aa06a;
+  --bar-hot:     #c2922e;
+  --bar-dip:     #b0573a;
+  --bar-neutral: #cbd9c3;
 
-  /* ---- Status (account health) — derived from the palette ---- */
+  /* ---- Status (account health → plant states) ---- */
   --growing-bg: var(--accent-soft);    --growing-ink: var(--accent-deep);
-  --stable-bg:  #ECEFE6;               --stable-ink:  var(--text-2);
-  --watch-bg:   #F5EBD3;               --watch-ink:   #8A6310;
-  --atrisk-bg:  var(--pop-warm-soft);  --atrisk-ink:  var(--pop-warm-deep);
+  --stable-bg:  #e7eede;               --stable-ink:  var(--text-2);
+  --watch-bg:   var(--gold-bg);        --watch-ink:   #8a6310;
+  --atrisk-bg:  var(--gold-bg);        --atrisk-ink:  var(--gold);
   --new-bg:     var(--pop-cool-soft);  --new-ink:     var(--pop-cool-deep);
-  --lapsed-ink: #8A7B5E;
+  --lapsed-ink: var(--soil-dk);
 
-  /* ---- Logo climb-line (animated mark) ---- */
-  --logo: var(--pop-warm);
-
-  /* ---- Bracket corner-mark motif (override per section: green/orange/blue) ---- */
+  --logo: var(--accent);
   --bracket: var(--accent);
 
-  /* ---- Shadows ---- */
-  --shadow-sm:  0 1px 2px rgba(45,60,40,.05);
-  --shadow:     0 1px 3px rgba(45,60,40,.06), 0 1px 2px rgba(45,60,40,.04);
-  --shadow-pop: 0 8px 22px rgba(40,60,40,.14);
+  /* ---- Shadows (soft, earthy) ---- */
+  --shadow-sm:  0 1px 2px rgba(40,55,35,.05);
+  --shadow:     0 2px 8px rgba(40,55,35,.06), 0 1px 2px rgba(40,55,35,.05);
+  --shadow-pop: 0 14px 34px rgba(30,45,25,.16);
 }
 
 /* =====================================================================
