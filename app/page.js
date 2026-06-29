@@ -421,7 +421,7 @@ export default function Home() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,cur90,prev90,state,city,chain,headline,account_weight,prior90_pct,last_order_w")
+            .select("account_id,account_name,cur90,prev90,state,city,chain,headline,account_weight,prior90_pct,last_order_w")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
