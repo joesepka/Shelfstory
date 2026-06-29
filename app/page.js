@@ -349,54 +349,81 @@ function NavIcon({ href }) {
 // ---- Wedge: the whole book as a left-tall, right-tapering health wedge ----
 const COLW = { thriving: "#4a9068", bearing: "#6aa06a", wilting: "#c2922e", bare: "#b0573a", sapling: "#5bb47e" };
 const WWORD = { thriving: "Growing", bearing: "Steady", wilting: "At risk", bare: "Lapsed", sapling: "New" };
+function dialogBtn(primary) { return { flex: 1, padding: "11px 0", borderRadius: 11, fontFamily: "inherit", fontSize: 13.5, fontWeight: 700, cursor: "pointer", border: primary ? "1px solid var(--accent)" : "0.5px solid var(--border-strong)", background: primary ? "var(--accent)" : "var(--surface)", color: primary ? "#fff" : "var(--text-2)" }; }
+
+// refined tree silhouette (the account-page aesthetic): thin trunk + layered,
+// slightly irregular muted canopy. Returns an SVG string.
+const TDK = { thriving: "#3f7d57", bearing: "#4a9068", wilting: "#a87d24", bare: "#9e3f28", sapling: "#4a9068" };
+const TOFF = [[0, 0], [-0.6, 0.12], [0.6, 0.12], [0, -0.52], [-0.5, -0.42], [0.5, -0.42], [0, 0.5]];
+function treeStr(x, by, h, state, op) {
+  if (state === "bare") {
+    return `<rect x="${(x - 0.8).toFixed(1)}" y="${(by - h * 0.72).toFixed(1)}" width="1.6" height="${(h * 0.72).toFixed(1)}" rx="0.6" fill="#9a6a52" opacity="${op}"/>`
+      + `<line x1="${x.toFixed(1)}" y1="${(by - h * 0.55).toFixed(1)}" x2="${(x - h * 0.13).toFixed(1)}" y2="${(by - h * 0.72).toFixed(1)}" stroke="#b0573a" stroke-width="1.1" stroke-linecap="round" opacity="${op}"/>`
+      + `<line x1="${x.toFixed(1)}" y1="${(by - h * 0.55).toFixed(1)}" x2="${(x + h * 0.13).toFixed(1)}" y2="${(by - h * 0.72).toFixed(1)}" stroke="#b0573a" stroke-width="1.1" stroke-linecap="round" opacity="${op}"/>`;
+  }
+  const col = COLW[state], dk = TDK[state] || col, r = Math.max(2.1, h * 0.17), cy = by - h * 0.56;
+  const K = h > 44 ? 7 : h > 30 ? 5 : h > 18 ? 3 : 1;
+  let c = "";
+  for (let i = 0; i < K; i++) { const o = TOFF[i]; c += `<circle cx="${(x + o[0] * r * 1.5).toFixed(1)}" cy="${(cy + o[1] * r * 1.7).toFixed(1)}" r="${r.toFixed(1)}" fill="${i % 3 === 0 ? dk : col}" opacity="${op}"/>`; }
+  return `<rect x="${(x - 0.8).toFixed(1)}" y="${(by - h * 0.42).toFixed(1)}" width="1.6" height="${(h * 0.42).toFixed(1)}" rx="0.6" fill="#9a6a52" opacity="${op}"/>${c}`;
+}
 
 function WedgeView({ wedge, onOpen }) {
   const [hot, setHot] = useState(-1);
   const ref = useRef(null);
-  const slices = useMemo(() => {
-    const arr = (wedge.indiv || []).map(a => ({ ...a, kind: "acct" }));
-    if (wedge.pool) wedge.pool.samp.forEach(s => arr.push({ w: s.w, state: s.state, kind: "pool" }));
+  const indiv = wedge.indiv || [];
+  const pool = wedge.pool;
+  const nI = indiv.length;
+  const L = 12, R = 348, TOPY = 26, BASE = 118, STRIP = R - L;
+  const headW = indiv.reduce((s, a) => s + a.w, 0);
+  const totW = (headW + (pool ? pool.w : 0)) || 1;
+
+  // plots: each account a vertical field row, width ∝ its share of volume; the
+  // pooled tail laid out as thin rows. cumulative width ∝ cumulative volume.
+  const plots = useMemo(() => {
+    const arr = []; let x = L;
+    for (const a of indiv) { const w = Math.max(1, (a.w / totW) * STRIP); arr.push({ x0: x, x1: x + w, kind: "acct", a }); x += w; }
+    if (pool) { const tw = (pool.w / totW) * STRIP, m = pool.samp.length || 1, pw = tw / m; for (let i = 0; i < m; i++) { arr.push({ x0: x, x1: x + pw, kind: "pool", state: pool.samp[i].state }); x += pw; } }
     return arr;
   }, [wedge]);
-  const L = 14, R = 346, BASE = 122;
-  const n = Math.max(1, slices.length);
-  const sw = (R - L) / n;
-  const vmax = slices.length ? Math.max(...slices.map(s => s.w), 1) : 1;
-  const Hh = w => Math.max(3, (w / vmax) * 104);
-  const idxAt = e => { const r = ref.current.getBoundingClientRect(); const vx = (e.clientX - r.left) / r.width * 360; return Math.max(0, Math.min(slices.length - 1, Math.floor((vx - L) / sw))); };
-  const it = hot >= 0 && hot < slices.length ? slices[hot] : null;
-  const hx = it ? L + hot * sw : 0, hh = it ? Hh(it.w) : 0, hy = BASE - hh;
-  const leftRos = wedge.indiv && wedge.indiv.length ? Math.round(wedge.indiv[0].cur / 3) : 0;
-  const rightRos = wedge.pool ? Math.round(wedge.pool.cur / wedge.pool.n / 3) : (wedge.indiv && wedge.indiv.length ? Math.round(wedge.indiv[wedge.indiv.length - 1].cur / 3) : 0);
+  const splitX = L + 0.40 * STRIP;   // right 60% of volume = the long tail
+
+  const fieldStr = useMemo(() => {
+    let s = "";
+    for (const pl of plots) { const col = pl.kind === "acct" ? COLW[pl.a.state] : COLW[pl.state]; s += `<rect x="${pl.x0.toFixed(1)}" y="${TOPY}" width="${(pl.x1 - pl.x0 + 0.4).toFixed(1)}" height="${(BASE - TOPY).toFixed(1)}" fill="${col}" opacity="0.9"/>`; }
+    for (let f = 1; f <= 3; f++) { const y = TOPY + f * ((BASE - TOPY) / 4); s += `<line x1="${L}" y1="${y.toFixed(1)}" x2="${R}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.22)" stroke-width="0.8"/>`; }
+    return s;
+  }, [wedge]);
+
+  const idxAt = e => { const r = ref.current.getBoundingClientRect(); const vx = (e.clientX - r.left) / r.width * 360; for (let i = 0; i < plots.length; i++) if (vx < plots[i].x1) return i; return plots.length - 1; };
+  const p = hot >= 0 && hot < plots.length ? plots[hot] : null;
+  const it = p && p.kind === "acct" ? p.a : null;
+  const isPool = p && p.kind === "pool";
+  const ro = nI ? Math.round(indiv[0].cur / 3) : 0;
+  const rm = nI ? Math.round(indiv[Math.floor(nI / 2)].cur / 3) : 0;
+  const rt = pool ? Math.round(pool.cur / pool.n / 3) : (nI ? Math.round(indiv[nI - 1].cur / 3) : 0);
+
   return (
     <div>
       <div className="wedgeRo" style={{ marginTop: 12 }}>
-        {it ? (it.kind === "acct"
-          ? <span><span className="rdot" style={{ background: COLW[it.state] }} /><b>{it.name}</b> · {it.cur.toLocaleString()} cs · 90D · {Math.round(it.cur / 3).toLocaleString()} cs/acct·mo · <span style={{ color: COLW[it.state], fontWeight: 700 }}>{WWORD[it.state]}</span></span>
-          : <span><span className="rdot" style={{ background: "var(--soil-dk)" }} /><b>Long tail</b> · {wedge.pool.n.toLocaleString()} accounts · {wedge.pool.cur.toLocaleString()} cs · 90D · tap to open</span>)
-          : <span className="wedgeHint">Drag across the book to scan · tap to open an account</span>}
+        {it ? <span><span className="rdot" style={{ background: COLW[it.state] }} /><b>{it.name}</b> · {it.cur.toLocaleString()} cs · 90D · {Math.round(it.cur / 3).toLocaleString()} cs/acct·mo · <span style={{ color: COLW[it.state], fontWeight: 700 }}>{WWORD[it.state]}</span></span>
+          : isPool ? <span><span className="rdot" style={{ background: "var(--soil-dk)" }} /><b>Long tail</b> · {pool.n.toLocaleString()} accounts · {pool.cur.toLocaleString()} cs · 90D · release to open</span>
+            : <span className="wedgeHint">Drag across to scan · release to open an account</span>}
       </div>
       <svg ref={ref} viewBox="0 0 360 150" width="100%" style={{ display: "block", touchAction: "none", cursor: "crosshair", marginTop: 6 }}
         onPointerMove={e => { e.preventDefault(); setHot(idxAt(e)); }}
         onPointerDown={e => { e.preventDefault(); setHot(idxAt(e)); }}
-        onPointerUp={e => { e.preventDefault(); const s = slices[idxAt(e)]; if (s) onOpen(s); }}
+        onPointerUp={e => { e.preventDefault(); const q = plots[idxAt(e)]; if (q) onOpen(q.kind === "acct" ? { ...q.a, kind: "acct" } : { kind: "pool" }); }}
         onPointerLeave={() => setHot(-1)} aria-hidden="true">
-        <line x1={L} y1={BASE} x2={R} y2={BASE} stroke="#cdb98f" strokeWidth="2" />
-        {slices.map((s, i) => { const h = Hh(s.w); return <rect key={i} x={(L + i * sw).toFixed(2)} y={(BASE - h).toFixed(2)} width={(sw + 0.6).toFixed(2)} height={h.toFixed(2)} fill={COLW[s.state]} opacity={it && i === hot ? 1 : 0.92} />; })}
-        {it && <rect x={(hx - 0.5).toFixed(2)} y={(hy - 3).toFixed(2)} width={(sw + 1.6).toFixed(2)} height={(hh + 3).toFixed(2)} fill="none" stroke="#2c3a26" strokeWidth="1.6" rx="1" />}
-        {it && <circle cx={(hx + sw / 2).toFixed(2)} cy={(hy - 3).toFixed(2)} r="3.4" fill={COLW[it.state]} />}
-        <text x={L} y="14" fontSize="11" fill="#7d8478">{leftRos.toLocaleString()} cs/acct·mo</text>
-        <text x={R} y={BASE - 3} fontSize="11" fill="#7d8478" textAnchor="end">{rightRos}</text>
-        {it && (() => {
-          const lab = it.kind === "acct" ? (it.name && it.name.length > 20 ? it.name.slice(0, 19) + "…" : (it.name || "Account")) : "Long tail";
-          const lx = Math.max(54, Math.min(306, hx + sw / 2));
-          const ly = Math.max(20, hy - 7);
-          const w = lab.length * 5.4 + 12;
-          return <g key="lab">
-            <rect x={(lx - w / 2).toFixed(1)} y={(ly - 12).toFixed(1)} width={w.toFixed(1)} height="15" rx="4" fill="#fbfdf8" stroke="#c2d6b4" strokeWidth="0.5" />
-            <text x={lx.toFixed(1)} y={(ly - 1.5).toFixed(1)} fontSize="9.5" fontWeight="600" fill="#2c3a26" textAnchor="middle">{lab}</text>
-          </g>;
-        })()}
+        <text x={L} y="14" fontSize="11" fill="#7d8478">{ro.toLocaleString()} cs/acct·mo</text>
+        <text x="180" y="14" fontSize="11" fill="#7d8478" textAnchor="middle">{rm.toLocaleString()}</text>
+        <text x={R} y="14" fontSize="11" fill="#7d8478" textAnchor="end">{rt.toLocaleString()}</text>
+        <g dangerouslySetInnerHTML={{ __html: fieldStr }} />
+        {p && <rect x={p.x0.toFixed(1)} y={TOPY - 2} width={Math.max(2, p.x1 - p.x0).toFixed(1)} height={(BASE - TOPY + 4).toFixed(1)} fill="none" stroke="#2c3a26" strokeWidth="1.6" />}
+        <line x1={splitX.toFixed(1)} y1={BASE + 4} x2={splitX.toFixed(1)} y2={BASE + 9} stroke="#9aa190" strokeWidth="1" />
+        <line x1={R} y1={BASE + 4} x2={R} y2={BASE + 9} stroke="#9aa190" strokeWidth="1" />
+        <line x1={splitX.toFixed(1)} y1={BASE + 9} x2={R} y2={BASE + 9} stroke="#9aa190" strokeWidth="1" />
+        <text x={((splitX + R) / 2).toFixed(1)} y={BASE + 23} fontSize="11" fontWeight="600" fill="#7d8478" textAnchor="middle">Long tail · 60% of volume</text>
       </svg>
     </div>
   );
@@ -410,8 +437,8 @@ export default function Home() {
   const [greet, setGreet] = useState("Welcome");
   const [briefOpen, setBriefOpen] = useState(false);
   const [slide, setSlide] = useState(0);
+  const [confirm, setConfirm] = useState(null);
   const touchX = useRef(null);
-  const scopeInit = useRef(false);
   const { burst, styleFor } = useExplode();
 
   useEffect(() => {
@@ -436,8 +463,6 @@ export default function Home() {
 
   useEffect(() => { setGreet(greeting()); }, []);
 
-  const brief = useMemo(() => buildBrief(rows), [rows]);
-
   // swipeable header: the whole book, then each state high→low by 90-day volume.
   // each slide carries its 3 stats AND a "wedge" of the whole book — top 40 accounts
   // as individual slices (tall→short by volume), the rest pooled into the tapering tail.
@@ -459,7 +484,7 @@ export default function Home() {
         for (let k = 0; k < S; k++) { const idx = Math.round((S <= 1 ? 0 : k / (S - 1)) * (tailRows.length - 1)); const r = tailRows[idx]; samp.push({ w: r.account_weight || 0, state: plantState(r.headline) }); }
         pool = { n: tailRows.length, w: tw, cur: tcur, samp };
       }
-      return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, wedge: { indiv, pool } };
+      return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), wedge: { indiv, pool } };
     };
     const byState = {};
     for (const r of rows) { if (!r.state) continue; (byState[r.state] || (byState[r.state] = [])).push(r); }
@@ -468,13 +493,8 @@ export default function Home() {
   }, [rows]);
   const cur = slides ? slides[Math.min(slide, slides.length - 1)] : null;
 
-  // restore the remembered scope on load — jump home to that state
-  useEffect(() => {
-    if (!slides || scopeInit.current) return;
-    scopeInit.current = true;
-    const s = getScope();
-    if (s) { const idx = slides.findIndex(x => x.key === s); if (idx > 0) setSlide(idx); }
-  }, [slides]);
+  // always open on "All states" — clears any remembered scope on entry
+  useEffect(() => { setScope(""); }, []);
 
   function navTo(href) {
     burst(href, () => router.push(href)); // explode the cards, then navigate
@@ -483,7 +503,6 @@ export default function Home() {
   function go(d) { if (!slides) return; const n = slides.length; pick((slide + d + n) % n); }
   function onTouchStart(e) { touchX.current = e.touches[0].clientX; }
   function onTouchEnd(e) { if (touchX.current == null) return; const dx = e.changedTouches[0].clientX - touchX.current; touchX.current = null; if (dx < -40) go(1); else if (dx > 40) go(-1); }
-  function onWedgePick(s) { if (!s) return; if (s.kind === "acct" && s.id) router.push(`/account/${s.id}`); else router.push("/book"); }
 
   return (
     <>
@@ -504,41 +523,39 @@ export default function Home() {
           <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
         </div>
 
-        {/* collapsible brief */}
-        <div style={{ marginTop: 16, minHeight: 19 }}>
-          {brief && (
-            <div className="riseIn" style={{ animationDelay: ".06s" }}>
-              <div onClick={() => setBriefOpen(o => !o)}
-                className={briefOpen ? "" : "bob"}
-                style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: 0.2 }}>
-                <span style={{ display: "inline-block", transform: briefOpen ? "rotate(90deg)" : "none", transition: "transform .18s" }}>▸</span>
-                {briefOpen ? "Hide your brief" : "Expand to see your brief"}
+        {/* scope indicator (above buttons) */}
+        {cur && (
+          <div className="riseIn" style={{ marginTop: 14, animationDelay: ".04s" }}>
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px", lineHeight: 1.1 }}>{cur.key === "ALL" ? "All states" : cur.label}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the stats to change" : ""}</div>
+          </div>
+        )}
+
+        {/* buttons — four square */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+          {NAV.map(c => (
+            <div key={c.href} onClick={() => navTo(c.href)}
+              style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "12px 13px 11px", minHeight: 86, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <NavIcon href={c.href} />
+                <span style={{ fontSize: 15, color: c.color, lineHeight: 1 }}>→</span>
               </div>
-              {briefOpen && (
-                <div style={{ marginTop: 12, animation: "briefIn .26s ease" }}>
-                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62, marginBottom: 12 }}>{brief.p1.map((el, i) => <span key={i}>{el}</span>)}</p>
-                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62 }}>{brief.p2.map((el, i) => <span key={i}>{el}</span>)}</p>
-                </div>
-              )}
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 8, letterSpacing: "-0.2px" }}>{c.title}</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.sub}</div>
             </div>
-          )}
+          ))}
         </div>
 
         {/* loading / error */}
         {!slides && !err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
         {err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
 
-        {/* swipeable stat box (whole book, then each state high→low by volume) +
-            a tier landscape below that blends into the page background */}
+        {/* info box (swipeable) — cases / accts / ROS */}
         {cur && (
-          <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
-            <div className="riseIn" style={{ position: "relative", marginTop: 18, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "11px 10px 13px", animationDelay: ".1s" }}>
+          <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ marginTop: 16 }}>
+            <div className="riseIn" style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
-              <div style={{ textAlign: "center", marginBottom: 10 }}>
-                <div style={{ fontFamily: "var(--font-serif)", fontSize: 19, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.2px", lineHeight: 1.1 }}>{cur.label}</div>
-                {slides.length > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", letterSpacing: "0.03em", marginTop: 2 }}>swipe to change state →</div>}
-              </div>
               <div key={cur.key} className="sceneFade" style={{ display: "flex" }}>
                 <Stat label="90D Cases" value={cur.cur.toLocaleString()} pct={cur.curPct} delay={0} />
                 <Stat label="Active Accts" value={cur.acctNow.toLocaleString()} pct={cur.acctPct} divider delay={0.9} />
@@ -552,33 +569,55 @@ export default function Home() {
               {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
             </div>
             <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days</div>
+          </div>
+        )}
 
-            {/* whole-book wedge — top 40 accounts + pooled tail; drag to scan, tap to open */}
-            <div key={"sc" + cur.key} className="sceneFade">
-              <WedgeView wedge={cur.wedge} onOpen={onWedgePick} />
+        {/* collapsible brief — state-specific */}
+        {cur && cur.brief && (
+          <div style={{ marginTop: 14, minHeight: 19 }}>
+            <div className="riseIn">
+              <div onClick={() => setBriefOpen(o => !o)}
+                className={briefOpen ? "" : "bob"}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: 0.2 }}>
+                <span style={{ display: "inline-block", transform: briefOpen ? "rotate(90deg)" : "none", transition: "transform .18s" }}>▸</span>
+                {briefOpen ? "Hide your brief" : "Expand to see your brief"}
+              </div>
+              {briefOpen && (
+                <div key={cur.key} style={{ marginTop: 12, animation: "briefIn .26s ease" }}>
+                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62, marginBottom: 12 }}>{cur.brief.p1.map((el, i) => <span key={i}>{el}</span>)}</p>
+                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62 }}>{cur.brief.p2.map((el, i) => <span key={i}>{el}</span>)}</p>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* where to — four square */}
-        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22, marginBottom: 8 }}>WHERE TO?</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {NAV.map(c => (
-            <div key={c.href} onClick={() => navTo(c.href)}
-              style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "13px 13px 12px", minHeight: 96, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <NavIcon href={c.href} />
-                <span style={{ fontSize: 15, color: c.color, lineHeight: 1 }}>→</span>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 10, letterSpacing: "-0.2px" }}>{c.title}</div>
-              <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.sub}</div>
+        {/* account funnel (wedge) — drag to scan, release to choose */}
+        {cur && (
+          <div style={{ marginTop: 18 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5 }}>ACCOUNT FUNNEL</div>
+            <div key={"sc" + cur.key} className="sceneFade">
+              <WedgeView wedge={cur.wedge} onOpen={setConfirm} />
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
         <div style={{ height: 28 }} />
         </div>
       </main>
+
+      {confirm && (
+        <div onClick={() => setConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(40,55,35,.34)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, boxShadow: "var(--shadow-pop)", padding: "18px 18px 14px", maxWidth: 320, width: "100%", animation: "briefIn .2s ease" }}>
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 18, fontWeight: 600, color: "var(--text)", lineHeight: 1.25 }}>{confirm.kind === "acct" ? `Go to ${confirm.name}?` : "Open the long-tail accounts?"}</div>
+            <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 6 }}>{confirm.kind === "acct" ? "Open this account's detail." : "See the smaller accounts in your list."}</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+              <button onClick={() => setConfirm(null)} style={dialogBtn(false)}>No</button>
+              <button onClick={() => { const c = confirm; setConfirm(null); if (c.kind === "acct" && c.id) router.push(`/account/${c.id}`); else router.push("/book"); }} style={dialogBtn(true)}>Yes</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes briefIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:none;}}
