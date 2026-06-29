@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import LoadingScreen from "../../../components/LoadingScreen";
+import TreeGlyph from "../../../components/TreeGlyph";
 import { greenBar } from "../../../lib/utils";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
@@ -312,8 +313,8 @@ export default function AccountOverview() {
 
   return (
     <div className="wrap">
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "14px 0 10px" }}>
-
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 11, padding: "14px 0 10px" }}>
+        <div style={{ flexShrink: 0, marginTop: 1 }}><TreeGlyph headline={acc.headline} pct={pct} h={50} /></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 600, lineHeight: 1.15, color: "var(--text)" }}>{acc.account_name}</div>
           <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}>

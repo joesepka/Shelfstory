@@ -6,7 +6,7 @@
    ===================================================================== */
 
 :root {
-  /* ===== THE GROVE skin — living, growing book ===== */
+  /* ===== ShelfStory skin — warm cream-green, leaf accent ===== */
   /* ---- Fonts (wired from next/font in layout.js) ---- */
   --font-sans:  var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-serif: var(--font-fraunces), Georgia, serif;
@@ -19,7 +19,7 @@
   --r-md: 13px;
   --r-lg: 16px;
 
-  /* ---- Surfaces (cream-green grove) ---- */
+  /* ---- Surfaces (warm cream-green) ---- */
   --bg:         #eef4e6;
   --surface:    #fbfdf8;   /* cards */
   --surface-2:  #e3eedb;   /* insets / toggles */
@@ -48,7 +48,7 @@
   --pop-cool-deep: #3d6e93;
   --pop-cool-soft: #dde9f3;
 
-  /* ---- Grove extras (plant language) ---- */
+  /* ---- Health-tree extras (account-health glyph) ---- */
   --gold:       #c2922e;   /* wilting / softening */
   --gold-bg:    #f3e8c8;
   --leaf-lt:    #6aa06a;
@@ -62,7 +62,7 @@
   --up:   #4a9068;
   --down: #b0573a;
 
-  /* ---- Chart bars (grove: green grow / gold soft / rust dip) ---- */
+  /* ---- Chart bars (green grow / gold soft / rust dip) ---- */
   --bar-grow:    #6aa06a;
   --bar-hot:     #c2922e;
   --bar-dip:     #b0573a;

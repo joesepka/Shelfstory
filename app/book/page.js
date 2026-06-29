@@ -5,6 +5,7 @@ import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
 import { useExplode } from "../../lib/useExplode";
 import FilterSelect from "../../components/FilterSelect";
+import TreeGlyph from "../../components/TreeGlyph";
 
 
 function label(hd) {
@@ -657,8 +658,11 @@ function BookInner() {
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${bc}`, borderLeft: `2px solid ${bc}`, borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${bc}`, borderRight: `1.5px solid ${bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
 
-              <div style={{ display: "flex", gap: 9, alignItems: "stretch" }}>
-                <span style={{ width: 17, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>#{i + 1}</span>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ width: 30, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                  <TreeGlyph headline={r.headline} pct={pct} h={38} />
+                  <span style={{ fontSize: 9, fontWeight: 700, color: "var(--text-3)" }}>#{i + 1}</span>
+                </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
                     <div style={{ minWidth: 0, flex: 1, display: "flex", alignItems: "center", gap: 6 }}>

@@ -404,14 +404,14 @@ const PRINT_CSS = `
 // green/blue/purple bars + corner brackets. Hardcoded (not CSS vars) because
 // html2canvas captures these slides off-screen.
 const PT = {
-  paper: "#FFFFFF", card: "#F7F8F5", lapsed: "#FBECEA",
-  ink: "#2B2B2B", ink2: "#54604F", mut: "#9AA593", line: "#E7EBDF", lineStrong: "#DCE2D2",
-  green: "#3F6E4A", greenMid: "#5E9277", greenSoft: "#E1EFE2",
-  blue: "#3D6E93", blueMid: "#5E8FC0", blueSoft: "#E2EBF4",
-  amber: "#8A6310", amberSoft: "#F5EBD3",
-  warm: "#B0573A", warmSoft: "#F6E2D8", up: "#3E8A5E", down: "#C0533A",
+  paper: "#FFFFFF", card: "#F4F8EF", lapsed: "#F1DDD2",
+  ink: "#2C3A26", ink2: "#5A6A50", mut: "#85937A", line: "#E4EBDB", lineStrong: "#C2D6B4",
+  green: "#3F8A5E", greenMid: "#4A9068", greenSoft: "#D8ECD0",
+  blue: "#3D6E93", blueMid: "#5E8FC0", blueSoft: "#DDE9F3",
+  amber: "#8A6310", amberSoft: "#F3E8C8",
+  warm: "#B0573A", warmSoft: "#F1DDD2", up: "#3F8A5E", down: "#B0573A",
   purple: "#534AB7", purpleDeep: "#463A76", purpleSoft: "#EEEDFE",
-  tile: "#F7F8F5", panel: "#F7F8F5",
+  tile: "#F4F8EF", panel: "#F4F8EF",
 };
 
 function PBracket({ c }) {

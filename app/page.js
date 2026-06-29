@@ -343,19 +343,14 @@ const NAV = [
   { href: "/actions", title: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true },
 ];
 
-// ---- Grove home helpers ----
-function seasonOf(pct) {
-  if (pct == null) return { label: "in season", c: "var(--text-2)" };
-  if (pct >= 6) return { label: "☀ in season", c: "var(--accent-deep)" };
-  if (pct >= -2) return { label: "in season", c: "var(--accent-deep)" };
-  if (pct > -8) return { label: "off-season", c: "var(--gold)" };
-  return { label: "dormant", c: "var(--down)" };
-}
-const EB = { fontSize: 10, letterSpacing: "0.13em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700 };
-const MONO = { fontFamily: "var(--font-mono)", fontWeight: 700 };
-function deltaBig(p) { const c = p == null ? "var(--text-3)" : p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)"; return <div style={{ fontWeight: 700, fontSize: 15, color: c }}>{p == null ? "—" : `${p > 0 ? "▲" : p < 0 ? "▼" : "▬"} ${Math.abs(p)}%`}</div>; }
-function deltaInline(p) { if (p == null) return <span style={{ color: "var(--text-3)" }}>—</span>; const c = p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)"; return <span style={{ color: c, fontWeight: 700 }}>{p > 0 ? "▲" : p < 0 ? "▼" : ""}{Math.abs(p)}%</span>; }
-function groveBtn(filled) { return { flex: 1, padding: "12px 0", borderRadius: 13, fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, cursor: "pointer", border: `1px solid ${filled ? "var(--accent)" : "var(--border)"}`, background: filled ? "var(--accent)" : "var(--surface)", color: filled ? "#fff" : "var(--text)" }; }
+// account-health rollup buckets (mirror the book's groups); each carries the
+// representative tree state for its mini glyph.
+const HEALTH_BUCKETS = [
+  { key: "healthy", label: "Healthy", state: "thriving", c: "var(--accent)" },
+  { key: "atrisk", label: "At risk", state: "wilting", c: "var(--pop-warm)" },
+  { key: "new", label: "New", state: "sapling", c: "var(--pop-cool)" },
+  { key: "lapsed", label: "Lapsed", state: "bare", c: "#8B3A2B" },
+];
 
 export default function Home() {
   const router = useRouter();
@@ -410,26 +405,21 @@ export default function Home() {
 
   const brief = useMemo(() => buildBrief(rows), [rows]);
 
-  // the living grove: top accounts as trees (height = volume, glyph = health) +
-  // the whole book's thriving-vs-tending split.
-  const grove = useMemo(() => {
+  // account-health rollup: count each bucket from the headline → plant state.
+  const health = useMemo(() => {
     if (!rows || !rows.length) return null;
-    const top = rows.slice(0, 7);                        // already sorted by weight desc
-    const maxW = Math.max(...top.map(r => r.account_weight || 0), 1);
-    const trees = top.map(r => ({ headline: r.headline, hgt: 78 + Math.round(72 * Math.sqrt((r.account_weight || 0) / maxW)) }));
-    let tend = 0;
-    for (const r of rows) { const st = plantState(r.headline); if (st === "wilting" || st === "bare") tend++; }
-    const tendPct = Math.round((100 * tend) / rows.length);
-    return { trees, thrivePct: 100 - tendPct, tendPct, n: rows.length };
+    const n = { healthy: 0, atrisk: 0, new: 0, lapsed: 0 };
+    for (const r of rows) {
+      const st = plantState(r.headline);
+      if (st === "sapling") n.new++;
+      else if (st === "bare") n.lapsed++;
+      else if (st === "wilting") n.atrisk++;
+      else n.healthy++;
+    }
+    return HEALTH_BUCKETS.map(b => ({ ...b, n: n[b.key] }));
   }, [rows]);
-  const season = useMemo(() => seasonOf(s ? s.curPct : null), [s]);
-
-  // weather follows the book's 90-day trend (same number the overview leads with)
-  const w = useMemo(() => weatherFor(s ? s.curPct : null), [s]);
 
   function navTo(href) {
-    if (poofing) return;
-    setPoofing(true);              // fade the weather sky
     burst(href, () => router.push(href)); // explode the cards, then navigate
   }
 
@@ -437,64 +427,78 @@ export default function Home() {
     <>
       {showSplash && <Splash onDone={() => setShowSplash(false)} />}
 
-      <main style={{ position: "relative", minHeight: "100vh", background: "var(--bg)", padding: "20px 18px 26px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", display: "flex", flexDirection: "column" }}>
-        {/* greeting + season */}
-        <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+      <main style={{ position: "relative", minHeight: "100vh", background: "var(--bg)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto" }}>
+        {/* top row: greeting + logo */}
+        <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginTop: 8 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={EB}>The Wynk Grove</div>
-            <h1 style={{ fontFamily: "var(--font-serif)", fontWeight: 600, fontSize: 24, color: "var(--text)", marginTop: 3, letterSpacing: "-0.01em" }}>{greet}, Joe.</h1>
+            <h1 style={{ fontFamily: "var(--font-serif)", fontSize: 26, color: "var(--text)", margin: "4px 0 4px", fontWeight: 600, letterSpacing: "-0.3px" }}>{greet}, Joe.</h1>
+            <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
           </div>
-          <div style={{ textAlign: "right", flexShrink: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: season.c }}>{season.label}</div>
-            <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>updated {DATA_UPDATED}</div>
-          </div>
+          <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
         </div>
 
-        {/* headline stat band */}
-        <div className="riseIn" style={{ marginTop: 13, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 15, boxShadow: "var(--shadow)", padding: "13px 15px", animationDelay: ".06s" }}>
-          {!s && !err && <div style={{ fontSize: 13, color: "var(--text-3)" }}>Reading the grove…</div>}
-          {err && <div style={{ fontSize: 13, color: "var(--down)" }}>Couldn’t load the grove. {err}</div>}
-          {s && (<>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
-              <div>
-                <div style={EB}>90-day cases</div>
-                <div style={{ fontFamily: "var(--font-serif)", fontWeight: 600, fontSize: 30, lineHeight: 1, color: "var(--text)", marginTop: 2 }}>{s.cur.toLocaleString()}</div>
+        {/* collapsible brief */}
+        <div style={{ marginTop: 16, minHeight: 19 }}>
+          {s && brief && (
+            <div className="riseIn" style={{ animationDelay: ".06s" }}>
+              <div onClick={() => setBriefOpen(o => !o)}
+                className={briefOpen ? "" : "bob"}
+                style={{ display: "inline-flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: 0.2 }}>
+                <span style={{ display: "inline-block", transform: briefOpen ? "rotate(90deg)" : "none", transition: "transform .18s" }}>▸</span>
+                {briefOpen ? "Hide your brief" : "Expand to see your brief"}
               </div>
-              <div style={{ textAlign: "right" }}>{deltaBig(s.curPct)}<div style={{ fontSize: 10, color: "var(--text-3)" }}>vs prior 90</div></div>
+              {briefOpen && (
+                <div style={{ marginTop: 12, animation: "briefIn .26s ease" }}>
+                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62, marginBottom: 12 }}>{brief.p1}</p>
+                  <p style={{ fontSize: 14, color: "var(--text-2)", lineHeight: 1.62 }}>{brief.p2}</p>
+                </div>
+              )}
             </div>
-            <div style={{ height: 1, background: "var(--border)", margin: "10px 0" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
-              <span><span style={EB}>Accts</span> <b style={MONO}>{s.acctNow.toLocaleString()}</b> {deltaInline(s.acctPct)}</span>
-              <span><span style={EB}>ROS</span> <b style={MONO}>{s.rosNow.toFixed(1)}</b> {deltaInline(s.rosPct)}</span>
-              <span><span style={EB}>Plc</span> <b style={MONO}>{s.placeNow.toLocaleString()}</b> {deltaInline(s.placePct)}</span>
-            </div>
-          </>)}
+          )}
         </div>
 
-        {/* the living grove */}
-        {grove && (
-          <div className="riseIn" style={{ position: "relative", flex: 1, minHeight: 190, marginTop: 16, animationDelay: ".12s" }}>
-            <div style={EB}>The grove · {grove.n.toLocaleString()} trees</div>
-            <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 50, background: "linear-gradient(var(--soil),var(--soil-dk))", opacity: 0.4, borderRadius: 12 }} />
-            <div style={{ position: "absolute", left: 0, right: 0, bottom: 14, display: "flex", alignItems: "flex-end", justifyContent: "space-around", padding: "0 4px" }}>
-              {grove.trees.map((t, i) => <TreeGlyph key={i} headline={t.headline} h={t.hgt} />)}
+        {/* stat band */}
+        <div style={{ marginTop: 18, minHeight: 64 }}>
+          {!s && !err && <div style={{ fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
+          {err && <div style={{ fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
+          {s && (
+            <div className="riseIn" style={{ animationDelay: ".12s", position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
+              <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
+              <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
+              <div style={{ display: "flex" }}>
+                <Stat label="90D Cases" value={s.cur.toLocaleString()} pct={s.curPct} delay={0} />
+                <Stat label="Active Accts" value={s.acctNow.toLocaleString()} pct={s.acctPct} divider delay={0.9} />
+                <Stat label="ROS / Acct" value={s.rosNow.toFixed(1)} unit="cs" pct={s.rosPct} divider delay={1.8} />
+              </div>
             </div>
-            <div style={{ position: "absolute", left: 0, right: 0, bottom: 1, textAlign: "center", fontSize: 9, color: "var(--text-2)" }}>{grove.thrivePct}% thriving · {grove.tendPct}% needs tending</div>
+          )}
+          {s && <div className="riseIn" style={{ animationDelay: ".18s", textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 8 }}>vs prior 90 days</div>}
+        </div>
+
+        {/* account health — the tree language, glanceable */}
+        {health && (
+          <div className="riseIn" style={{ marginTop: 20, animationDelay: ".2s" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginBottom: 8 }}>ACCOUNT HEALTH</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+              {health.map(b => (
+                <div key={b.key} onClick={() => navTo(`/book?health=${b.key}`)}
+                  style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "10px 6px 9px", textAlign: "center", boxShadow: "var(--shadow-sm)" }}>
+                  <div style={{ display: "flex", justifyContent: "center", height: 36 }}><TreeGlyph state={b.state} h={34} /></div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text)", marginTop: 3, fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{b.n.toLocaleString()}</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 700, color: b.c }}>{b.label}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* brief */}
-        {s && brief && (
-          <div className="riseIn" style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 13, padding: "11px 13px", marginTop: 12, animationDelay: ".18s" }}>
-            <div style={{ fontSize: 12.5, color: "var(--text-2)", lineHeight: 1.5 }}>{brief.p1}</div>
-          </div>
-        )}
+        {/* where to */}
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5, marginTop: 22, marginBottom: 2 }}>WHERE TO?</div>
+        {NAV.map(c => (
+          <EditorialRow key={c.href} name={c.title} sub={c.sub} color={c.color} highlight={c.highlight} onClick={() => navTo(c.href)} popStyle={styleFor(c.href)} />
+        ))}
 
-        {/* nav */}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-          <button onClick={() => navTo("/book")} style={groveBtn(false)}>Walk the grove</button>
-          <button onClick={() => navTo("/perf")} style={groveBtn(true)}>Territory ▸</button>
-        </div>
+        <div style={{ height: 28 }} />
       </main>
 
       <style>{`
