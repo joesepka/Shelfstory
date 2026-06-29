@@ -367,7 +367,25 @@ function expandTrees(cnt, total, drawN, h) {
   return out.map(state => ({ state, h }));
 }
 
-// one-line read on a tier's health, from its momentum + mix
+// six-level health verdict (the instant Great→Bad read) — word + color + ground tint
+const LEVELS = {
+  great:    { word: "Great",    color: "#2f7d54", ground: "#bcd9a8" },
+  good:     { word: "Good",     color: "#4a9068", ground: "#c6dcae" },
+  steady:   { word: "Steady",   color: "#7c8a55", ground: "#d4d6b4" },
+  cautious: { word: "Cautious", color: "#b58420", ground: "#e3cf94" },
+  atrisk:   { word: "At risk",  color: "#cf7a3a", ground: "#e3b48f" },
+  bad:      { word: "Bad",      color: "#b0573a", ground: "#d79a82" },
+};
+function tierLevel(pct, cnt, n) {
+  if (!n) return LEVELS.steady;
+  const healthy = ((cnt.thriving || 0) + (cnt.bearing || 0) + (cnt.sapling || 0)) / n;
+  const strug = ((cnt.wilting || 0) + (cnt.bare || 0)) / n;
+  const score = healthy - strug + (pct == null ? 0 : Math.max(-0.25, Math.min(0.25, pct / 40)));
+  const key = score >= 0.6 ? "great" : score >= 0.35 ? "good" : score >= 0.12 ? "steady" : score >= -0.12 ? "cautious" : score >= -0.4 ? "atrisk" : "bad";
+  return LEVELS[key];
+}
+
+// one-line nuance under the verdict — what's actually happening in the tier
 function tierDesc(pct, cnt, n) {
   if (!n) return "No accounts";
   const lap = (cnt.bare || 0) / n, risk = (cnt.wilting || 0) / n, fresh = (cnt.sapling || 0) / n;
@@ -375,7 +393,7 @@ function tierDesc(pct, cnt, n) {
   if (pct != null && pct <= -5) return "Slowing down";
   if (risk >= 0.3) return "Several at risk";
   if (fresh >= 0.3) return "Lots of new accounts";
-  if (pct != null && pct >= 5) return "Healthy overall";
+  if (pct != null && pct >= 8) return "Gaining momentum";
   return "Holding steady";
 }
 
@@ -450,7 +468,7 @@ export default function Home() {
         const vol = g.reduce((s, r) => s + (r.account_weight || 0), 0);
         const drawN = Math.min(t.cap, g.length);
         const tpct = gpct(c, p);
-        return { key: t.key, label: t.label, n: g.length, cur: c, volPct: Math.round((100 * vol) / totW), pct: tpct, desc: tierDesc(tpct, cnt, g.length), trees: expandTrees(cnt, g.length, drawN, t.h) };
+        return { key: t.key, label: t.label, n: g.length, cur: c, volPct: Math.round((100 * vol) / totW), pct: tpct, level: tierLevel(tpct, cnt, g.length), desc: tierDesc(tpct, cnt, g.length), trees: expandTrees(cnt, g.length, drawN, t.h) };
       });
       return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, tiers };
     };
@@ -533,7 +551,7 @@ export default function Home() {
             <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days · swipe for states, highest volume first</div>
 
             {/* tier landscape — outside the box, blending into the background */}
-            <div key={"sc" + cur.key} className="sceneFade" style={{ position: "relative", height: 244, marginTop: 8, marginLeft: -24, marginRight: -24, overflow: "hidden" }}>
+            <div key={"sc" + cur.key} className="sceneFade" style={{ position: "relative", height: 264, marginTop: 8, marginLeft: -24, marginRight: -24, overflow: "hidden" }}>
               <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg,#cfe6f6 0%,#dcebdf 46%,var(--bg) 84%)" }} />
               <svg className="cl cl1" viewBox="0 0 320 110" style={{ position: "absolute", top: 10, width: 116, opacity: 0.85 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
               <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 34, width: 80, opacity: 0.6 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
@@ -545,7 +563,9 @@ export default function Home() {
                       <div className="ttrees">
                         {t.trees.length ? t.trees.map((tr, i) => <TreeGlyph key={i} state={tr.state} h={tr.h} />) : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}
                       </div>
-                      <div className="tnm">{t.label} {deltaTiny(t.pct)}</div>
+                      <div className="tground" style={{ background: t.level.ground }} />
+                      <div className="tverdict" style={{ color: t.level.color }}>{t.level.word}</div>
+                      <div className="tnm">{t.label} · {deltaTiny(t.pct)}</div>
                       <div className="tdesc">{t.desc}</div>
                     </div>
                   </div>
@@ -590,8 +610,10 @@ export default function Home() {
         .tvol{font-size:10.5px;color:var(--text-3);margin-top:1px;}
         .tbot{width:100%;}
         .ttrees{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:center;gap:1px 2px;}
-        .tnm{font-size:11px;font-weight:700;color:var(--accent-deep);margin-top:6px;}
-        .tdesc{font-size:10px;color:var(--text-3);margin-top:1px;line-height:1.25;}
+        .tground{width:100%;height:7px;border-radius:2px;margin-top:4px;}
+        .tverdict{font-size:14px;font-weight:700;letter-spacing:-0.2px;margin-top:5px;line-height:1;}
+        .tnm{font-size:10px;font-weight:600;color:var(--text-3);margin-top:3px;}
+        .tdesc{font-size:10px;color:var(--text-3);margin-top:1px;line-height:1.2;}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}
