@@ -379,13 +379,6 @@ export default function AccountOverview() {
         <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", background: head.bg, color: head.fg }}>{acc.headline}</span>
       </div>
 
-      {bench && (
-        <div style={{ display: "flex", gap: 6, paddingBottom: 12 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 7, background: "var(--new-bg)", color: "var(--new-ink)" }}>Top {bench.pct_overall}% overall</span>
-          <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 7, background: "var(--surface-2)", color: "var(--text-2)" }}>Top {bench.pct_channel}% in {titleCase(acc.channel)}</span>
-        </div>
-      )}
-
       {/* overview — quick read: trend, SKU depth vs peers, relative size */}
       <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 11, boxShadow: "var(--shadow-sm)" }}>
         <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
