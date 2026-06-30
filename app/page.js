@@ -96,9 +96,9 @@ function LogoMark({ size = 30 }) {
     <svg viewBox="0 0 64 48" style={{ width: size, height: "auto" }} aria-hidden="true">
       <path d="M32 40 q-9 -4 -22 -2 v-22 q13 -2 22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
       <path d="M32 40 q9 -4 22 -2 v-22 q-13 -2 -22 2 z" fill="none" stroke={BOOK} strokeWidth="2.4" strokeLinejoin="round" />
-      <polyline points="16,31 24,28 31,23 39,16" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M39 16 q-2 -6 -8 -6 q1 6 8 6 z" fill={TREND} />
-      <path d="M39 16 q5 -4 11 -3 q-3 6 -11 3 z" fill={TREND} />
+      <polyline className="lm-line" points="16,31 24,28 31,23 39,16" fill="none" stroke={TREND} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path className="lm-leaf" d="M39 16 q-2 -6 -8 -6 q1 6 8 6 z" fill={TREND} />
+      <path className="lm-leaf" d="M39 16 q5 -4 11 -3 q-3 6 -11 3 z" fill={TREND} />
     </svg>
   );
 }
@@ -178,8 +178,8 @@ function Splash({ onDone }) {
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   useEffect(() => {
-    const t1 = setTimeout(() => setOut(true), 760);
-    const t2 = setTimeout(() => onDoneRef.current(), 1080);
+    const t1 = setTimeout(() => setOut(true), 1180);
+    const t2 = setTimeout(() => onDoneRef.current(), 1520);
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
   return (
@@ -497,14 +497,6 @@ export default function Home() {
           <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
         </div>
 
-        {/* scope indicator (above buttons) */}
-        {cur && (
-          <div className="riseIn" style={{ marginTop: 14, animationDelay: ".04s" }}>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px", lineHeight: 1.1 }}>{cur.key === "ALL" ? "All states" : cur.label}</div>
-            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the stats to change" : ""}</div>
-          </div>
-        )}
-
         {/* buttons — four square */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
           {NAV.map(c => (
@@ -524,9 +516,17 @@ export default function Home() {
         {!slides && !err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
         {err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
 
+        {/* scope indicator — between the buttons and the stat box */}
+        {cur && (
+          <div className="riseIn" style={{ marginTop: 18 }}>
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px", lineHeight: 1.1 }}>{cur.key === "ALL" ? "All states" : cur.label}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the stats to change" : ""}</div>
+          </div>
+        )}
+
         {/* info box (swipeable) — cases / accts / ROS */}
         {cur && (
-          <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ marginTop: 16 }}>
+          <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ marginTop: 10 }}>
             <div className="riseIn" style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
@@ -601,6 +601,11 @@ export default function Home() {
         @keyframes sceneFade{from{opacity:0;transform:translateY(4px) scale(.98);}to{opacity:1;transform:none;}}
         .splashIn{animation:splashIn .5s cubic-bezier(.22,.61,.36,1) both;}
         @keyframes splashIn{from{opacity:0;transform:translateY(8px) scale(.97);}to{opacity:1;transform:none;}}
+        .splashIn .lm-line{stroke-dasharray:30;stroke-dashoffset:30;animation:lmDraw .66s ease .22s forwards;}
+        .splashIn .lm-leaf{opacity:0;transform-box:fill-box;transform-origin:center;animation:lmLeaf .4s cubic-bezier(.34,1.56,.64,1) .82s forwards;}
+        @keyframes lmDraw{to{stroke-dashoffset:0;}}
+        @keyframes lmLeaf{from{opacity:0;transform:scale(.4);}to{opacity:1;transform:scale(1);}}
+        @media (prefers-reduced-motion: reduce){.splashIn .lm-line{stroke-dashoffset:0;animation:none;}.splashIn .lm-leaf{opacity:1;animation:none;}}
         .cl{will-change:transform;animation:floatCloud 50s linear infinite;}
         .cl1{animation-duration:44s;}
         .cl2{animation-duration:62s;animation-delay:-14s;}
