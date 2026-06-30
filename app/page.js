@@ -3,9 +3,9 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
-import TreeGlyph, { plantState, TierTree } from "../components/TreeGlyph";
+import TreeGlyph, { tierBucket, TierTree } from "../components/TreeGlyph";
 import { getScope, setScope } from "../lib/scope";
-import ThemePicker from "../components/ThemePicker";
+import ThemeChooser from "../components/ThemeChooser";
 
 const T = {
   bg: "var(--bg)", ink: "var(--text)", muted: "var(--text-3)", line: "var(--border)", primary: "var(--accent)",
@@ -404,9 +404,12 @@ function WedgeView({ wedge, onOpen }) {
   );
 }
 
+// shown once per fresh page load (not on in-app navigation back home)
+let booted = false;
+
 export default function Home() {
   const router = useRouter();
-  const [showSplash, setShowSplash] = useState(true);
+  const [phase, setPhase] = useState(booted ? "ready" : "choose"); // choose → splash → ready
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
@@ -457,7 +460,7 @@ export default function Home() {
       const tiers = TIER_DEFS.map(t => {
         const g = groups[t.key];
         let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
-        for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[plantState(r.headline)]++; }
+        for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[tierBucket(r.headline)]++; }
         const pct = gpct(c, p), sc = tierScore(pct, cnt, g.length);
         return { key: t.key, label: t.label, n: g.length, cur: c, pct, vit: sc.vit, color: sc.color, desc: tierDesc(pct, cnt, g.length) };
       });
@@ -483,7 +486,8 @@ export default function Home() {
 
   return (
     <>
-      {showSplash && <Splash onDone={() => setShowSplash(false)} />}
+      {phase === "choose" && <ThemeChooser onChoose={() => setPhase("splash")} />}
+      {phase === "splash" && <Splash onDone={() => { booted = true; setPhase("ready"); }} />}
 
       <main className="pagefade" style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,var(--bg) 500px)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
         {/* sky clouds, drifting behind everything */}
@@ -498,11 +502,6 @@ export default function Home() {
             <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
           </div>
           <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
-        </div>
-
-        {/* skin picker */}
-        <div className="riseIn" style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-          <ThemePicker />
         </div>
 
         {/* buttons — four square */}
