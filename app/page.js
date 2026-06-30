@@ -409,7 +409,8 @@ let booted = false;
 
 export default function Home() {
   const router = useRouter();
-  const [phase, setPhase] = useState(booted ? "ready" : "choose"); // choose → splash → ready
+  const [phase, setPhase] = useState(booted ? "ready" : "splash"); // splash → ready
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
@@ -486,8 +487,8 @@ export default function Home() {
 
   return (
     <>
-      {phase === "choose" && <ThemeChooser onChoose={() => setPhase("splash")} />}
       {phase === "splash" && <Splash onDone={() => { booted = true; setPhase("ready"); }} />}
+      {pickerOpen && <ThemeChooser onChoose={() => setPickerOpen(false)} onClose={() => setPickerOpen(false)} />}
 
       <main className="pagefade" style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,var(--bg) 500px)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
         {/* sky clouds, drifting behind everything */}
@@ -594,7 +595,14 @@ export default function Home() {
           </div>
         )}
 
-        <div style={{ height: 28 }} />
+        <div style={{ height: 22 }} />
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <button onClick={() => setPickerOpen(true)} aria-label="Change tree style" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.65, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px" }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 22 11 10 10 0 0 0 12 2Z" /><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" /><circle cx="15.5" cy="7" r="1.4" fill="currentColor" stroke="none" /><circle cx="17.5" cy="12" r="1.4" fill="currentColor" stroke="none" /></svg>
+            Change style
+          </button>
+        </div>
+        <div style={{ height: 18 }} />
         </div>
       </main>
 
