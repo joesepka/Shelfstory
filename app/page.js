@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
 import TreeGlyph, { plantState, TierTree } from "../components/TreeGlyph";
 import { getScope, setScope } from "../lib/scope";
+import ThemePicker from "../components/ThemePicker";
 
 const T = {
   bg: "var(--bg)", ink: "var(--text)", muted: "var(--text-3)", line: "var(--border)", primary: "var(--accent)",
@@ -497,6 +498,11 @@ export default function Home() {
             <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
           </div>
           <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
+        </div>
+
+        {/* skin picker */}
+        <div className="riseIn" style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+          <ThemePicker />
         </div>
 
         {/* buttons — four square */}

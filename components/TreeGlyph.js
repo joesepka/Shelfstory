@@ -1,9 +1,11 @@
 "use client";
 // ShelfStory — an account's health drawn as a small tree.
 // Shape + color come from the health state; canopy *fullness* is graded by 90-day
-// momentum (pct) so a hot account reads fuller than a barely-positive one, and a
-// deep decline reads more wilted than a mild one. Kept deliberately subtle — this
-// is a health indicator, not scenery.
+// momentum (pct). The ART STYLE follows the active theme (Classic / Cupertino /
+// Pen & Ink) — same inputs, three illustration languages. Kept deliberately subtle:
+// this is a health indicator, not scenery.
+import { useId } from "react";
+import { useTheme } from "../lib/theme";
 
 const C = {
   soil:   "#9a7b52",
@@ -40,6 +42,14 @@ function fullness(st, pct) {
   if (st === "sapling")  return clamp(0.4 + (pct > 0 ? pct / 70 : 0), 0.35, 0.72);
   return 0;
 }
+function prep(headline, pct, state) { const st = state || plantState(headline); return { st, f: fullness(st, pct) }; }
+
+function darken(hex, f) {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const d = x => Math.round(x * f).toString(16).padStart(2, "0");
+  return `#${d(r)}${d(g)}${d(b)}`;
+}
 
 // canopy leaf positions, ordered center-out so a partial fill grows outward
 const SPOTS = [
@@ -52,12 +62,20 @@ const FALLEN = [[9, 41], [15, 43], [21, 41], [25, 42], [12, 42]];
 const BRANCHES = [[16, 6], [8, 11], [24, 11], [11, 15], [21, 15]];
 const FRUIT = [[11, 16], [21, 12], [16, 21], [24, 17], [13, 11]];
 
-export default function TreeGlyph({ headline, pct, h = 40, state }) {
+// ============================ per-account dispatch ============================
+export default function TreeGlyph(props) {
+  const { theme } = useTheme();
+  if (theme === "cupertino") return <CupTree {...props} />;
+  if (theme === "ink") return <InkTree {...props} />;
+  return <ClassicTree {...props} />;
+}
+
+// ----------------------------- CLASSIC -----------------------------
+function ClassicTree({ headline, pct, h = 40, state }) {
   const st = state || plantState(headline);
   const G = { width: Math.round((h * 32) / 44), height: h, display: "block", flexShrink: 0 };
   const f = fullness(st, pct);
 
-  // ----- lapsed: bare branches + a couple fallen leaves -----
   if (st === "bare") {
     return (
       <svg style={G} viewBox="0 0 32 44" aria-hidden="true">
@@ -72,7 +90,6 @@ export default function TreeGlyph({ headline, pct, h = 40, state }) {
     );
   }
 
-  // ----- sapling: small bright young tree -----
   if (st === "sapling") {
     const K = Math.round(2 + f * 4);
     return (
@@ -85,13 +102,11 @@ export default function TreeGlyph({ headline, pct, h = 40, state }) {
     );
   }
 
-  // ----- thriving / bearing / wilting: graded canopy -----
   const K = Math.round(4 + f * (SPOTS.length - 4));            // 4..16 leaf clusters
   const base = st === "thriving" ? C.leaf : st === "bearing" ? C.leafLt : C.gold;
   const dark = st === "thriving" ? C.leafDk : st === "bearing" ? C.leaf : C.goldDk;
   const fallenN = st === "wilting" ? Math.round((1 - f) * 5) : 0;
   const trunkY = st === "wilting" ? 22 : 23;
-  // really popping (strong growth) → bear fruit
   const fruitN = (st === "thriving" || st === "bearing") && pct != null && pct >= 30 ? (pct >= 50 ? 5 : 3) : 0;
 
   return (
@@ -110,19 +125,92 @@ export default function TreeGlyph({ headline, pct, h = 40, state }) {
   );
 }
 
-// ---- TierTree: a single emblem tree for a whole tier ----
-// Driven by `t` (vitality 0..1) and a strongly-carried tier `color`. Lush + fruiting
-// when accelerating, sparse + shedding as it slips, bare red branches when critical.
-function darken(hex, f) {
-  const h = hex.replace("#", "");
-  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-  const d = x => Math.round(x * f).toString(16).padStart(2, "0");
-  return `#${d(r)}${d(g)}${d(b)}`;
+// ----------------------------- CUPERTINO -----------------------------
+// One smooth canopy, single weight, soft sheen. Health by hue, momentum by size.
+function CupTree({ headline, pct, h = 40, state }) {
+  const { st, f } = prep(headline, pct, state);
+  const G = { width: Math.round((h * 32) / 44), height: h, display: "block", flexShrink: 0 };
+  const col = stateColor[st];
+  if (st === "bare") {
+    return (
+      <svg style={G} viewBox="0 0 32 44" aria-hidden="true">
+        <rect x="14.6" y="20" width="2.8" height="24" rx="1.4" fill={C.soil} />
+        <circle cx="16" cy="15" r="9" fill="none" stroke={C.rust} strokeWidth="1.6" opacity="0.7" strokeDasharray="2.6 3.2" />
+      </svg>
+    );
+  }
+  const ry = (st === "sapling" ? 6.5 : 8.5) + f * 6.5;
+  const rx = ry * 0.92;
+  const cy = 15;
+  const fruit = (st === "thriving" || st === "bearing") && pct != null && pct >= 30;
+  return (
+    <svg style={G} viewBox="0 0 32 44" aria-hidden="true">
+      <rect x="14.6" y={cy + ry - 1} width="2.8" height={44 - (cy + ry - 1)} rx="1.4" fill={C.soil} />
+      <ellipse cx="16" cy={cy} rx={rx} ry={ry} fill={col} />
+      <ellipse cx={16 - rx * 0.32} cy={cy - ry * 0.34} rx={rx * 0.46} ry={ry * 0.36} fill="#ffffff" opacity="0.22" />
+      {fruit && <><circle cx="11.5" cy={cy + 1} r="1.7" fill="#f0d27a" /><circle cx="20.5" cy={cy - 3} r="1.7" fill="#f0d27a" /></>}
+    </svg>
+  );
 }
+
+// ----------------------------- PEN & INK -----------------------------
+// Engraved canopy: outline + hatching. Denser hatch (and cross-hatch) = healthier.
+// Hue is tinted into the ink so health still reads without breaking the woodcut feel.
+function InkTree({ headline, pct, h = 40, state }) {
+  const { st, f } = prep(headline, pct, state);
+  const G = { width: Math.round((h * 32) / 44), height: h, display: "block", flexShrink: 0 };
+  const id = useId().replace(/[:]/g, "");
+  const ink = darken(stateColor[st], 0.55);
+  if (st === "bare") {
+    return (
+      <svg style={G} viewBox="0 0 32 44" aria-hidden="true">
+        <rect x="14.8" y="18" width="2.4" height="26" fill="none" stroke={C.rust} strokeWidth="1.1" />
+        {BRANCHES.map(([x, y], i) => (
+          <line key={i} x1="16" y1="20" x2={x} y2={y} stroke={C.rust} strokeWidth="1.1" strokeLinecap="round" />
+        ))}
+      </svg>
+    );
+  }
+  const R = (st === "sapling" ? 7 : 8.5) + f * 6.5;
+  const cy = 14;
+  const gap = Math.max(2, 5.5 - f * 3.5);
+  const cross = f > 0.5;
+  const cid = "ic" + id;
+  const lines = [];
+  for (let x = 16 - 2 * R; x < 16 + R; x += gap) lines.push([x, cy - R, x + 2 * R, cy + R]);
+  if (cross) for (let x = 16 - R; x < 16 + 2 * R; x += gap) lines.push([x, cy + R, x - 2 * R, cy - R]);
+  const fruitN = (st === "thriving" || st === "bearing") && pct != null && pct >= 30 ? (pct >= 50 ? 3 : 2) : 0;
+  return (
+    <svg style={G} viewBox="0 0 32 44" aria-hidden="true">
+      <defs><clipPath id={cid}><circle cx="16" cy={cy} r={R} /></clipPath></defs>
+      <rect x="14.9" y={cy + R - 2} width="2.2" height={44 - (cy + R - 2)} fill="none" stroke={ink} strokeWidth="1" />
+      <circle cx="16" cy={cy} r={R} fill="none" stroke={ink} strokeWidth="1.1" />
+      <g clipPath={`url(#${cid})`}>
+        {lines.map(([x1, y1, x2, y2], i) => (
+          <line key={i} x1={x1.toFixed(1)} y1={y1.toFixed(1)} x2={x2.toFixed(1)} y2={y2.toFixed(1)} stroke={ink} strokeWidth="0.55" />
+        ))}
+      </g>
+      {FRUIT.slice(0, fruitN).map(([x, y], i) => (
+        <circle key={"fr" + i} cx={x} cy={Math.min(y, cy + R - 2)} r="1.5" fill="none" stroke={ink} strokeWidth="0.8" />
+      ))}
+    </svg>
+  );
+}
+
+// ============================ tier emblem dispatch ============================
+// A single emblem tree for a whole tier — driven by `t` (vitality 0..1) and a
+// strongly-carried tier `color`.
+export function TierTree(props) {
+  const { theme } = useTheme();
+  if (theme === "cupertino") return <CupTier {...props} />;
+  if (theme === "ink") return <InkTier {...props} />;
+  return <ClassicTier {...props} />;
+}
+
 const TT_SPOTS = [[22, 16], [16, 17], [28, 17], [22, 10], [18, 22], [26, 22], [13, 13], [31, 13], [22, 25], [16, 11], [28, 11], [13, 20], [31, 20]];
 const TT_FALLEN = [[13, 43], [31, 43], [20, 45], [27, 44]];
 
-export function TierTree({ t = 0.6, color = "#4a9068", h = 88 }) {
+function ClassicTier({ t = 0.6, color = "#4a9068", h = 88 }) {
   const W = Math.round((h * 44) / 48);
   const G = { width: W, height: h, display: "block" };
   if (t <= 0.12) {
@@ -150,6 +238,71 @@ export function TierTree({ t = 0.6, color = "#4a9068", h = 88 }) {
       {t > 0.82 && <><circle cx="17" cy="14" r="1.9" fill="#f0d27a" /><circle cx="29" cy="18" r="1.9" fill="#f0d27a" /><circle cx="22" cy="10" r="1.9" fill="#f0d27a" /></>}
       {TT_FALLEN.slice(0, fallenN).map(([x, y], i) => (
         <ellipse key={"f" + i} cx={x} cy={y} rx="2.2" ry="1.2" fill={color} opacity="0.65" />
+      ))}
+    </svg>
+  );
+}
+
+function CupTier({ t = 0.6, color = "#4a9068", h = 88 }) {
+  const W = Math.round((h * 44) / 48);
+  const G = { width: W, height: h, display: "block" };
+  if (t <= 0.12) {
+    return (
+      <svg style={G} viewBox="0 0 44 48" aria-hidden="true">
+        <rect x="20.6" y="26" width="3" height="18" rx="1.5" fill={C.soil} />
+        <circle cx="22" cy="19" r="12" fill="none" stroke={C.rust} strokeWidth="1.8" opacity="0.7" strokeDasharray="3 3.6" />
+      </svg>
+    );
+  }
+  const ry = 11 + t * 9;
+  const rx = ry * 0.95;
+  const cy = 19;
+  return (
+    <svg style={G} viewBox="0 0 44 48" aria-hidden="true">
+      <rect x="20.6" y={cy + ry - 2} width="3" height={48 - (cy + ry - 2)} rx="1.5" fill={C.soil} />
+      <ellipse cx="22" cy={cy} rx={rx} ry={ry} fill={color} />
+      <ellipse cx={22 - rx * 0.32} cy={cy - ry * 0.34} rx={rx * 0.46} ry={ry * 0.36} fill="#ffffff" opacity="0.2" />
+      {t > 0.82 && <><circle cx="17" cy={cy} r="2" fill="#f0d27a" /><circle cx="28" cy={cy - 4} r="2" fill="#f0d27a" /></>}
+    </svg>
+  );
+}
+
+function InkTier({ t = 0.6, color = "#4a9068", h = 88 }) {
+  const W = Math.round((h * 44) / 48);
+  const G = { width: W, height: h, display: "block" };
+  const id = useId().replace(/[:]/g, "");
+  const ink = darken(color, 0.5);
+  if (t <= 0.12) {
+    return (
+      <svg style={G} viewBox="0 0 44 48" aria-hidden="true">
+        <rect x="20.9" y="24" width="2.2" height="20" fill="none" stroke={C.rust} strokeWidth="1.2" />
+        <line x1="22" y1="26" x2="12" y2="14" stroke={C.rust} strokeWidth="1.3" strokeLinecap="round" />
+        <line x1="22" y1="26" x2="32" y2="14" stroke={C.rust} strokeWidth="1.3" strokeLinecap="round" />
+        <line x1="22" y1="30" x2="15" y2="21" stroke={C.rust} strokeWidth="1.1" strokeLinecap="round" />
+        <line x1="22" y1="30" x2="29" y2="21" stroke={C.rust} strokeWidth="1.1" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  const R = 11 + t * 9;
+  const cy = 18;
+  const gap = Math.max(2.2, 5.5 - t * 3.3);
+  const cross = t > 0.5;
+  const cid = "itc" + id;
+  const lines = [];
+  for (let x = 22 - 2 * R; x < 22 + R; x += gap) lines.push([x, cy - R, x + 2 * R, cy + R]);
+  if (cross) for (let x = 22 - R; x < 22 + 2 * R; x += gap) lines.push([x, cy + R, x - 2 * R, cy - R]);
+  return (
+    <svg style={G} viewBox="0 0 44 48" aria-hidden="true">
+      <defs><clipPath id={cid}><circle cx="22" cy={cy} r={R} /></clipPath></defs>
+      <rect x="20.9" y={cy + R - 2} width="2.2" height={48 - (cy + R - 2)} fill="none" stroke={ink} strokeWidth="1.1" />
+      <circle cx="22" cy={cy} r={R} fill="none" stroke={ink} strokeWidth="1.2" />
+      <g clipPath={`url(#${cid})`}>
+        {lines.map(([x1, y1, x2, y2], i) => (
+          <line key={i} x1={x1.toFixed(1)} y1={y1.toFixed(1)} x2={x2.toFixed(1)} y2={y2.toFixed(1)} stroke={ink} strokeWidth="0.6" />
+        ))}
+      </g>
+      {t > 0.82 && [[17, 13], [28, 17], [22, 9]].map(([x, y], i) => (
+        <circle key={"fr" + i} cx={x} cy={y} r="1.8" fill="none" stroke={ink} strokeWidth="0.9" />
       ))}
     </svg>
   );
