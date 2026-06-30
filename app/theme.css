@@ -19,19 +19,19 @@
   --r-md: 13px;
   --r-lg: 16px;
 
-  /* ---- Surfaces (warm cream-green) ---- */
-  --bg:         #eef4e6;
-  --surface:    #fbfdf8;   /* cards */
-  --surface-2:  #e3eedb;   /* insets / toggles */
+  /* ---- Surfaces (clean white, faint warm-neutral page) ---- */
+  --bg:         #f6f7f4;
+  --surface:    #ffffff;   /* cards */
+  --surface-2:  #eef0ec;   /* insets / toggles */
 
   /* ---- Text tiers (forest ink) ---- */
   --text:    #2c3a26;
   --text-2:  #5a6a50;
   --text-3:  #85937a;
 
-  /* ---- Lines ---- */
-  --border:        #c2d6b4;
-  --border-strong: #a9c599;
+  /* ---- Lines (neutral, light) ---- */
+  --border:        #e2e4df;
+  --border-strong: #cccfc8;
 
   /* ---- Brand accent (leaf) ---- */
   --accent:      #4a9068;

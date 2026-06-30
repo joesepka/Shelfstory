@@ -221,15 +221,24 @@ function ItemBoxes({ name, months, total, lastOrdered, lost, onClose }) {
   );
 }
 
-// pre-call briefing tint by health: light green growing · white steady ·
-// yellow at-risk/softening · light red lapsed
-function briefBg(hd) {
-  switch (String(hd || "").toLowerCase()) {
-    case "accelerating": return "#e3f3db";
-    case "lapsed": return "#f4d9cf";
-    case "at-risk": case "atrisk": case "decelerating": return "#f6ead0";
-    default: return "var(--surface)";
-  }
+// relative-size bucket — walk down: top 5% overall → top 5% of channel → 15% → 50% → smaller
+function sizeBucket(bench, channel) {
+  if (!bench) return "Relative size not yet ranked";
+  const o = bench.pct_overall, c = bench.pct_channel;
+  if (o != null && o <= 5) return "Top 5% of all accounts";
+  if (c != null && c <= 5) return `Top 5% of ${channel} accounts`;
+  if (o != null && o <= 15) return "Top 15% of all accounts";
+  if (c != null && c <= 15) return `Top 15% of ${channel} accounts`;
+  if (o != null && o <= 50) return "Top 50% of all accounts";
+  return "A relatively smaller account";
+}
+// color a suggestion by its verb — win back (rust) · ride (green) · sell in (blue)
+function moveColor(m) {
+  const s = String(m || "").toLowerCase();
+  if (s.startsWith("win back")) return "#b0573a";
+  if (s.startsWith("ride")) return "#4a9068";
+  if (s.startsWith("sell in")) return "#3d6e93";
+  return "#4a9068";
 }
 
 export default function AccountOverview() {
@@ -335,6 +344,20 @@ export default function AccountOverview() {
     return b.l90 - a.l90;
   });
   const brief = buildBriefing(acc, bench, items, white);
+  const chTitle = titleCase(acc.channel);
+  const headline = acc.headline === "Accelerating" ? `Heating up — L90 up ${Math.abs(pct || 0)}% vs the prior quarter`
+    : acc.headline === "At-Risk" ? `At risk — L90 down ${Math.abs(pct || 0)}% and shedding placements`
+    : acc.headline === "Decelerating" ? `Cooling — L90 down ${Math.abs(pct || 0)}% from the prior quarter`
+    : acc.headline === "Stable" ? "Holding steady quarter over quarter"
+    : acc.headline === "New" ? "A new account, still ramping"
+    : acc.headline === "Lapsed" ? "Gone quiet — no orders in the last 90 days"
+    : `Tracking ${(pct || 0) >= 0 ? "up" : "down"} ${Math.abs(pct || 0)}%`;
+  const skuBullet = skuComp
+    ? (skuComp.pct >= 5 ? `Carries ${acc.live_placements} SKUs — ${skuComp.pct}% more than ${skuComp.label}`
+      : skuComp.pct <= -5 ? `Carries ${acc.live_placements} SKUs — ${Math.abs(skuComp.pct)}% fewer than ${skuComp.label}`
+        : `Carries ${acc.live_placements} SKUs — about the same as ${skuComp.label}`)
+    : `Carries ${acc.live_placements || 0} active SKUs`;
+  const bullets = [brief.signals[0] ? brief.signals[0].t : "Holding its pace quarter over quarter.", skuBullet, sizeBucket(bench, chTitle)];
 
   return (
     <div className="wrap pagefade">
@@ -363,32 +386,35 @@ export default function AccountOverview() {
         </div>
       )}
 
-      <div style={{ position: "relative", background: briefBg(acc.headline), borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 14 }}>
+      {/* overview — quick read: trend, SKU depth vs peers, relative size */}
+      <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 11, boxShadow: "var(--shadow-sm)" }}>
         <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
         <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${head.bc}`, borderRight: `1.5px solid ${head.bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
-        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-2)", marginBottom: 6, letterSpacing: "0.3px", textTransform: "uppercase" }}>Pre-call briefing</div>
-        <div style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--text)" }}>{brief.lead}</div>
-        {brief.signals.length > 0 && (
-          <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 6 }}>
-            {brief.signals.map((s, i) => (
-              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-                <span aria-hidden="true" style={{ flexShrink: 0, width: 6, height: 6, borderRadius: 3, marginTop: 5, background: sigColor(s.k) }} />
-                <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{s.t}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        {brief.moves.length > 0 && (
-          <div style={{ marginTop: 11, paddingTop: 10, borderTop: "0.5px solid var(--border)" }}>
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: "0.3px", textTransform: "uppercase" }}>Move</span>
-            <div style={{ marginTop: 5, display: "flex", flexDirection: "column", gap: 5 }}>
-              {brief.moves.map((m, i) => (
-                <div key={i} style={{ display: "flex", gap: 7, alignItems: "flex-start", fontSize: 12.5, lineHeight: 1.45, color: "var(--text)" }}>
-                  <span aria-hidden="true" style={{ color: "var(--accent-deep)", flexShrink: 0 }}>→</span><span>{m}</span>
-                </div>
-              ))}
+        <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, color: "var(--text)" }}>{headline}</div>
+        <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 7 }}>
+          {bullets.map((t, i) => (
+            <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span aria-hidden="true" style={{ flexShrink: 0, width: 6, height: 6, borderRadius: 3, marginTop: 5, background: head.bc }} />
+              <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{t}</span>
             </div>
+          ))}
+        </div>
+      </div>
+
+      {/* account suggestions — the plays */}
+      <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 14, boxShadow: "var(--shadow-sm)" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: "0.3px", textTransform: "uppercase" }}>Account Suggestions</div>
+        {brief.moves.length > 0 ? (
+          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 7 }}>
+            {brief.moves.map((m, i) => { const col = moveColor(m); return (
+              <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "9px 11px", borderRadius: 10, background: "var(--surface-2)", borderLeft: `3px solid ${col}` }}>
+                <span aria-hidden="true" style={{ color: col, fontWeight: 700, flexShrink: 0 }}>→</span>
+                <span style={{ fontSize: 12.5, lineHeight: 1.4, color: "var(--text)" }}>{m}</span>
+              </div>
+            ); })}
           </div>
+        ) : (
+          <div style={{ marginTop: 7, fontSize: 12.5, color: "var(--text-3)" }}>No standout plays right now — keep the relationship warm.</div>
         )}
       </div>
 
