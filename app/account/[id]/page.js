@@ -334,11 +334,13 @@ export default function AccountOverview() {
       const vals = t.peers.map((a) => a.live_placements || 0);
       if (vals.length >= 5) {
         const med = median(vals);
-        if (med > 0) return { pct: Math.round(((mine - med) / med) * 100), n: vals.length, label: t.label };
+        if (med > 0) return { pct: Math.round(((mine - med) / med) * 100), delta: mine - med, n: vals.length, label: t.label };
       }
     }
     return null;
   })();
+  // SKUs vs peers as a plain, understandable count: <0.5 rounds to flat (≈), else ±N
+  const skuDelta = skuComp ? Math.round(skuComp.delta) : null;
 
   const skus = [...items].sort((a, b) => {
     const al = a.cell_state === "lost_recent", bl = b.cell_state === "lost_recent";
@@ -386,7 +388,7 @@ export default function AccountOverview() {
         {[
           ["annualized", <>{acc.account_weight} <span style={{ fontSize: 11, color: "var(--text-2)" }}>cs</span></>, null],
           ["L90 cases", <>{acc.cur90} {pct != null && <span style={{ fontSize: 11, color: pct < 0 ? "var(--down)" : pct > 0 ? "var(--up)" : "var(--text-3)" }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : ""}{Math.abs(pct)}%</span>}</>, "vs prior 90D"],
-          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, skuComp ? <span style={{ color: skuComp.pct > 0 ? "var(--up)" : skuComp.pct < 0 ? "var(--down)" : "var(--text-3)" }}>{skuComp.pct > 0 ? "+" : ""}{skuComp.pct}% vs peers</span> : null],
+          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, skuComp ? <span style={{ color: skuDelta > 0 ? "var(--up)" : skuDelta < 0 ? "var(--down)" : "var(--text-3)" }}>{skuDelta === 0 ? "≈ peers" : `${skuDelta > 0 ? "+" : ""}${skuDelta} SKU${Math.abs(skuDelta) === 1 ? "" : "s"} vs peers`}</span> : null],
         ].map(([label, val, note], i) => (
           <div key={i} style={{ flex: 1, padding: "10px 12px", borderRight: i < 2 ? "0.5px solid var(--border)" : "none" }}>
             <div style={{ fontSize: 11, color: "var(--text-3)" }}>{label}</div>
@@ -410,47 +412,6 @@ export default function AccountOverview() {
           ))}
         </div>
       </div>
-
-      {/* account suggestions — the plays */}
-      <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 14, boxShadow: "var(--shadow-sm)" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--accent-deep)", letterSpacing: "0.3px", textTransform: "uppercase" }}>Account Suggestions</div>
-        {brief.moves.length > 0 ? (
-          <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 7 }}>
-            {brief.moves.map((m, i) => { const col = moveColor(m); return (
-              <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "9px 11px", borderRadius: 10, background: "var(--surface-2)", borderLeft: `3px solid ${col}` }}>
-                <span aria-hidden="true" style={{ color: col, fontWeight: 700, flexShrink: 0 }}>→</span>
-                <span style={{ fontSize: 12.5, lineHeight: 1.4, color: "var(--text)" }}>{m}</span>
-              </div>
-            ); })}
-          </div>
-        ) : (
-          <div style={{ marginTop: 7, fontSize: 12.5, color: "var(--text-3)" }}>No standout plays right now — keep the relationship warm.</div>
-        )}
-      </div>
-
-      {bench && bench.wt_vs_chan_pct != null && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 2px", marginTop: 2 }}>
-          <span style={{ fontSize: 15, color: "var(--text-2)" }}>▦</span>
-          <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.4 }}>
-            Does <strong style={{ fontWeight: 600, color: "var(--text)" }}>{bench.wt_vs_chan_pct > 0 ? "+" : ""}{bench.wt_vs_chan_pct}%</strong>
-            {" the volume of the median "}{titleCase(acc.channel)}{"-channel account "}
-            ({acc.account_weight} vs {bench.chan_med_wt} cs).
-          </div>
-        </div>
-      )}
-
-      {skuComp && (
-        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 2px 2px" }}>
-          <span style={{ fontSize: 15, color: skuComp.pct > 0 ? "var(--up)" : skuComp.pct < 0 ? "var(--down)" : "var(--text-2)" }}>▥</span>
-          <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.4 }}>
-            Carries <strong style={{ fontWeight: 600, color: "var(--text)" }}>{acc.live_placements} active SKUs</strong> — {skuComp.pct >= 5
-              ? <><strong style={{ fontWeight: 600, color: "var(--up)" }}>{skuComp.pct}% more</strong> than </>
-              : skuComp.pct <= -5
-                ? <><strong style={{ fontWeight: 600, color: "var(--down)" }}>{Math.abs(skuComp.pct)}% fewer</strong> than </>
-                : "about the same as "}{skuComp.label} <span style={{ color: "var(--text-3)" }}>({skuComp.n} compared)</span>.
-          </div>
-        </div>
-      )}
 
       <div ref={chartRef} style={{ scrollMarginTop: 12, minHeight: 96 }}>
         {sel ? (
@@ -499,7 +460,7 @@ export default function AccountOverview() {
       )}
 
       <div style={{ height: 18 }} />
-      <SellStory acc={acc} items={items} white={white} />
+      <SellStory acc={acc} items={items} white={white} moves={brief.moves} />
       <AccountTag acc={acc} items={items} white={white} />
 
       <div style={{ height: 24 }} />

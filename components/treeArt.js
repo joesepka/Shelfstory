@@ -23,9 +23,9 @@ export function lighten(hex, f) {
 export const RAMP = {
   accelerating: "#0f9d54",   // deep emerald
   thriving:     "#34a94e",   // green
-  growing:      "#74c23c",   // lime
-  steady:       "#c6c233",   // yellow-lime (flat)
-  softening:    "#e8b62b",   // amber-yellow
+  growing:      "#5fb84e",   // green
+  steady:       "#86c96f",   // light green (flat = healthy, never yellow)
+  softening:    "#e8b62b",   // amber-yellow — yellow starts at actual decline
   slipping:     "#e2901f",   // amber-orange
   atrisk:       "#db7a26",   // orange
   declining:    "#9e978d",   // GREY — almost dead

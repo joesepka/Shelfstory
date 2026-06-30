@@ -15,6 +15,7 @@ export function plantState(headline, pct) {
   const h = norm(headline);
   if (h === "lapsed") return "lapsed";
   if (h === "new") return "new";
+  if (h === "stable") return "steady";   // a stable account always reads green, never yellow
   if (pct != null) {
     if (h === "accelerating" || pct >= 28) return "accelerating";
     if (pct >= 15) return "thriving";
