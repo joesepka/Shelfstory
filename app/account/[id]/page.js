@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import LoadingScreen from "../../../components/LoadingScreen";
 import TreeGlyph from "../../../components/TreeGlyph";
+import SellStory from "../../../components/SellStory";
 import { greenBar } from "../../../lib/utils";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
@@ -410,6 +411,9 @@ export default function AccountOverview() {
           <div style={{ marginTop: 7, fontSize: 12.5, color: "var(--text-3)" }}>No standout plays right now — keep the relationship warm.</div>
         )}
       </div>
+
+      {/* sell-story generator (Cupertino-styled panel) */}
+      <SellStory acc={acc} items={items} white={white} />
 
       <div style={{ display: "flex", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
         {[
