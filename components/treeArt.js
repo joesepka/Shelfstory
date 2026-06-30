@@ -36,6 +36,33 @@ const fruitDot = (x, y, fill, stroke) => `<circle cx="${x}" cy="${y}" r="2.2" fi
 const fall = (x, y, c) => `<ellipse cx="${x}" cy="${y}" rx="2.1" ry="1.1" fill="${c}" opacity="0.8" transform="rotate(${(x % 2 ? 22 : -18)} ${x} ${y})"/>`;
 const spark = (x, y, c) => `<path d="M${x} ${y - 3.2} L${(x + 0.9).toFixed(1)} ${(y - 0.9).toFixed(1)} L${x + 3.2} ${y} L${(x + 0.9).toFixed(1)} ${(y + 0.9).toFixed(1)} L${x} ${y + 3.2} L${(x - 0.9).toFixed(1)} ${(y + 0.9).toFixed(1)} L${x - 3.2} ${y} L${(x - 0.9).toFixed(1)} ${(y - 0.9).toFixed(1)} Z" fill="${c}"/>`;
 const sphere = (x, y, r, g) => `<circle cx="${x}" cy="${y}" r="${r}" fill="url(#${g})"/><ellipse cx="${(x - r * 0.28).toFixed(1)}" cy="${(y - r * 0.34).toFixed(1)}" rx="${(r * 0.3).toFixed(1)}" ry="${(r * 0.2).toFixed(1)}" fill="#fff" opacity="0.55"/>`;
+const leaf = (cx, cy, ang, len, w, col) => `<g transform="translate(${cx} ${cy}) rotate(${ang})"><path d="M0 0 Q ${w} ${(-len * 0.5).toFixed(1)} 0 ${-len} Q ${-w} ${(-len * 0.5).toFixed(1)} 0 0 Z" fill="${col}"/></g>`;
+
+// NEW account = a young budding sapling — slim tender stem, two sprout leaves, a
+// closed bud at the tip. Deliberately its own silhouette across every skin (not
+// the mature canopy). Top growth nods to the active skin's idiom.
+function saplingArt(theme, sfx) {
+  const stem = "#7aa757";
+  const lc = theme === "cupertino" ? "#5cc591" : theme === "rounded" ? "#5fb98a" : "#6abf86";
+  let o = `<ellipse cx="30" cy="59" rx="7" ry="1.8" fill="#000" opacity="0.05"/>`;
+  o += `<path d="M30 58 Q 27.5 47 30 39 Q 31.5 34 30 30" fill="none" stroke="${stem}" stroke-width="2" stroke-linecap="round"/>`;
+  o += leaf(30, 47, -52, 10, 3.2, lc) + leaf(30, 50, 58, 9, 3, lighten(lc, 0.12));   // two sprout leaves
+  if (theme === "bubble") {
+    o = grads(sfx) + o;
+    o += sphere(30, 29, 4.4, "gn" + sfx) + sphere(26, 32, 3.1, "gn" + sfx) + sphere(34, 32, 3.1, "gn" + sfx);
+  } else if (theme === "cupertino") {
+    o += `<ellipse cx="30" cy="29" rx="5" ry="5.4" fill="${lc}"/>` + sheen(30, 29, 5, 5.4);
+  } else if (theme === "rounded") {
+    const gid = "sp" + sfx;
+    o += `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${lighten(lc, 0.2)}"/><stop offset="1" stop-color="${darken(lc, 0.8)}"/></linearGradient></defs><ellipse cx="30" cy="29" rx="5" ry="5.4" fill="url(#${gid})"/>` + sheen(30, 29, 5, 5.4);
+  } else if (theme === "clusters") {
+    o += leaf(30, 33, 0, 9, 3.2, "#3f8a5e") + leaf(30, 33, -40, 8, 3, "#6abf86") + leaf(30, 33, 40, 8, 3, "#6abf86");
+  } else {
+    o += `<circle cx="30" cy="29" r="3.4" fill="#5bb47e"/><circle cx="27" cy="32" r="3" fill="#7bc49a"/><circle cx="33" cy="32" r="3" fill="#7bc49a"/>`;
+  }
+  o += `<path d="M30 25 q 2 -1.3 0 -4.6 q -2 1.3 0 4.6 Z" fill="#9ed08a"/>`;   // closed bud at the tip
+  return o;
+}
 
 const CL = [[0, 2], [-8, 3], [8, 3], [0, -6], [-6, -3], [6, -3], [-11, 1], [11, 1], [0, 9], [-7, 8], [7, 8], [-4, -9], [4, -9], [0, 15], [-10, 10]];
 const POS = [[24, 26], [35, 24], [30, 18], [23, 33], [37, 31]];
@@ -161,6 +188,7 @@ function bubbleT(t, color, s) {
 
 // ======================= dispatch =======================
 export function accountArt(theme, st, f, sfx) {
+  if (st === "flowering") return saplingArt(theme, sfx);   // NEW = budding sapling in every skin
   if (theme === "cupertino") return cupA(st, f, sfx);
   if (theme === "rounded") return roundedA(st, f, sfx);
   if (theme === "clusters") return clustersA(st, f, sfx);
