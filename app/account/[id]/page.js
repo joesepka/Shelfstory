@@ -7,6 +7,7 @@ import TreeGlyph from "../../../components/TreeGlyph";
 import SellStory from "../../../components/SellStory";
 import AccountTag from "../../../components/AccountTag";
 import { greenBar } from "../../../lib/utils";
+import { profitPerCase } from "../../../lib/pricing";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
 
@@ -274,7 +275,7 @@ export default function AccountOverview() {
         let cohort = [], cf = 0;
         while (true) {
           const { data: cd, error: ce } = await supabase.from("account_list")
-            .select("account_id, live_placements, channel_type, state, account_weight")
+            .select("account_id, live_placements, channel_type, state, account_weight, city, prior90_pct")
             .ilike("channel", onP ? "ON%" : "OFF%")
             .range(cf, cf + 4999);
           if (ce) throw ce;
@@ -282,7 +283,38 @@ export default function AccountOverview() {
           if (!cd || cd.length < 5000) break;
           cf += 5000;
         }
-        setD({ acc, bench: benRes.data, items, white, cohort, onP });
+        // ---- real sell-story peer aggregates (city + channel, fallback to state) ----
+        // resilient: a peer-query hiccup falls back to empty aggregates, never blanks the page
+        let areaAvgMoReal = null, wsReal = [], penetration = null, peerTopGrowth = 0;
+        try {
+          const chT = acc.channel_type;
+          let peers = cohort.filter((a) => a.account_id !== acc.account_id && (!chT || a.channel_type === chT) && a.city === acc.city);
+          if (peers.length < 8) peers = cohort.filter((a) => a.account_id !== acc.account_id && (!chT || a.channel_type === chT) && a.state === acc.state);
+          const peerIds = peers.slice(0, 360).map((a) => a.account_id);
+          let pItems = [];
+          for (let i = 0; i < peerIds.length; i += 150) {
+            const { data: pd } = await supabase.from("item_grid").select("account_id, product_key, item_name, l90").in("account_id", peerIds.slice(i, i + 150));
+            pItems = pItems.concat(pd || []);
+          }
+          const byProd = {}, byAcct = {}, carrying = new Set();
+          for (const r of pItems) {
+            if ((r.l90 || 0) > 0) {
+              (byProd[r.product_key] || (byProd[r.product_key] = { name: r.item_name, vals: [] })).vals.push((r.l90 || 0) / 3);
+              byAcct[r.account_id] = (byAcct[r.account_id] || 0) + ((r.l90 || 0) / 3) * profitPerCase(r.item_name, 0.30);
+              carrying.add(r.account_id);
+            }
+          }
+          const acctProfits = Object.values(byAcct);
+          areaAvgMoReal = acctProfits.length ? median(acctProfits) : null;
+          const carriedSet = new Set(items.map((i) => i.product_key));
+          wsReal = Object.entries(byProd).filter(([pk]) => !carriedSet.has(pk)).map(([pk, o]) => {
+            const vel = median(o.vals);
+            return { name: o.name, vel: Math.round(vel * 10) / 10, carriers: o.vals.length, dollars: vel * profitPerCase(o.name, 0.30) };
+          }).sort((a, b) => b.dollars - a.dollars).slice(0, 5);
+          penetration = { carry: carrying.size, total: peers.length };
+          peerTopGrowth = peers.reduce((m, a) => Math.max(m, a.prior90_pct || 0), 0);
+        } catch { /* leave empty aggregates */ }
+        setD({ acc, bench: benRes.data, items, white, cohort, onP, areaAvgMoReal, wsReal, penetration, peerTopGrowth });
       } catch (e) {
         setErr(e.message || "load failed");
       }
@@ -313,7 +345,7 @@ export default function AccountOverview() {
   if (err) return <div className="wrap"><p className="state-msg">Couldn’t load account. {err}</p></div>;
   if (!d) return <LoadingScreen />;
 
-  const { acc, bench, items, white, cohort = [], onP } = d;
+  const { acc, bench, items, white, cohort = [], onP, areaAvgMoReal = null, wsReal = [], penetration = null, peerTopGrowth = 0 } = d;
   const head = HEAD[acc.headline] || HEAD["Stable"];
   const pct = acc.prior90_pct;
   const dl = acc.placements_delta;
@@ -341,16 +373,6 @@ export default function AccountOverview() {
   })();
   // SKUs vs peers as a plain, understandable count: <0.5 rounds to flat (≈), else ±N
   const skuDelta = skuComp ? Math.round(skuComp.delta) : null;
-
-  // area/channel average monthly profit (median annualized cases ÷ 12 × per-case profit @30%)
-  const areaWeight = (() => {
-    const base = cohort.filter((a) => a.account_id !== acc.account_id);
-    const ch = acc.channel_type;
-    const tiers = [base.filter((a) => ch && a.channel_type === ch && a.state === acc.state), ch ? base.filter((a) => a.channel_type === ch) : [], base];
-    for (const peers of tiers) { const vals = peers.map((a) => a.account_weight || 0).filter((x) => x > 0); if (vals.length >= 5) return median(vals); }
-    return null;
-  })();
-  const areaAvgMo = areaWeight != null ? (areaWeight / 12) * 16.33 : null;
 
   // butter-up: only clearly-positive, real signals about this account
   const praise = [];
@@ -477,7 +499,7 @@ export default function AccountOverview() {
       )}
 
       <div style={{ height: 18 }} />
-      <SellStory acc={acc} items={items} white={white} moves={brief.moves} areaAvgMo={areaAvgMo} praise={praise.slice(0, 3)} />
+      <SellStory acc={acc} items={items} white={white} moves={brief.moves} areaAvgMo={areaAvgMoReal} wsReal={wsReal} penetration={penetration} peerTopGrowth={peerTopGrowth} praise={praise.slice(0, 3)} />
       <AccountTag acc={acc} items={items} white={white} />
 
       <div style={{ height: 24 }} />

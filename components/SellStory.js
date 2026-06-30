@@ -1,10 +1,11 @@
 "use client";
 // Sell-story generator — Cupertino look (hardcoded so it reads the same in any skin).
-// Margin dropdown + a brief on what the account earns, then an item explorer: pick
-// an item → 3 velocity graphs (at-account / cold box +15% / promo +20%) with the
-// retailer $/mo each generates and a comparison, then top-5 whitespace, then a
-// simple city story. Lift %s + area figures are estimates pending live data. No emojis.
+// Margin is fixed at 30%. Numbers are now real where the data exists: account profit
+// (items × pricing), the channel/area average profit and whitespace medians come from
+// nearby same-channel peers. Lift %s (cold box / promo) remain editable estimates.
+// No emojis. Built to be a snappy in-hand tool for a rep.
 import { useMemo, useState } from "react";
+import { profitPerCase } from "../lib/pricing";
 
 const CU = {
   card: "#ffffff", inset: "#f5f5f7", text: "#1d1d1f", sub: "#515154", mut: "#86868b",
@@ -13,35 +14,28 @@ const CU = {
   shadow: "0 2px 12px rgba(0,0,0,.06),0 1px 3px rgba(0,0,0,.05)",
 };
 const usd = n => "$" + Math.round(n).toLocaleString();
-const wholeOf = name => { const s = String(name || "").toUpperCase(); if (s.includes("SOUR APPLE") || s.includes("TROPICAL")) return 33; if (s.includes("VARIETY")) return 26; return 30; };
-const MARKUP = 1.27;
-const retailerCase = (name, margin) => { const retail = wholeOf(name) * MARKUP; return retail * (margin / (1 - margin)); };
-const mean = a => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);
 const COLD = 0.15, PROMO = 0.20;
 
 function Bolt({ c }) { return <svg width="15" height="15" viewBox="0 0 24 24" fill={c} stroke="none"><path d="M13 2 4 14h6l-1 8 9-12h-6z" /></svg>; }
 function Check({ c }) { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2, flexShrink: 0 }}><path d="M20 6 9 17l-5-5" /></svg>; }
 
-export default function SellStory({ acc, items = [], white = [], moves = [], areaAvgMo = null, praise = [] }) {
+export default function SellStory({ acc, items = [], white = [], moves = [], areaAvgMo = null, praise = [], wsReal = [], penetration = null, peerTopGrowth = 0 }) {
   const [open, setOpen] = useState(false);
-  const margin = 0.30;
+  const M = 0.30;
 
   const carried = useMemo(() => items.filter(i => (i.l90 || 0) > 0).sort((a, b) => (b.l90 || 0) - (a.l90 || 0)), [items]);
-  const areaAvg = useMemo(() => mean(carried.map(i => (i.l90 || 0) / 3)) || 5, [carried]);
 
-  // item options = carried + whitespace, de-duped by name
   const options = useMemo(() => {
     const seen = new Set(), out = [];
-    for (const i of carried) { if (!seen.has(i.item_name)) { seen.add(i.item_name); out.push({ name: i.item_name, csMo: (i.l90 || 0) / 3, here: true }); } }
-    for (const w of white) { if (!seen.has(w.item_name)) { seen.add(w.item_name); out.push({ name: w.item_name, csMo: areaAvg * 0.75, here: false }); } }
+    for (const i of carried) if (!seen.has(i.item_name)) { seen.add(i.item_name); out.push({ name: i.item_name, csMo: (i.l90 || 0) / 3, here: true }); }
+    for (const w of wsReal) if (!seen.has(w.name)) { seen.add(w.name); out.push({ name: w.name, csMo: w.vel, here: false }); }
     return out;
-  }, [carried, white, areaAvg]);
+  }, [carried, wsReal]);
 
   const [sel, setSel] = useState("");
   const cur = options.find(o => o.name === sel) || options[0];
 
-  const PC30 = retailerCase("STD", 0.30);
-  const accountMo = ((acc?.account_weight || 0) / 12) * PC30;
+  const accountMo = useMemo(() => carried.reduce((s, i) => s + ((i.l90 || 0) / 3) * profitPerCase(i.item_name, M), 0), [carried]);
   const takeaway = areaAvgMo == null ? ""
     : accountMo >= areaAvgMo * 1.05 ? `Running ~${Math.round((accountMo / areaAvgMo - 1) * 100)}% ahead of similar stores — strong velocity. Praise it, then add SKUs to push further.`
     : accountMo <= areaAvgMo * 0.95 ? `About ~${Math.round((1 - accountMo / areaAvgMo) * 100)}% behind similar stores — room to grow. Pitch a few more SKUs and better placement.`
@@ -49,17 +43,18 @@ export default function SellStory({ acc, items = [], white = [], moves = [], are
 
   const explore = useMemo(() => {
     if (!cur) return null;
-    const pc = retailerCase(cur.name, margin);
+    const pc = profitPerCase(cur.name, M);
     const csB = cur.csMo, csC = cur.csMo * (1 + COLD), csP = cur.csMo * (1 + PROMO);
     return { csB, csC, csP, dB: csB * pc, dC: csC * pc, dP: csP * pc, max: csP * pc || 1 };
-  }, [cur, margin]);
+  }, [cur]);
 
-  const ws = useMemo(() => white.slice(0, 5).map((w, idx) => {
-    const vel = Math.max(2, Math.round(areaAvg * 0.8) - idx);
-    return { name: w.item_name, vel, dollars: vel * retailerCase(w.item_name, margin) };
-  }), [white, areaAvg, margin]);
-  const wsMax = Math.max(...ws.map(w => w.dollars), 1);
+  const wsMax = Math.max(...wsReal.map(w => w.dollars), 1);
   const chan = String(acc?.channel || "store").toLowerCase();
+
+  const cityBullets = [];
+  if (penetration && penetration.total > 0) cityBullets.push(`Datum is in ${penetration.carry} of ${penetration.total} ${chan}s like this one in ${acc?.city || "your area"}.`);
+  if (peerTopGrowth >= 8) cityBullets.push(`A nearby ${chan} grew +${Math.round(peerTopGrowth)}% last quarter — momentum's in the area.`);
+  cityBullets.push("The Variety Pack is an easy trial driver to widen the set.");
 
   if (!open) {
     return (
@@ -75,7 +70,7 @@ export default function SellStory({ acc, items = [], white = [], moves = [], are
 
   return (
     <div style={{ fontFamily: "var(--font-sans)", marginBottom: 10, animation: "riseIn .35s cubic-bezier(.2,.7,.2,1) both" }}>
-      {/* header + margin */}
+      {/* header + butter-up */}
       <Card style={{ background: "linear-gradient(180deg,#f4faf6,#ffffff)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
           <span style={{ width: 30, height: 30, borderRadius: 9, background: CU.green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Bolt c="#fff" /></span>
@@ -99,7 +94,7 @@ export default function SellStory({ acc, items = [], white = [], moves = [], are
         )}
       </Card>
 
-      {/* suggested plays (moved from the page) */}
+      {/* suggested plays */}
       {moves && moves.length > 0 && (
         <Card>
           <Cap c={CU.text}>Suggested plays</Cap>
@@ -128,7 +123,7 @@ export default function SellStory({ acc, items = [], white = [], moves = [], are
           </div>
         </div>
         {takeaway && <div style={{ fontSize: 12, color: CU.sub, marginTop: 8, lineHeight: 1.4 }}>{takeaway}</div>}
-        <div style={{ fontSize: 10, color: CU.mut, marginTop: 4 }}>profit = sell − buy at 30% margin · area avg <Est /></div>
+        <div style={{ fontSize: 10, color: CU.mut, marginTop: 4 }}>profit = sell − buy at 30% margin</div>
       </Card>
 
       {/* item explorer */}
@@ -166,42 +161,36 @@ export default function SellStory({ acc, items = [], white = [], moves = [], are
         </Card>
       )}
 
-      {/* whitespace top 5 */}
-      {ws.length > 0 && (
+      {/* whitespace (real medians from nearby carriers) */}
+      {wsReal.length > 0 && (
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <Cap c={CU.text}>Top whitespace · sells nearby</Cap>
-            <span style={{ fontSize: 10.5, color: CU.mut }}>est. $/mo to you</span>
+            <span style={{ fontSize: 10.5, color: CU.mut }}>profit / mo to you</span>
           </div>
-          <div style={{ marginTop: 8 }}>
-            {ws.map((w, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 0", borderTop: i ? `1px solid ${CU.line}` : "none" }}>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: CU.text, width: 104, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
-                <div style={{ flex: 1, height: 6, borderRadius: 3, background: CU.inset, overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${(w.dollars / wsMax * 100).toFixed(0)}%`, background: CU.blue, borderRadius: 3 }} /></div>
-                <span style={{ fontSize: 11, color: CU.mut, width: 50, textAlign: "right", flexShrink: 0 }}>{w.vel} cs/mo</span>
-                <span style={{ fontSize: 12.5, fontWeight: 800, color: CU.greenDeep, width: 52, textAlign: "right", flexShrink: 0 }}>+{usd(w.dollars)}</span>
-              </div>
-            ))}
-          </div>
+          <div style={{ fontSize: 11, color: CU.mut, margin: "3px 0 7px" }}>median velocity of nearby {chan}s that carry it</div>
+          {wsReal.map((w, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", gap: 9, padding: "6px 0", borderTop: i ? `1px solid ${CU.line}` : "none" }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: CU.text, width: 102, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
+              <div style={{ flex: 1, height: 6, borderRadius: 3, background: CU.inset, overflow: "hidden" }}><span style={{ display: "block", height: "100%", width: `${(w.dollars / wsMax * 100).toFixed(0)}%`, background: CU.blue, borderRadius: 3 }} /></div>
+              <span style={{ fontSize: 11, color: CU.mut, width: 52, textAlign: "right", flexShrink: 0 }}>{w.vel} cs/mo</span>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: CU.greenDeep, width: 52, textAlign: "right", flexShrink: 0 }}>+{usd(w.dollars)}</span>
+            </div>
+          ))}
         </Card>
       )}
 
-      {/* the city story */}
+      {/* the city */}
       <Card>
-        <Cap c={CU.text}>Your city · how it's doing</Cap>
+        <Cap c={CU.text}>Your area · how it's doing</Cap>
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-          {[
-            `Datum is in roughly 120 ${chan}s across Chicago.`,
-            "Rate of sale runs about 9% higher where Datum sits in the cooler.",
-            "A nearby store added the Variety Pack and it quickly became their #2 energy seller.",
-          ].map((t, i) => (
+          {cityBullets.map((t, i) => (
             <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
               <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: CU.green }} />
               <span style={{ fontSize: 12.5, color: CU.sub, lineHeight: 1.45 }}>{t}</span>
             </div>
           ))}
         </div>
-        <div style={{ fontSize: 10, color: CU.mut, marginTop: 9, fontStyle: "italic" }}>City figures are demo placeholders — wire to live data next.</div>
       </Card>
     </div>
   );
