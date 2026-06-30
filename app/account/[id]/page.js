@@ -274,7 +274,7 @@ export default function AccountOverview() {
         let cohort = [], cf = 0;
         while (true) {
           const { data: cd, error: ce } = await supabase.from("account_list")
-            .select("account_id, live_placements, channel_type, state")
+            .select("account_id, live_placements, channel_type, state, account_weight")
             .ilike("channel", onP ? "ON%" : "OFF%")
             .range(cf, cf + 4999);
           if (ce) throw ce;
@@ -341,6 +341,23 @@ export default function AccountOverview() {
   })();
   // SKUs vs peers as a plain, understandable count: <0.5 rounds to flat (≈), else ±N
   const skuDelta = skuComp ? Math.round(skuComp.delta) : null;
+
+  // area/channel average monthly profit (median annualized cases ÷ 12 × per-case profit @30%)
+  const areaWeight = (() => {
+    const base = cohort.filter((a) => a.account_id !== acc.account_id);
+    const ch = acc.channel_type;
+    const tiers = [base.filter((a) => ch && a.channel_type === ch && a.state === acc.state), ch ? base.filter((a) => a.channel_type === ch) : [], base];
+    for (const peers of tiers) { const vals = peers.map((a) => a.account_weight || 0).filter((x) => x > 0); if (vals.length >= 5) return median(vals); }
+    return null;
+  })();
+  const areaAvgMo = areaWeight != null ? (areaWeight / 12) * 16.33 : null;
+
+  // butter-up: only clearly-positive, real signals about this account
+  const praise = [];
+  if ((pct || 0) > 5) praise.push(`Velocity's climbing — L90 up ${Math.abs(pct)}% vs the prior quarter.`);
+  if (skuDelta > 0) praise.push(`Carries ${skuDelta} more SKU${skuDelta === 1 ? "" : "s"} than similar accounts — a fuller set.`);
+  if (bench && bench.pct_overall != null && bench.pct_overall <= 15) praise.push(`Top ${bench.pct_overall}% account in the book — a flagship.`);
+  if (acc.last_order_w != null && acc.last_order_w <= 3 && acc.headline !== "Lapsed") praise.push("Ordered recently — actively engaged.");
 
   const skus = [...items].sort((a, b) => {
     const al = a.cell_state === "lost_recent", bl = b.cell_state === "lost_recent";
@@ -460,7 +477,7 @@ export default function AccountOverview() {
       )}
 
       <div style={{ height: 18 }} />
-      <SellStory acc={acc} items={items} white={white} moves={brief.moves} />
+      <SellStory acc={acc} items={items} white={white} moves={brief.moves} areaAvgMo={areaAvgMo} praise={praise.slice(0, 3)} />
       <AccountTag acc={acc} items={items} white={white} />
 
       <div style={{ height: 24 }} />

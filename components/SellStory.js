@@ -20,10 +20,11 @@ const mean = a => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);
 const COLD = 0.15, PROMO = 0.20;
 
 function Bolt({ c }) { return <svg width="15" height="15" viewBox="0 0 24 24" fill={c} stroke="none"><path d="M13 2 4 14h6l-1 8 9-12h-6z" /></svg>; }
+function Check({ c }) { return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: 2, flexShrink: 0 }}><path d="M20 6 9 17l-5-5" /></svg>; }
 
-export default function SellStory({ acc, items = [], white = [], moves = [] }) {
+export default function SellStory({ acc, items = [], white = [], moves = [], areaAvgMo = null, praise = [] }) {
   const [open, setOpen] = useState(false);
-  const [margin, setMargin] = useState(0.30);
+  const margin = 0.30;
 
   const carried = useMemo(() => items.filter(i => (i.l90 || 0) > 0).sort((a, b) => (b.l90 || 0) - (a.l90 || 0)), [items]);
   const areaAvg = useMemo(() => mean(carried.map(i => (i.l90 || 0) / 3)) || 5, [carried]);
@@ -39,8 +40,12 @@ export default function SellStory({ acc, items = [], white = [], moves = [] }) {
   const [sel, setSel] = useState("");
   const cur = options.find(o => o.name === sel) || options[0];
 
-  const acctMo = useMemo(() => carried.reduce((s, i) => s + ((i.l90 || 0) / 3) * retailerCase(i.item_name, margin), 0), [carried, margin]);
-  const brandMo = useMemo(() => carried.reduce((s, i) => s + ((i.l90 || 0) / 3) * wholeOf(i.item_name), 0), [carried, margin]);
+  const PC30 = retailerCase("STD", 0.30);
+  const accountMo = ((acc?.account_weight || 0) / 12) * PC30;
+  const takeaway = areaAvgMo == null ? ""
+    : accountMo >= areaAvgMo * 1.05 ? `Running ~${Math.round((accountMo / areaAvgMo - 1) * 100)}% ahead of similar stores — strong velocity. Praise it, then add SKUs to push further.`
+    : accountMo <= areaAvgMo * 0.95 ? `About ~${Math.round((1 - accountMo / areaAvgMo) * 100)}% behind similar stores — room to grow. Pitch a few more SKUs and better placement.`
+    : "Right in line with similar stores — a cold-box move or a couple SKUs pulls ahead.";
 
   const explore = useMemo(() => {
     if (!cur) return null;
@@ -48,9 +53,6 @@ export default function SellStory({ acc, items = [], white = [], moves = [] }) {
     const csB = cur.csMo, csC = cur.csMo * (1 + COLD), csP = cur.csMo * (1 + PROMO);
     return { csB, csC, csP, dB: csB * pc, dC: csC * pc, dP: csP * pc, max: csP * pc || 1 };
   }, [cur, margin]);
-
-  const good = acc?.headline === "Accelerating" ? "This account is heating up faster than most nearby — lean into it."
-    : (acc?.prior90_pct > 8 ? "Volume here is climbing — a good time to widen the set." : null);
 
   const ws = useMemo(() => white.slice(0, 5).map((w, idx) => {
     const vel = Math.max(2, Math.round(areaAvg * 0.8) - idx);
@@ -83,12 +85,18 @@ export default function SellStory({ acc, items = [], white = [], moves = [] }) {
           </div>
           <button onClick={() => setOpen(false)} style={{ border: "none", background: CU.inset, color: CU.sub, borderRadius: 20, fontSize: 12, fontWeight: 600, padding: "5px 11px", cursor: "pointer", fontFamily: "inherit" }}>Close</button>
         </div>
-        <div style={{ marginTop: 12, borderTop: `1px solid ${CU.line}`, paddingTop: 11, display: "flex", alignItems: "center", gap: 9 }}>
-          <Cap c={CU.sub}>Retailer margin</Cap>
-          <select value={margin} onChange={e => setMargin(Number(e.target.value))} style={{ fontSize: 12.5, fontWeight: 700, color: CU.text, background: CU.inset, border: `1px solid ${CU.line}`, borderRadius: 9, padding: "6px 10px", fontFamily: "inherit", cursor: "pointer" }}>
-            <option value={0.25}>25%</option><option value={0.30}>30%</option><option value={0.35}>35%</option>
-          </select>
-        </div>
+        {praise && praise.length > 0 ? (
+          <div style={{ marginTop: 11, borderTop: `1px solid ${CU.line}`, paddingTop: 10, display: "flex", flexDirection: "column", gap: 7 }}>
+            {praise.map((t, i) => (
+              <div key={i} style={{ display: "flex", gap: 7, alignItems: "flex-start" }}>
+                <Check c={CU.green} />
+                <span style={{ fontSize: 12.5, color: CU.sub, lineHeight: 1.4 }}>{t}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ marginTop: 11, borderTop: `1px solid ${CU.line}`, paddingTop: 10, fontSize: 12.5, color: CU.mut }}>Steady, dependable account — keep the relationship warm.</div>
+        )}
       </Card>
 
       {/* suggested plays (moved from the page) */}
@@ -106,14 +114,21 @@ export default function SellStory({ acc, items = [], white = [], moves = [] }) {
         </Card>
       )}
 
-      {/* brief: what the account earns now */}
+      {/* account profit vs area average */}
       <Card>
-        <Cap c={CU.mut}>This account, at current pricing</Cap>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginTop: 3 }}>
-          <span style={{ fontSize: 26, fontWeight: 800, color: CU.greenDeep, letterSpacing: "-0.8px" }}>{usd(acctMo)}</span>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: CU.sub }}>/mo in your margin</span>
+        <Cap c={CU.text}>Account profit · per month</Cap>
+        <div style={{ display: "flex", gap: 10, marginTop: 9 }}>
+          <div style={{ flex: 1, background: CU.greenSoft, borderRadius: 11, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: CU.greenDeep }}>This account</div>
+            <div style={{ fontSize: 23, fontWeight: 800, color: CU.greenDeep, letterSpacing: "-0.7px" }}>{usd(accountMo)}</div>
+          </div>
+          <div style={{ flex: 1, background: CU.inset, borderRadius: 11, padding: "10px 12px" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: CU.sub }}>Avg {chan} nearby</div>
+            <div style={{ fontSize: 23, fontWeight: 800, color: CU.text, letterSpacing: "-0.7px" }}>{areaAvgMo != null ? usd(areaAvgMo) : "—"}</div>
+          </div>
         </div>
-        <div style={{ fontSize: 11.5, color: CU.mut, marginTop: 2 }}>on {usd(brandMo)}/mo of Datum at {Math.round(margin * 100)}% retail margin</div>
+        {takeaway && <div style={{ fontSize: 12, color: CU.sub, marginTop: 8, lineHeight: 1.4 }}>{takeaway}</div>}
+        <div style={{ fontSize: 10, color: CU.mut, marginTop: 4 }}>profit = sell − buy at 30% margin · area avg <Est /></div>
       </Card>
 
       {/* item explorer */}
@@ -123,7 +138,7 @@ export default function SellStory({ acc, items = [], white = [], moves = [] }) {
           <select value={cur.name} onChange={e => setSel(e.target.value)} style={{ width: "100%", marginTop: 8, fontSize: 13.5, fontWeight: 600, color: CU.text, background: "#fff", border: `1px solid ${CU.line}`, borderRadius: 10, padding: "9px 11px", fontFamily: "inherit", cursor: "pointer" }}>
             {options.map(o => <option key={o.name} value={o.name}>{o.name}{o.here ? "" : " · not carried"}</option>)}
           </select>
-          <div style={{ fontSize: 11, color: CU.mut, marginTop: 9 }}>Retailer revenue / month — {cur.here ? "velocity at this account" : "area average (not carried here)"} · lifts <Est /></div>
+          <div style={{ fontSize: 11, color: CU.mut, marginTop: 9 }}>Profit / month (sell − buy at 30%) — {cur.here ? "velocity at this account" : "area average (not carried here)"} · lifts <Est /></div>
           {(() => {
             const BARS = [["Current", explore.dB, explore.csB, CU.grey, CU.sub, ""], ["Cold box", explore.dC, explore.csC, CU.blue, CU.blue, "+15%"], ["Promo", explore.dP, explore.csP, CU.green, CU.greenDeep, "+20%"]];
             return (
@@ -141,6 +156,7 @@ export default function SellStory({ acc, items = [], white = [], moves = [] }) {
                     <div key={l} style={{ flex: 1, textAlign: "center" }}>
                       <div style={{ fontSize: 12, fontWeight: 700, color: CU.text }}>{l} {lift && <span style={{ fontSize: 10, fontWeight: 700, color: txt }}>{lift}</span>}</div>
                       <div style={{ fontSize: 11, color: CU.mut, marginTop: 1 }}>{cs.toFixed(1)} cs/mo</div>
+                      {d > explore.dB ? <div style={{ fontSize: 10.5, fontWeight: 800, color: CU.greenDeep, marginTop: 1 }}>+{usd(d - explore.dB)}/mo</div> : <div style={{ fontSize: 10.5, color: CU.mut, marginTop: 1 }}>baseline</div>}
                     </div>
                   ))}
                 </div>
@@ -175,11 +191,10 @@ export default function SellStory({ acc, items = [], white = [], moves = [] }) {
         <Cap c={CU.text}>Your city · how it's doing</Cap>
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
           {[
-            good,
             `Datum is in roughly 120 ${chan}s across Chicago.`,
             "Rate of sale runs about 9% higher where Datum sits in the cooler.",
             "A nearby store added the Variety Pack and it quickly became their #2 energy seller.",
-          ].filter(Boolean).map((t, i) => (
+          ].map((t, i) => (
             <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
               <span style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: CU.green }} />
               <span style={{ fontSize: 12.5, color: CU.sub, lineHeight: 1.45 }}>{t}</span>
