@@ -3,7 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
-import TreeGlyph, { plantState } from "../components/TreeGlyph";
+import TreeGlyph, { plantState, TierTree } from "../components/TreeGlyph";
 import { getScope, setScope } from "../lib/scope";
 
 const T = {
@@ -438,27 +438,29 @@ export default function Home() {
   useEffect(() => { setGreet(greeting()); }, []);
 
   // swipeable header: the whole book, then each state high→low by 90-day volume.
-  // each slide carries its 3 stats AND a "wedge" of the whole book — top 40 accounts
-  // as individual slices (tall→short by volume), the rest pooled into the tapering tail.
+  // each slide carries its 3 stats, a state-specific brief, and four volume tiers
+  // (each ~25% of L52W volume) — top / mid / small / long tail — as health trees.
+  const TIER_DEFS = [{ key: "top", label: "Top tier" }, { key: "mid", label: "Mid tier" }, { key: "small", label: "Small tier" }, { key: "tail", label: "Long tail" }];
   const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
     const mk = (label, key, list) => {
       let cur = 0, prev = 0, acctNow = 0, acctPrev = 0;
       for (const r of list) { const c = r.cur90 || 0, p = r.prev90 || 0; cur += c; prev += p; if (c > 0) acctNow++; if (p > 0) acctPrev++; }
       const rosNow = acctNow ? cur / acctNow : 0, rosPrev = acctPrev ? prev / acctPrev : 0;
+      // split by cumulative L52W volume into quarters
       const sorted = [...list].sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0));
-      const TOP = 40;
-      const indiv = sorted.slice(0, TOP).map(r => ({ id: r.account_id, name: r.account_name, w: r.account_weight || 0, cur: r.cur90 || 0, pct: r.prior90_pct, state: plantState(r.headline) }));
-      const tailRows = sorted.slice(TOP);
-      let pool = null;
-      if (tailRows.length) {
-        const tw = tailRows.reduce((s, r) => s + (r.account_weight || 0), 0);
-        const tcur = tailRows.reduce((s, r) => s + (r.cur90 || 0), 0);
-        const S = Math.min(tailRows.length, Math.min(46, Math.max(5, Math.round(tailRows.length / 6)))), samp = [];
-        for (let k = 0; k < S; k++) { const idx = Math.round((S <= 1 ? 0 : k / (S - 1)) * (tailRows.length - 1)); const r = tailRows[idx]; samp.push({ w: r.account_weight || 0, state: plantState(r.headline) }); }
-        pool = { n: tailRows.length, w: tw, cur: tcur, samp };
-      }
-      return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), wedge: { indiv, pool } };
+      const totW = sorted.reduce((s, r) => s + (r.account_weight || 0), 0) || 1;
+      const groups = { top: [], mid: [], small: [], tail: [] };
+      let cum = 0;
+      for (const r of sorted) { const f = cum / totW; cum += r.account_weight || 0; (f < 0.25 ? groups.top : f < 0.5 ? groups.mid : f < 0.75 ? groups.small : groups.tail).push(r); }
+      const tiers = TIER_DEFS.map(t => {
+        const g = groups[t.key];
+        let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
+        for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[plantState(r.headline)]++; }
+        const pct = gpct(c, p), sc = tierScore(pct, cnt, g.length);
+        return { key: t.key, label: t.label, n: g.length, cur: c, pct, vit: sc.vit, color: sc.color, desc: tierDesc(pct, cnt, g.length) };
+      });
+      return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers };
     };
     const byState = {};
     for (const r of rows) { if (!r.state) continue; (byState[r.state] || (byState[r.state] = [])).push(r); }
@@ -566,12 +568,22 @@ export default function Home() {
           </div>
         )}
 
-        {/* account funnel (wedge) — drag to scan, release to choose */}
+        {/* the book by tier — four health trees, each ~25% of volume */}
         {cur && (
           <div style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5 }}>ACCOUNT FUNNEL</div>
-            <div key={"sc" + cur.key} className="sceneFade">
-              <WedgeView wedge={cur.wedge} onOpen={setConfirm} />
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5 }}>THE BOOK BY TIER</div>
+            <div key={"t4" + cur.key} className="sceneFade tier4row">
+              {cur.tiers.map((t, idx) => (
+                <Fragment key={t.key}>
+                  {idx > 0 && <div className="t4div" aria-hidden="true" />}
+                  <div className="t4col">
+                    <div className="t4tree">{t.n ? <TierTree t={t.vit} color={t.color} h={[66, 56, 48, 42][idx]} /> : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}</div>
+                    <div className="t4lbl">{t.label}</div>
+                    <div className="t4n">{t.n.toLocaleString()} acct{t.n === 1 ? "" : "s"}</div>
+                    <div className="t4desc">{t.desc}</div>
+                  </div>
+                </Fragment>
+              ))}
             </div>
           </div>
         )}
@@ -614,6 +626,13 @@ export default function Home() {
         .wedgeRo b{color:var(--text);font-weight:700;}
         .rdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
         .wedgeHint{color:var(--text-3);}
+        .tier4row{display:flex;align-items:flex-end;margin-top:12px;}
+        .t4div{width:1px;background:#e2e4df;align-self:stretch;flex-shrink:0;}
+        .t4col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:0 5px;}
+        .t4tree{display:flex;align-items:flex-end;justify-content:center;min-height:68px;}
+        .t4lbl{font-size:11.5px;font-weight:700;color:var(--text);margin-top:7px;}
+        .t4n{font-size:10px;color:var(--text-3);margin-top:1px;}
+        .t4desc{font-size:10px;color:var(--text-3);margin-top:2px;line-height:1.25;}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}
