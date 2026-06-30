@@ -89,27 +89,27 @@ function cupA(st, f) {
 }
 
 // ===================== WILD #1: pixel plant (8-bit) =====================
-const PXC = 4.4;
-const pxRect = (x, y, c) => `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(PXC - 0.6).toFixed(1)}" height="${(PXC - 0.6).toFixed(1)}" fill="${c}"/>`;
+const PXC = 5.2;
+const pxRect = (x, y, c) => `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(PXC - 0.5).toFixed(1)}" height="${(PXC - 0.5).toFixed(1)}" fill="${c}" stroke="rgba(0,0,0,0.10)" stroke-width="0.4"/>`;
+const pxGround = cx => `<ellipse cx="30" cy="59" rx="11" ry="2" fill="#000" opacity="0.05"/>` + [-2, -1, 0, 1, 2].map(i => pxRect(cx + i * PXC - PXC / 2, 53.5, "#7a5a3e")).join("");
 function pixelA(st, f) {
-  const cx = 30, cy = 28, trunkC = "#9c6a3a";
-  const sh = `<ellipse cx="30" cy="59" rx="9" ry="2" fill="#000" opacity="0.05"/>`;
+  const cx = 30, cy = 26, trunkC = "#9c6a3a", ground = pxGround(cx);
   if (st === "lapsed") {
-    let o = sh;
-    for (let gj = 1; gj <= 6; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, "#9c8a72");
+    let o = ground;
+    for (let gj = 1; gj <= 5; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, "#9c8a72");
     o += pxRect(cx - PXC / 2 - PXC, cy + PXC, "#a39a8c") + pxRect(cx - PXC / 2 + PXC, cy + 0.4 * PXC, "#a39a8c");
     return o;
   }
   if (st === "new") {
-    let o = sh;
-    for (let gj = 3; gj <= 6; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, "#7aa757");
-    o += pxRect(cx - PXC / 2, cy + 2 * PXC - PXC / 2, "#6abf86") + pxRect(cx - PXC / 2 - PXC, cy + 2.4 * PXC, "#7bc49a") + pxRect(cx - PXC / 2 + PXC, cy + 2.4 * PXC, "#7bc49a");
-    o += pxRect(cx - PXC / 2, cy + 1.1 * PXC, "#9ed08a");
+    let o = ground;
+    for (let gj = 2; gj <= 5; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, "#7aa757");
+    o += pxRect(cx - PXC / 2, cy + 1 * PXC - PXC / 2, "#6abf86") + pxRect(cx - PXC / 2 - PXC, cy + 1.4 * PXC, "#7bc49a") + pxRect(cx - PXC / 2 + PXC, cy + 1.4 * PXC, "#7bc49a");
+    o += pxRect(cx - PXC / 2, cy + 0.1 * PXC, "#9ed08a");
     return o;
   }
-  const col = cf(st).m, dk = darken(col, 0.78), rG = 1.3 + f * 2.5;
-  let o = sh;
-  for (let gj = Math.ceil(rG); gj <= 6; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, trunkC);
+  const col = cf(st).m, dk = darken(col, 0.78), rG = 1.2 + f * 2.3;
+  let o = ground;
+  for (let gj = Math.ceil(rG); gj <= 5; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, trunkC);
   for (let gi = -4; gi <= 4; gi++) for (let gj = -4; gj <= 4; gj++) {
     if (gi * gi + gj * gj <= rG * rG) o += pxRect(cx + gi * PXC - PXC / 2, cy + gj * PXC - PXC / 2, ((gi + gj) & 1) ? dk : col);
   }
@@ -118,32 +118,37 @@ function pixelA(st, f) {
 }
 
 // ===================== WILD #2: living flame (ember) =====================
+// True fire palette — bright yellow-orange when hot, deeper orange as it cools,
+// GREY ember + smoke when almost dead, grey ash when lapsed. Size = health.
+const FIRE = { accelerating: "#ff8a1f", thriving: "#ff9e26", growing: "#f59a2a", steady: "#ef8f2a", softening: "#e8842a", slipping: "#dd7726", atrisk: "#cf6322", declining: "#9e978d" };
+const ash = () => `<ellipse cx="30" cy="58" rx="11" ry="3.2" fill="#8f877b"/><ellipse cx="26" cy="56" rx="3" ry="2" fill="#a39a8c"/><ellipse cx="34" cy="56.5" rx="2.6" ry="1.8" fill="#a39a8c"/><path d="M30 53 q4 -6 0 -11 q-4 -5 0 -10" fill="none" stroke="#b3ada3" stroke-width="1.4" opacity="0.45" stroke-linecap="round"/>`;
 const flame = (cx, by, w, h, fill) => `<path d="M${cx} ${(by - h).toFixed(1)} C ${(cx - w).toFixed(1)} ${(by - h * 0.55).toFixed(1)} ${(cx - w * 0.7).toFixed(1)} ${by} ${cx} ${by} C ${(cx + w * 0.7).toFixed(1)} ${by} ${(cx + w).toFixed(1)} ${(by - h * 0.55).toFixed(1)} ${cx} ${(by - h).toFixed(1)} Z" fill="${fill}"/>`;
 function emberA(st, f) {
   const by = 56;
-  if (st === "lapsed") {
-    return `<ellipse cx="30" cy="58" rx="11" ry="3.2" fill="#8f877b"/><ellipse cx="26" cy="56" rx="3" ry="2" fill="#a39a8c"/><ellipse cx="34" cy="56.5" rx="2.6" ry="1.8" fill="#a39a8c"/><path d="M30 53 q4 -6 0 -11 q-4 -5 0 -10" fill="none" stroke="#b3ada3" stroke-width="1.4" opacity="0.45" stroke-linecap="round"/>`;
-  }
-  const col = cf(st).m, lite = lighten(col, 0.35), tip = lighten(col, 0.65);
+  if (st === "lapsed") return ash();
+  const body = st === "new" ? "#ffb02e" : (FIRE[st] || "#ef8f2a");
+  const inner = lighten(body, 0.32), core = lighten(body, 0.62);
   const H = st === "new" ? 14 : 14 + f * 26, W = st === "new" ? 6 : 7 + f * 5;
   let o = `<ellipse cx="30" cy="59" rx="${(W * 0.9).toFixed(1)}" ry="2" fill="#000" opacity="0.06"/>`;
-  o += flame(30, by, W, H, col) + flame(30, by, W * 0.62, H * 0.72, lite) + flame(30, by, W * 0.32, H * 0.42, tip);
+  if (st === "accelerating" || st === "thriving") o += `<ellipse cx="30" cy="${(by - H * 0.55).toFixed(1)}" rx="${(W * 1.35).toFixed(1)}" ry="${(H * 0.6).toFixed(1)}" fill="${body}" opacity="0.12"/>`;
+  o += flame(30, by, W, H, body) + flame(30, by, W * 0.62, H * 0.72, inner) + flame(30, by, W * 0.32, H * 0.42, core);
   if (st === "new") o += `<rect x="29" y="${by - 1}" width="2" height="6" rx="1" fill="#9c6a3a"/>`;
-  if (st === "accelerating") o += spark(42, 28, "#ffd76a") + spark(18, 30, "#fff") + spark(38, 15, lite);
+  if (st === "accelerating") o += spark(42, 28, "#ffe08a") + spark(18, 30, "#fff3c0") + spark(38, 15, inner);
   if (st === "declining") o += `<path d="M30 ${(by - H).toFixed(1)} q5 -6 1 -12" fill="none" stroke="#b3ada3" stroke-width="1.3" opacity="0.5" stroke-linecap="round"/>`;
   return o;
 }
 
 // ===================== WILD #3: vital-sign pulse (EKG) =====================
+const pulseGrid = () => `<g stroke="#cfd8cf" stroke-width="0.5" opacity="0.55">` + [13, 22, 31, 40, 49].map(y => `<line x1="4" y1="${y}" x2="56" y2="${y}"/>`).join("") + [12, 22, 32, 42, 52].map(x => `<line x1="${x}" y1="11" x2="${x}" y2="51"/>`).join("") + `</g>`;
 function pulseA(st, f) {
-  const midY = 33;
-  if (st === "lapsed") return `<path d="M5 ${midY} H55" stroke="#9a958c" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="55" cy="${midY}" r="2" fill="#9a958c"/>`;
+  const midY = 31, grid = pulseGrid();
+  if (st === "lapsed") return grid + `<path d="M4 ${midY} H56" stroke="#9a958c" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="56" cy="${midY}" r="2" fill="#9a958c"/>`;
   const col = cf(st).m, amp = st === "new" ? 5 : 4 + f * 20;
   const path = st === "new"
-    ? `M5 ${midY} H22 q3 -${amp} 6 0 H55`
-    : `M5 ${midY} H20 L24 ${(midY - amp).toFixed(1)} L27 ${(midY + amp * 0.55).toFixed(1)} L30 ${(midY - amp * 0.28).toFixed(1)} L33 ${midY} H55`;
-  let o = `<path d="${path}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="55" cy="${midY}" r="2.4" fill="${col}"/>`;
-  if (st === "accelerating") o += spark(24, midY - amp - 3, "#ffd76a");
+    ? `M4 ${midY} H22 q3 -${amp} 6 0 H56`
+    : `M4 ${midY} H19 L23 ${(midY - amp).toFixed(1)} L26 ${(midY + amp * 0.55).toFixed(1)} L29 ${(midY - amp * 0.28).toFixed(1)} L32 ${midY} H56`;
+  let o = grid + `<path d="${path}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="56" cy="${midY}" r="2.4" fill="${col}"/>`;
+  if (st === "accelerating") o += spark(23, midY - amp - 3, "#ffd76a");
   return o;
 }
 
@@ -166,9 +171,9 @@ function cupT(t, color) {
 }
 function pixelT(t, color) {
   if (t <= 0.12) return pixelA("lapsed", 0);
-  const cx = 30, cy = 28, trunkC = "#9c6a3a", dk = darken(color, 0.78), rG = 1.3 + t * 2.6;
-  let o = `<ellipse cx="30" cy="59" rx="9" ry="2" fill="#000" opacity="0.05"/>`;
-  for (let gj = Math.ceil(rG); gj <= 6; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, trunkC);
+  const cx = 30, cy = 26, trunkC = "#9c6a3a", dk = darken(color, 0.78), rG = 1.2 + t * 2.5;
+  let o = pxGround(cx);
+  for (let gj = Math.ceil(rG); gj <= 5; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, trunkC);
   for (let gi = -4; gi <= 4; gi++) for (let gj = -4; gj <= 4; gj++) {
     if (gi * gi + gj * gj <= rG * rG) o += pxRect(cx + gi * PXC - PXC / 2, cy + gj * PXC - PXC / 2, ((gi + gj) & 1) ? dk : color);
   }
@@ -176,19 +181,19 @@ function pixelT(t, color) {
   return o;
 }
 function emberT(t, color) {
-  if (t <= 0.12) return emberA("lapsed", 0);
-  const by = 56, lite = lighten(color, 0.35), tip = lighten(color, 0.65), H = 14 + t * 26, W = 7 + t * 5;
+  if (t <= 0.12) return ash();
+  const by = 56, body = t < 0.3 ? "#cf6322" : "#ef8f2a", inner = lighten(body, 0.32), core = lighten(body, 0.62), H = 14 + t * 26, W = 7 + t * 5;
   let o = `<ellipse cx="30" cy="59" rx="${(W * 0.9).toFixed(1)}" ry="2" fill="#000" opacity="0.06"/>`;
-  o += flame(30, by, W, H, color) + flame(30, by, W * 0.62, H * 0.72, lite) + flame(30, by, W * 0.32, H * 0.42, tip);
-  if (t > 0.82) o += spark(42, 26, "#ffd76a") + spark(18, 30, "#fff");
+  o += flame(30, by, W, H, body) + flame(30, by, W * 0.62, H * 0.72, inner) + flame(30, by, W * 0.32, H * 0.42, core);
+  if (t > 0.82) o += spark(42, 26, "#ffe08a") + spark(18, 30, "#fff3c0");
   return o;
 }
 function pulseT(t, color) {
-  const midY = 33;
-  if (t <= 0.12) return `<path d="M5 ${midY} H55" stroke="#9a958c" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="55" cy="${midY}" r="2" fill="#9a958c"/>`;
+  const midY = 31, grid = pulseGrid();
+  if (t <= 0.12) return grid + `<path d="M4 ${midY} H56" stroke="#9a958c" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="56" cy="${midY}" r="2" fill="#9a958c"/>`;
   const amp = 4 + t * 20;
-  let o = `<path d="M5 ${midY} H20 L24 ${(midY - amp).toFixed(1)} L27 ${(midY + amp * 0.55).toFixed(1)} L30 ${(midY - amp * 0.28).toFixed(1)} L33 ${midY} H55" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="55" cy="${midY}" r="2.4" fill="${color}"/>`;
-  if (t > 0.82) o += spark(24, midY - amp - 3, "#ffd76a");
+  let o = grid + `<path d="M4 ${midY} H19 L23 ${(midY - amp).toFixed(1)} L26 ${(midY + amp * 0.55).toFixed(1)} L29 ${(midY - amp * 0.28).toFixed(1)} L32 ${midY} H56" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="56" cy="${midY}" r="2.4" fill="${color}"/>`;
+  if (t > 0.82) o += spark(23, midY - amp - 3, "#ffd76a");
   return o;
 }
 
