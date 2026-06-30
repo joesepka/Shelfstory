@@ -40,7 +40,7 @@ export default function ThemeChooser({ onChoose }) {
                 gridColumn: i === THEMES.length - 1 && THEMES.length % 2 ? "1 / span 2" : "auto",
               }}>
               <svg width="66" height="68" viewBox={VB} aria-hidden="true"
-                dangerouslySetInnerHTML={{ __html: accountArt(t.key, "fruiting", 0.96, "ch" + i) }} />
+                dangerouslySetInnerHTML={{ __html: accountArt(t.key, "accelerating", 0.96, "ch" + i) }} />
               <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 4 }}>{t.label}</div>
               <div style={{ fontSize: 11, color: "var(--text-3)", lineHeight: 1.3 }}>{t.blurb}</div>
             </button>

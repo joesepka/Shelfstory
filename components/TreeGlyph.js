@@ -6,45 +6,44 @@
 // state+fullness drives every style. Pure-SVG art lives in treeArt.js.
 import { useId } from "react";
 import { useTheme } from "../lib/theme";
-import { accountArt, tierArt, VB } from "./treeArt";
+import { accountArt, tierArt, VB, RAMP, NEW_COLOR, LAPSED_COLOR } from "./treeArt";
 
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 const norm = h => String(h || "").toLowerCase().trim();
 
-// headline (+ momentum) → one of the 7 states
+// headline (+ momentum) → one of 10 states along the health ramp
 export function plantState(headline, pct) {
   const h = norm(headline);
-  if (h === "lapsed") return "bare";
-  if (h === "new") return "flowering";
-  if (h === "accelerating") return pct != null && pct >= 30 ? "fruiting" : "thriving";
-  if (h === "at-risk" || h === "atrisk" || h === "at risk") return "wilting";
-  if (h === "decelerating") return "slipping";
+  if (h === "lapsed") return "lapsed";
+  if (h === "new") return "new";
   if (pct != null) {
-    if (pct >= 30) return "fruiting";
-    if (pct >= 8) return "thriving";
-    if (pct <= -12) return "wilting";
-    if (pct < 0) return "slipping";
+    if (h === "accelerating" || pct >= 28) return "accelerating";
+    if (pct >= 15) return "thriving";
+    if (pct >= 5) return "growing";
+    if (pct >= -3) return "steady";
+    if (h === "at-risk" || h === "atrisk" || h === "at risk") return pct <= -22 ? "declining" : "atrisk";
+    if (pct >= -10) return "softening";
+    if (pct >= -20) return "slipping";
+    if (pct >= -32) return "atrisk";
+    return "declining";
   }
+  if (h === "accelerating") return "accelerating";
+  if (h === "at-risk" || h === "atrisk" || h === "at risk") return "atrisk";
+  if (h === "decelerating") return "softening";
   return "steady";
 }
 
-// canopy fullness 0..1 — graded within each state by momentum
+// canopy fullness 0..1 — steps down across the ramp (size reinforces color)
+const VIT = { accelerating: 0.94, thriving: 0.82, growing: 0.7, steady: 0.56, softening: 0.46, slipping: 0.36, atrisk: 0.26, declining: 0.16 };
 export function vit(st, pct) {
-  if (st === "bare") return 0;
-  const base = { flowering: 0.68, fruiting: 0.9, thriving: 0.8, steady: 0.55, slipping: 0.4, wilting: 0.24 }[st];
-  if (pct == null) return base;
-  if (st === "fruiting") return clamp(0.82 + (pct - 30) / 200, 0.82, 1);
-  if (st === "thriving") return clamp(0.62 + pct / 120, 0.6, 0.86);
-  if (st === "flowering") return clamp(0.6 + (pct > 0 ? pct / 120 : 0), 0.55, 0.82);
-  if (st === "steady") return clamp(0.5 + pct / 300, 0.45, 0.62);
-  if (st === "slipping") return clamp(0.45 + pct / 70, 0.32, 0.5);
-  if (st === "wilting") return clamp(0.34 + pct / 60, 0.14, 0.34);
-  return base;
+  if (st === "lapsed") return 0;
+  if (st === "new") return 0.6;
+  const base = VIT[st] != null ? VIT[st] : 0.55;
+  return pct == null ? base : Math.max(0.12, Math.min(1, base + Math.max(-0.05, Math.min(0.05, pct / 600))));
 }
 
 // user-facing labels + accent colors per state
-export const stateLabel = { flowering: "New", fruiting: "Accelerating", thriving: "Growing", steady: "Steady", slipping: "Cooling", wilting: "At risk", bare: "Lapsed" };
-export const stateColor = { flowering: "#5bb47e", fruiting: "#3f8a5e", thriving: "#4a9068", steady: "#6aa06a", slipping: "#9aa05a", wilting: "#c2922e", bare: "#b0573a" };
+export const stateLabel = { new: "New", accelerating: "Accelerating", thriving: "Thriving", growing: "Growing", steady: "Steady", softening: "Softening", slipping: "Slipping", atrisk: "At risk", declining: "Declining", lapsed: "Lapsed" };
+export const stateColor = { new: NEW_COLOR, ...RAMP, lapsed: LAPSED_COLOR };
 
 // coarse 5-bucket map for the home tier rollup (keeps page.js math stable)
 export function tierBucket(headline) {
