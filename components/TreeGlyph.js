@@ -132,10 +132,15 @@ function CupTree({ headline, pct, h = 40, state }) {
   const G = { width: Math.round((h * 32) / 44), height: h, display: "block", flexShrink: 0 };
   const col = stateColor[st];
   if (st === "bare") {
+    // dead account = bare branches, kept smooth/rounded in the Cupertino spirit
     return (
       <svg style={G} viewBox="0 0 32 44" aria-hidden="true">
-        <rect x="14.6" y="20" width="2.8" height="24" rx="1.4" fill={C.soil} />
-        <circle cx="16" cy="15" r="9" fill="none" stroke={C.rust} strokeWidth="1.6" opacity="0.7" strokeDasharray="2.6 3.2" />
+        <rect x="14.6" y="22" width="2.8" height="22" rx="1.4" fill="#b09a7c" />
+        <line x1="16" y1="24" x2="10" y2="11" stroke="#a99e8e" strokeWidth="2.4" strokeLinecap="round" />
+        <line x1="16" y1="24" x2="22" y2="11" stroke="#a99e8e" strokeWidth="2.4" strokeLinecap="round" />
+        <line x1="16" y1="26" x2="12" y2="17" stroke="#a99e8e" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="16" y1="26" x2="20" y2="17" stroke="#a99e8e" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="16" y1="22" x2="16" y2="9" stroke="#a99e8e" strokeWidth="1.8" strokeLinecap="round" />
       </svg>
     );
   }
@@ -247,10 +252,15 @@ function CupTier({ t = 0.6, color = "#4a9068", h = 88 }) {
   const W = Math.round((h * 44) / 48);
   const G = { width: W, height: h, display: "block" };
   if (t <= 0.12) {
+    // dead tier = bare branches (smooth/rounded), not an empty ring
     return (
       <svg style={G} viewBox="0 0 44 48" aria-hidden="true">
-        <rect x="20.6" y="26" width="3" height="18" rx="1.5" fill={C.soil} />
-        <circle cx="22" cy="19" r="12" fill="none" stroke={C.rust} strokeWidth="1.8" opacity="0.7" strokeDasharray="3 3.6" />
+        <rect x="20.6" y="26" width="3" height="18" rx="1.5" fill="#b09a7c" />
+        <line x1="22" y1="28" x2="12" y2="13" stroke="#a99e8e" strokeWidth="2.6" strokeLinecap="round" />
+        <line x1="22" y1="28" x2="32" y2="13" stroke="#a99e8e" strokeWidth="2.6" strokeLinecap="round" />
+        <line x1="22" y1="31" x2="15" y2="21" stroke="#a99e8e" strokeWidth="2" strokeLinecap="round" />
+        <line x1="22" y1="31" x2="29" y2="21" stroke="#a99e8e" strokeWidth="2" strokeLinecap="round" />
+        <line x1="22" y1="26" x2="22" y2="11" stroke="#a99e8e" strokeWidth="2" strokeLinecap="round" />
       </svg>
     );
   }
