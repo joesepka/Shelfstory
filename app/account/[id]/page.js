@@ -5,6 +5,7 @@ import { supabase } from "../../../lib/supabase";
 import LoadingScreen from "../../../components/LoadingScreen";
 import TreeGlyph from "../../../components/TreeGlyph";
 import SellStory from "../../../components/SellStory";
+import AccountTag from "../../../components/AccountTag";
 import { greenBar } from "../../../lib/utils";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
@@ -267,7 +268,7 @@ export default function AccountOverview() {
         if (!acc) { setErr("Account not found."); return; }
         const items = (itemRes.data || []);
         const carried = new Set(items.map((i) => i.product_key));
-        const white = (mktRes.data || []).filter((m) => !carried.has(m.product_key)).slice(0, 3);
+        const white = (mktRes.data || []).filter((m) => !carried.has(m.product_key)).slice(0, 10);
         // peer cohort for the active-SKU comparison: same on/off premise (strict)
         const onP = String(acc.channel || "").toUpperCase().startsWith("ON");
         let cohort = [], cf = 0;
@@ -380,6 +381,21 @@ export default function AccountOverview() {
         <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: "var(--r-sm)", whiteSpace: "nowrap", background: head.bg, color: head.fg }}>{acc.headline}</span>
       </div>
 
+      {/* headline stats — annualized, L90, active SKUs */}
+      <div style={{ display: "flex", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden", marginBottom: 11 }}>
+        {[
+          ["annualized", <>{acc.account_weight} <span style={{ fontSize: 11, color: "var(--text-2)" }}>cs</span></>, null],
+          ["L90 cases", <>{acc.cur90} {pct != null && <span style={{ fontSize: 11, color: pct < 0 ? "var(--down)" : pct > 0 ? "var(--up)" : "var(--text-3)" }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : ""}{Math.abs(pct)}%</span>}</>, "vs prior 90D"],
+          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, skuComp ? <span style={{ color: skuComp.pct > 0 ? "var(--up)" : skuComp.pct < 0 ? "var(--down)" : "var(--text-3)" }}>{skuComp.pct > 0 ? "+" : ""}{skuComp.pct}% vs peers</span> : null],
+        ].map(([label, val, note], i) => (
+          <div key={i} style={{ flex: 1, padding: "10px 12px", borderRight: i < 2 ? "0.5px solid var(--border)" : "none" }}>
+            <div style={{ fontSize: 11, color: "var(--text-3)" }}>{label}</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text)" }}>{val}</div>
+            {note && <div style={{ fontSize: 8.5, color: "var(--text-3)", marginTop: 2 }}>{note}</div>}
+          </div>
+        ))}
+      </div>
+
       {/* overview — quick read: trend, SKU depth vs peers, relative size */}
       <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 11, boxShadow: "var(--shadow-sm)" }}>
         <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
@@ -410,23 +426,6 @@ export default function AccountOverview() {
         ) : (
           <div style={{ marginTop: 7, fontSize: 12.5, color: "var(--text-3)" }}>No standout plays right now — keep the relationship warm.</div>
         )}
-      </div>
-
-      {/* sell-story generator (Cupertino-styled panel) */}
-      <SellStory acc={acc} items={items} white={white} />
-
-      <div style={{ display: "flex", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden" }}>
-        {[
-          ["annualized", <>{acc.account_weight} <span style={{ fontSize: 11, color: "var(--text-2)" }}>cs</span></>, null],
-          ["L90 cases", <>{acc.cur90} {pct != null && <span style={{ fontSize: 11, color: pct < 0 ? "var(--down)" : pct > 0 ? "var(--up)" : "var(--text-3)" }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : ""}{Math.abs(pct)}%</span>}</>, "vs prior 90D"],
-          ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, skuComp ? <span style={{ color: skuComp.pct > 0 ? "var(--up)" : skuComp.pct < 0 ? "var(--down)" : "var(--text-3)" }}>{skuComp.pct > 0 ? "+" : ""}{skuComp.pct}% vs peers</span> : null],
-        ].map(([label, val, note], i) => (
-          <div key={i} style={{ flex: 1, padding: "10px 12px", borderRight: i < 2 ? "0.5px solid var(--border)" : "none" }}>
-            <div style={{ fontSize: 11, color: "var(--text-3)" }}>{label}</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text)" }}>{val}</div>
-            {note && <div style={{ fontSize: 8.5, color: "var(--text-3)", marginTop: 2 }}>{note}</div>}
-          </div>
-        ))}
       </div>
 
       {bench && bench.wt_vs_chan_pct != null && (
@@ -490,7 +489,7 @@ export default function AccountOverview() {
       {white.length > 0 && (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "16px 0 6px", letterSpacing: "0.3px" }}>WHITESPACE · sells nearby, not carried here</div>
-          {white.map((w, i) => (
+          {white.slice(0, 3).map((w, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 2px", borderBottom: "0.5px solid var(--border)" }}>
               <span style={{ fontSize: 13, color: "var(--text)" }}>{w.item_name}</span>
               <span style={{ fontSize: 11, color: "var(--text-3)" }}>#{w.market_rank} in market</span>
@@ -498,6 +497,10 @@ export default function AccountOverview() {
           ))}
         </>
       )}
+
+      <div style={{ height: 18 }} />
+      <SellStory acc={acc} items={items} white={white} />
+      <AccountTag acc={acc} items={items} white={white} />
 
       <div style={{ height: 24 }} />
     </div>
