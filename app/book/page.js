@@ -7,6 +7,7 @@ import { useExplode } from "../../lib/useExplode";
 import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
 import { getScope } from "../../lib/scope";
+import { tierIdSet, TIER_LABEL } from "../../lib/tiers";
 
 
 function label(hd) {
@@ -407,6 +408,7 @@ function BookInner() {
   const linkChain = searchParams.get("chain");
   const linkDist = searchParams.get("distributor");
   const linkHealth = searchParams.get("health"); // new | healthy | atrisk | lapsed
+  const linkTier = searchParams.get("tier"); // top | mid | small | tail
 
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
@@ -419,6 +421,7 @@ function BookInner() {
   const [premF, setPremF] = useState("All");
   const [distF, setDistF] = useState("All");
   const [healthFilter, setHealthFilter] = useState(null);
+  const [tierFilter, setTierFilter] = useState(null);
   const [linkScope, setLinkScope] = useState(null);
 
   useEffect(() => {
@@ -434,7 +437,10 @@ function BookInner() {
     if (linkChain) setChainF(linkChain);
     if (linkDist) setDistF(linkDist);
     if (linkHealth && ["new", "healthy", "atrisk", "lapsed"].includes(linkHealth)) setHealthFilter(linkHealth);
-    if (linkIds && linkIds.length) {
+    if (linkTier && TIER_LABEL[linkTier]) setTierFilter(linkTier);
+    if (linkTier && TIER_LABEL[linkTier]) {
+      setLinkScope({ kind: "tier", label: TIER_LABEL[linkTier] });
+    } else if (linkIds && linkIds.length) {
       setLinkScope({ kind: "ids", ids: new Set(linkIds), n: linkIds.length });
     } else if (linkCity) {
       setLinkScope({ kind: "city", label: titleCase(linkCity) });
@@ -443,11 +449,11 @@ function BookInner() {
     } else if (linkDist) {
       setLinkScope({ kind: "distributor", label: titleCase(linkDist) });
     } else setLinkScope(null);
-  }, [linkIds, linkCity, linkState, linkChain, linkDist, linkHealth]);
+  }, [linkIds, linkCity, linkState, linkChain, linkDist, linkHealth, linkTier]);
 
   function clearLink() {
     setLinkScope(null);
-    setStF("All"); setCityF("All"); setChainF("All"); setDistF("All"); setHealthFilter(null);
+    setStF("All"); setCityF("All"); setChainF("All"); setDistF("All"); setHealthFilter(null); setTierFilter(null);
     router.replace(view === "account" ? "/book" : `/book?view=${view}`, { scroll: false });
   }
 
@@ -516,14 +522,18 @@ function BookInner() {
     return { ...g, tot, hp: Math.round(100 * g.healthy.vol / tot), np: Math.round(100 * g.new.vol / tot), rp: Math.round(100 * g.atrisk.vol / tot), lp: Math.round(100 * g.lapsed.vol / tot) };
   }, [geo]);
 
+  // clicked a home tier → the set of account_ids in that volume tier of the scoped book
+  const tierSet = useMemo(() => (tierFilter && geo) ? tierIdSet(geo, tierFilter) : null, [tierFilter, geo]);
+
   const shownFull = useMemo(() => {
     let f = geo || [];
+    if (tierSet) f = f.filter(r => tierSet.has(r.account_id));
     if (healthFilter === "lapsed") f = f.filter(r => isLapsed(r.headline));
     else if (healthFilter) f = f.filter(r => groupOf(r.headline) === healthFilter);
     const t = q.trim().toLowerCase();
     if (t) f = f.filter(r => String(r.account_name || "").toLowerCase().includes(t));
     return f;
-  }, [geo, healthFilter, q]);
+  }, [geo, tierSet, healthFilter, q]);
 
   const shown = useMemo(() => shownFull.slice(0, CAP), [shownFull]);
   const shownTree = useMemo(() => shownFull.slice(0, TREE_CAP), [shownFull]);
@@ -541,7 +551,7 @@ function BookInner() {
       {linkScope && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "var(--pop-cool-soft)", borderRadius: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: "var(--pop-cool-deep)" }}>
-            Filtered{linkScope.kind === "ids" ? ` to ${linkScope.n} flagged account${linkScope.n === 1 ? "" : "s"}` : ` to ${linkScope.label}`} from your action list
+            {linkScope.kind === "ids" ? `Showing ${linkScope.n} flagged account${linkScope.n === 1 ? "" : "s"}` : linkScope.kind === "tier" ? `Showing ${linkScope.label}` : `Filtered to ${linkScope.label}`}
           </span>
           <button onClick={clearLink} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 16, border: "none", background: "var(--surface)", color: "var(--pop-cool-deep)", cursor: "pointer", fontFamily: "inherit" }}>clear ✕</button>
         </div>

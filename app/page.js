@@ -576,7 +576,8 @@ export default function Home() {
               {cur.tiers.map((t, idx) => (
                 <Fragment key={t.key}>
                   {idx > 0 && <div className="t4div" aria-hidden="true" />}
-                  <div className="t4col">
+                  <div className="t4col" style={{ cursor: t.n ? "pointer" : "default" }}
+                    onClick={() => { if (t.n) router.push(`/book?tier=${t.key}${cur.key !== "ALL" ? `&state=${cur.key}` : ""}`); }}>
                     <div className="t4tree">{t.n ? <TierTree t={t.vit} color={t.color} h={[66, 56, 48, 42][idx]} /> : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}</div>
                     <div className="t4lbl">{t.label}</div>
                     <div className="t4n">{t.n.toLocaleString()} acct{t.n === 1 ? "" : "s"}</div>
