@@ -417,7 +417,9 @@ export default function Home() {
   const [briefOpen, setBriefOpen] = useState(false);
   const [slide, setSlide] = useState(0);
   const [confirm, setConfirm] = useState(null);
-  const touchX = useRef(null);
+  const drag = useRef({ x: 0, on: false });
+  const [dragDx, setDragDx] = useState(0);
+  const [dragging, setDragging] = useState(false);
   const { burst, styleFor } = useExplode();
 
   useEffect(() => {
@@ -482,40 +484,43 @@ export default function Home() {
   }
   function pick(i) { if (!slides) return; setSlide(i); setScope(slides[i].key === "ALL" ? "" : slides[i].key); }
   function go(d) { if (!slides) return; const n = slides.length; pick((slide + d + n) % n); }
-  function onTouchStart(e) { touchX.current = e.touches[0].clientX; }
-  function onTouchEnd(e) { if (touchX.current == null) return; const dx = e.changedTouches[0].clientX - touchX.current; touchX.current = null; if (dx < -40) go(1); else if (dx > 40) go(-1); }
+  // Gmail-style drag: the bar follows the finger with a little rubber-band, then
+  // snaps back and commits to the next/prev slide if dragged past the threshold.
+  function onDown(e) { if (!slides || slides.length < 2) return; drag.current = { x: e.clientX, on: true }; setDragging(true); }
+  function onMove(e) { if (!drag.current.on) return; let d = e.clientX - drag.current.x; if (Math.abs(d) > 90) d = (d > 0 ? 1 : -1) * (90 + (Math.abs(d) - 90) * 0.35); setDragDx(d); }
+  function onUp() { if (!drag.current.on) return; drag.current.on = false; setDragging(false); const d = dragDx; setDragDx(0); if (d < -48) go(1); else if (d > 48) go(-1); }
 
   return (
     <>
       {phase === "splash" && <Splash onDone={() => { booted = true; setPhase("ready"); }} />}
       {pickerOpen && <ThemeChooser onChoose={() => setPickerOpen(false)} onClose={() => setPickerOpen(false)} />}
 
-      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,var(--bg) 500px)", padding: 24, fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
+      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,var(--bg) 500px)", padding: "14px 20px 12px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
         {/* sky clouds, drifting behind everything */}
         <svg className="cl cl1" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 58, left: -24, width: 124, opacity: 0.8, zIndex: 0 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
         <svg className="cl cl2" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 104, right: -12, width: 90, opacity: 0.6, zIndex: 0 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
 
         <div style={{ position: "relative", zIndex: 1 }}>
         {/* top row: greeting + logo */}
-        <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginTop: 8 }}>
+        <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginTop: 2 }}>
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontFamily: "var(--font-serif)", fontSize: 26, color: "var(--text)", margin: "4px 0 4px", fontWeight: 600, letterSpacing: "-0.3px" }}>{greet}, Joe.</h1>
-            <p style={{ fontSize: 13, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
+            <h1 style={{ fontFamily: "var(--font-serif)", fontSize: 22, color: "var(--text)", margin: "2px 0 2px", fontWeight: 600, letterSpacing: "-0.3px" }}>{greet}, Joe.</h1>
+            <p style={{ fontSize: 12, color: "var(--text-3)", marginTop: 0 }}>Data last updated {DATA_UPDATED}</p>
           </div>
-          <div style={{ flexShrink: 0, marginTop: 4 }}><HeaderLogo /></div>
+          <div style={{ flexShrink: 0, marginTop: 2 }}><HeaderLogo /></div>
         </div>
 
         {/* buttons — four square */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
           {NAV.map(c => (
             <div key={c.href} onClick={() => navTo(c.href)}
-              style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "12px 13px 11px", minHeight: 86, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
+              style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "9px 12px 8px", minHeight: 66, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <NavIcon href={c.href} />
                 <span style={{ fontSize: 15, color: c.color, lineHeight: 1 }}>→</span>
               </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", marginTop: 8, letterSpacing: "-0.2px" }}>{c.title}</div>
-              <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.sub}</div>
+              <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginTop: 5, letterSpacing: "-0.2px" }}>{c.title}</div>
+              <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 2, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.sub}</div>
             </div>
           ))}
         </div>
@@ -526,16 +531,18 @@ export default function Home() {
 
         {/* scope indicator — between the buttons and the stat box */}
         {cur && (
-          <div className="riseIn" style={{ marginTop: 18 }}>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px", lineHeight: 1.1 }}>{cur.key === "ALL" ? "All states" : cur.label}</div>
+          <div className="riseIn" style={{ marginTop: 10 }}>
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 19, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px", lineHeight: 1.1 }}>{cur.key === "ALL" ? "All states" : cur.label}</div>
             <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the stats to change" : ""}</div>
           </div>
         )}
 
         {/* info box (swipeable) — cases / accts / ROS */}
         {cur && (
-          <div onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ marginTop: 10 }}>
-            <div className="riseIn" style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "13px 10px" }}>
+          <div style={{ marginTop: 8 }}>
+            <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
+              style={{ transform: `translateX(${dragDx}px)`, transition: dragging ? "none" : "transform .28s cubic-bezier(.2,.7,.2,1)", touchAction: "pan-y", cursor: slides && slides.length > 1 ? "grab" : "default" }}>
+            <div className="riseIn" style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "11px 10px" }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
               <div key={cur.key} className="sceneFade" style={{ display: "flex" }}>
@@ -544,19 +551,20 @@ export default function Home() {
                 <Stat label="ROS / Acct" value={cur.rosNow.toFixed(1)} unit="cs" pct={cur.rosPct} divider delay={1.8} />
               </div>
             </div>
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 9 }}>
+            </div>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 6 }}>
               {slides.slice(0, 9).map((sl, i) => (
                 <span key={i} onClick={() => pick(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
               ))}
               {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
             </div>
-            <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 6 }}>vs prior 90 days</div>
+            <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 3 }}>vs prior 90 days</div>
           </div>
         )}
 
         {/* collapsible brief — state-specific */}
         {cur && cur.brief && (
-          <div style={{ marginTop: 14, minHeight: 19 }}>
+          <div style={{ marginTop: 8, minHeight: 18 }}>
             <div className="riseIn">
               <div onClick={() => setBriefOpen(o => !o)}
                 className={briefOpen ? "" : "bob"}
@@ -576,7 +584,7 @@ export default function Home() {
 
         {/* the book by tier — four health trees, each ~25% of volume */}
         {cur && (
-          <div style={{ marginTop: 18 }}>
+          <div style={{ marginTop: 10 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5 }}>THE BOOK BY TIER</div>
             <div key={"t4" + cur.key} className="sceneFade tier4row">
               {cur.tiers.map((t, idx) => (
@@ -584,7 +592,7 @@ export default function Home() {
                   {idx > 0 && <div className="t4div" aria-hidden="true" />}
                   <div className="t4col" style={{ cursor: t.n ? "pointer" : "default" }}
                     onClick={() => { if (t.n) router.push(`/book?tier=${t.key}${cur.key !== "ALL" ? `&state=${cur.key}` : ""}`); }}>
-                    <div className="t4tree">{t.n ? <TierTree t={t.vit} color={t.color} h={[66, 56, 48, 42][idx]} /> : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}</div>
+                    <div className="t4tree">{t.n ? <TierTree t={t.vit} color={t.color} h={[54, 47, 41, 35][idx]} /> : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}</div>
                     <div className="t4lbl">{t.label}</div>
                     <div className="t4n">{t.n.toLocaleString()} acct{t.n === 1 ? "" : "s"}</div>
                     <div className="t4desc">{t.desc}</div>
@@ -595,14 +603,14 @@ export default function Home() {
           </div>
         )}
 
-        <div style={{ height: 22 }} />
+        <div style={{ height: 8 }} />
         <div style={{ display: "flex", justifyContent: "center" }}>
           <button onClick={() => setPickerOpen(true)} aria-label="Change tree style" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.65, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 22 11 10 10 0 0 0 12 2Z" /><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" /><circle cx="15.5" cy="7" r="1.4" fill="currentColor" stroke="none" /><circle cx="17.5" cy="12" r="1.4" fill="currentColor" stroke="none" /></svg>
             Change style
           </button>
         </div>
-        <div style={{ height: 18 }} />
+        <div style={{ height: 4 }} />
         </div>
       </main>
 
@@ -640,13 +648,13 @@ export default function Home() {
         .wedgeRo b{color:var(--text);font-weight:700;}
         .rdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;}
         .wedgeHint{color:var(--text-3);}
-        .tier4row{display:flex;align-items:flex-end;margin-top:12px;}
+        .tier4row{display:flex;align-items:flex-end;margin-top:8px;}
         .t4div{width:1px;background:#e2e4df;align-self:stretch;flex-shrink:0;}
         .t4col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:0 5px;}
-        .t4tree{display:flex;align-items:flex-end;justify-content:center;min-height:68px;}
-        .t4lbl{font-size:11.5px;font-weight:700;color:var(--text);margin-top:7px;}
+        .t4tree{display:flex;align-items:flex-end;justify-content:center;min-height:56px;}
+        .t4lbl{font-size:11.5px;font-weight:700;color:var(--text);margin-top:5px;}
         .t4n{font-size:10px;color:var(--text-3);margin-top:1px;}
-        .t4desc{font-size:10px;color:var(--text-3);margin-top:2px;line-height:1.25;}
+        .t4desc{font-size:9.5px;color:var(--text-3);margin-top:2px;line-height:1.2;}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}
