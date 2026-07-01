@@ -117,38 +117,52 @@ function pixelA(st, f) {
   return o;
 }
 
-// ===================== WILD #2: living flame (ember) =====================
-// True fire palette — bright yellow-orange when hot, deeper orange as it cools,
-// GREY ember + smoke when almost dead, grey ash when lapsed. Size = health.
-const FIRE = { accelerating: "#ff8a1f", thriving: "#ff9e26", growing: "#f59a2a", steady: "#ef8f2a", softening: "#e8842a", slipping: "#dd7726", atrisk: "#cf6322", declining: "#9e978d" };
-const ash = () => `<ellipse cx="30" cy="58" rx="11" ry="3.2" fill="#8f877b"/><ellipse cx="26" cy="56" rx="3" ry="2" fill="#a39a8c"/><ellipse cx="34" cy="56.5" rx="2.6" ry="1.8" fill="#a39a8c"/><path d="M30 53 q4 -6 0 -11 q-4 -5 0 -10" fill="none" stroke="#b3ada3" stroke-width="1.4" opacity="0.45" stroke-linecap="round"/>`;
-const flame = (cx, by, w, h, fill) => `<path d="M${cx} ${(by - h).toFixed(1)} C ${(cx - w).toFixed(1)} ${(by - h * 0.55).toFixed(1)} ${(cx - w * 0.7).toFixed(1)} ${by} ${cx} ${by} C ${(cx + w * 0.7).toFixed(1)} ${by} ${(cx + w).toFixed(1)} ${(by - h * 0.55).toFixed(1)} ${cx} ${(by - h).toFixed(1)} Z" fill="${fill}"/>`;
-function emberA(st, f) {
-  const by = 56;
-  if (st === "lapsed") return ash();
-  const body = st === "new" ? "#ffb02e" : (FIRE[st] || "#ef8f2a");
-  const inner = lighten(body, 0.32), core = lighten(body, 0.62);
-  const H = st === "new" ? 14 : 14 + f * 26, W = st === "new" ? 6 : 7 + f * 5;
-  let o = `<ellipse cx="30" cy="59" rx="${(W * 0.9).toFixed(1)}" ry="2" fill="#000" opacity="0.06"/>`;
-  if (st === "accelerating" || st === "thriving") o += `<ellipse cx="30" cy="${(by - H * 0.55).toFixed(1)}" rx="${(W * 1.35).toFixed(1)}" ry="${(H * 0.6).toFixed(1)}" fill="${body}" opacity="0.12"/>`;
-  o += flame(30, by, W, H, body) + flame(30, by, W * 0.62, H * 0.72, inner) + flame(30, by, W * 0.32, H * 0.42, core);
-  if (st === "new") o += `<rect x="29" y="${by - 1}" width="2" height="6" rx="1" fill="#9c6a3a"/>`;
-  if (st === "accelerating") o += spark(42, 28, "#ffe08a") + spark(18, 30, "#fff3c0") + spark(38, 15, inner);
-  if (st === "declining") o += `<path d="M30 ${(by - H).toFixed(1)} q5 -6 1 -12" fill="none" stroke="#b3ada3" stroke-width="1.3" opacity="0.5" stroke-linecap="round"/>`;
+// ===================== Watercolor: soft washed canopy =====================
+const LP_TRIS = [[[30, 12], [18, 32], [42, 32]], [[18, 32], [42, 32], [30, 30]], [[18, 32], [30, 30], [22, 46]], [[42, 32], [30, 30], [38, 46]], [[30, 30], [22, 46], [38, 46]], [[30, 12], [34, 24], [42, 32]]];
+function washCanopy(color, R, cy, fid) {
+  let blobs = "";
+  for (let i = 0; i < 5; i++) { const a = i / 5 * 6.283, rr = R * 0.45, x = 30 + Math.cos(a) * rr, y = cy + Math.sin(a) * rr * 0.85, r2 = R * (0.62 + 0.16 * (i % 3)); blobs += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${r2.toFixed(1)}" ry="${(r2 * 0.9).toFixed(1)}" fill="${i % 2 ? lighten(color, 0.3) : color}" opacity="0.5"/>`; }
+  return `<defs><filter id="${fid}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.25"/></filter></defs><g filter="url(#${fid})">${blobs}</g>`;
+}
+function watercolorA(st, f, sfx) {
+  if (st === "new") return saplingArt("watercolor");
+  if (st === "lapsed") return smoothDead();
+  const col = cf(st).m, R = 9 + f * 7;
+  let o = shadow(R) + TR + washCanopy(col, R, 30, "wc" + sfx);
+  if (st === "accelerating") o += [[24, 27], [35, 24], [30, 20]].map(([x, y]) => fruitDot(x, y, "#f0d27a", "#d9a93f")).join("");
+  o += FBs.slice(0, DISTRESS[st] || 0).map(([x, y]) => fall(x, y, darken(col, 0.85))).join("");
   return o;
 }
 
-// ===================== WILD #3: vital-sign pulse (EKG) =====================
-const pulseGrid = () => `<g stroke="#cfd8cf" stroke-width="0.5" opacity="0.55">` + [13, 22, 31, 40, 49].map(y => `<line x1="4" y1="${y}" x2="56" y2="${y}"/>`).join("") + [12, 22, 32, 42, 52].map(x => `<line x1="${x}" y1="11" x2="${x}" y2="51"/>`).join("") + `</g>`;
-function pulseA(st, f) {
-  const midY = 31, grid = pulseGrid();
-  if (st === "lapsed") return grid + `<path d="M4 ${midY} H56" stroke="#9a958c" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="56" cy="${midY}" r="2" fill="#9a958c"/>`;
-  const col = cf(st).m, amp = st === "new" ? 5 : 4 + f * 20;
-  const path = st === "new"
-    ? `M4 ${midY} H22 q3 -${amp} 6 0 H56`
-    : `M4 ${midY} H19 L23 ${(midY - amp).toFixed(1)} L26 ${(midY + amp * 0.55).toFixed(1)} L29 ${(midY - amp * 0.28).toFixed(1)} L32 ${midY} H56`;
-  let o = grid + `<path d="${path}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="56" cy="${midY}" r="2.4" fill="${col}"/>`;
-  if (st === "accelerating") o += spark(23, midY - amp - 3, "#ffd76a");
+// ===================== Low-poly: faceted geometric tree =====================
+function facets(color, K) {
+  const shades = [lighten(color, 0.22), color, darken(color, 0.8)];
+  return `<polygon points="27,58 33,58 31,40 29,40" fill="#7a5a3e"/>` + LP_TRIS.slice(0, K).map((p, i) => `<polygon points="${p.map(q => q.join(",")).join(" ")}" fill="${shades[i % 3]}" stroke="#ffffff" stroke-width="0.5" stroke-opacity="0.35"/>`).join("");
+}
+function lowpolyA(st, f) {
+  if (st === "new") return saplingArt("lowpoly");
+  if (st === "lapsed") return smoothDead();
+  const col = cf(st).m;
+  let o = shadow(12) + facets(col, f > 0.6 ? 6 : 4);
+  if (st === "accelerating") o += [[24, 26], [36, 24]].map(([x, y]) => fruitDot(x, y, "#f0d27a", "#d9a93f")).join("");
+  o += FBs.slice(0, DISTRESS[st] || 0).map(([x, y]) => fall(x, y, darken(col, 0.85))).join("");
+  return o;
+}
+
+// ===================== Bonsai: sculpted pads on a curved trunk =====================
+const BONSAI_DEAD = `<ellipse cx="30" cy="59" rx="9" ry="2" fill="#000" opacity="0.04"/><path d="M30 58 C26 50 33 46 30 38 C28 32 34 30 31 22" stroke="#b09a7c" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M30 40 q-8 -2 -12 -7 M30 34 q9 0 13 -5 M31 26 q4 -4 9 -4" stroke="#a99e8e" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+function bonsaiPads(color, sc) {
+  const d = darken(color, 0.82);
+  return `<path d="M30 40 L20 31 M30 36 L40 27 M30 30 L30 20" stroke="#9a8366" stroke-width="1.8" fill="none" stroke-linecap="round"/>` +
+    [[20, 30, 7], [40, 26, 6.5], [30, 18, 6]].map(([x, y, r], i) => { const rr = r * sc; return `<ellipse cx="${x}" cy="${y}" rx="${(rr * 1.15).toFixed(1)}" ry="${rr.toFixed(1)}" fill="${i === 1 ? d : color}"/><ellipse cx="${(x - rr * 0.4).toFixed(1)}" cy="${(y - rr * 0.4).toFixed(1)}" rx="${(rr * 0.45).toFixed(1)}" ry="${(rr * 0.3).toFixed(1)}" fill="#fff" opacity="0.16"/>`; }).join("");
+}
+function bonsaiA(st, f) {
+  if (st === "new") return saplingArt("bonsai");
+  if (st === "lapsed") return BONSAI_DEAD;
+  const col = cf(st).m;
+  let o = `<ellipse cx="30" cy="59" rx="9" ry="2" fill="#000" opacity="0.05"/><path d="M30 58 C26 50 33 46 30 38 C28 32 34 30 31 22" stroke="#9a8366" stroke-width="3" fill="none" stroke-linecap="round"/>` + bonsaiPads(col, 0.62 + f * 0.5);
+  if (st === "accelerating") o += [[20, 30], [40, 26], [30, 18]].map(([x, y]) => fruitDot(x, y, "#f0d27a", "#d9a93f")).join("");
+  o += FBs.slice(0, DISTRESS[st] || 0).map(([x, y]) => fall(x, y, darken(col, 0.85))).join("");
   return o;
 }
 
@@ -180,20 +194,23 @@ function pixelT(t, color) {
   if (t > 0.82) [[-1, -1], [1, 0]].forEach(([gi, gj]) => { o += pxRect(cx + gi * PXC - PXC / 2, cy + gj * PXC - PXC / 2, "#e0492e"); });
   return o;
 }
-function emberT(t, color) {
-  if (t <= 0.12) return ash();
-  const by = 56, body = t < 0.3 ? "#cf6322" : "#ef8f2a", inner = lighten(body, 0.32), core = lighten(body, 0.62), H = 14 + t * 26, W = 7 + t * 5;
-  let o = `<ellipse cx="30" cy="59" rx="${(W * 0.9).toFixed(1)}" ry="2" fill="#000" opacity="0.06"/>`;
-  o += flame(30, by, W, H, body) + flame(30, by, W * 0.62, H * 0.72, inner) + flame(30, by, W * 0.32, H * 0.42, core);
-  if (t > 0.82) o += spark(42, 26, "#ffe08a") + spark(18, 30, "#fff3c0");
+function watercolorT(t, color, sfx) {
+  if (t <= 0.12) return smoothDead();
+  const R = 10 + t * 7;
+  let o = shadow(R) + TR + washCanopy(color, R, 30, "wct" + sfx);
+  if (t > 0.82) o += [[24, 27], [35, 24]].map(([x, y]) => fruitDot(x, y, "#f0d27a", "#d9a93f")).join("");
   return o;
 }
-function pulseT(t, color) {
-  const midY = 31, grid = pulseGrid();
-  if (t <= 0.12) return grid + `<path d="M4 ${midY} H56" stroke="#9a958c" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="56" cy="${midY}" r="2" fill="#9a958c"/>`;
-  const amp = 4 + t * 20;
-  let o = grid + `<path d="M4 ${midY} H19 L23 ${(midY - amp).toFixed(1)} L26 ${(midY + amp * 0.55).toFixed(1)} L29 ${(midY - amp * 0.28).toFixed(1)} L32 ${midY} H56" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="56" cy="${midY}" r="2.4" fill="${color}"/>`;
-  if (t > 0.82) o += spark(23, midY - amp - 3, "#ffd76a");
+function lowpolyT(t, color) {
+  if (t <= 0.12) return smoothDead();
+  let o = shadow(12) + facets(color, t > 0.6 ? 6 : 4);
+  if (t > 0.82) o += [[24, 26], [36, 24]].map(([x, y]) => fruitDot(x, y, "#f0d27a", "#d9a93f")).join("");
+  return o;
+}
+function bonsaiT(t, color) {
+  if (t <= 0.12) return BONSAI_DEAD;
+  let o = `<ellipse cx="30" cy="59" rx="9" ry="2" fill="#000" opacity="0.05"/><path d="M30 58 C26 50 33 46 30 38 C28 32 34 30 31 22" stroke="#9a8366" stroke-width="3" fill="none" stroke-linecap="round"/>` + bonsaiPads(color, 0.62 + t * 0.5);
+  if (t > 0.82) o += [[20, 30], [40, 26]].map(([x, y]) => fruitDot(x, y, "#f0d27a", "#d9a93f")).join("");
   return o;
 }
 
@@ -201,14 +218,16 @@ function pulseT(t, color) {
 export function accountArt(theme, st, f, sfx) {
   if (theme === "cupertino") return cupA(st, f);
   if (theme === "pixel") return pixelA(st, f);
-  if (theme === "ember") return emberA(st, f);
-  if (theme === "pulse") return pulseA(st, f);
+  if (theme === "watercolor") return watercolorA(st, f, sfx);
+  if (theme === "lowpoly") return lowpolyA(st, f);
+  if (theme === "bonsai") return bonsaiA(st, f);
   return classicA(st, f);
 }
 export function tierArt(theme, t, color, sfx) {
   if (theme === "cupertino") return cupT(t, color);
   if (theme === "pixel") return pixelT(t, color);
-  if (theme === "ember") return emberT(t, color);
-  if (theme === "pulse") return pulseT(t, color);
+  if (theme === "watercolor") return watercolorT(t, color, sfx);
+  if (theme === "lowpoly") return lowpolyT(t, color);
+  if (theme === "bonsai") return bonsaiT(t, color);
   return classicT(t, color);
 }

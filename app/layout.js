@@ -15,7 +15,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${jakarta.variable} ${fraunces.variable} ${spline.variable}`}>
       <body>
-        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('ssTheme');if(['cupertino','pixel','ember','pulse'].indexOf(t)>=0)document.documentElement.dataset.theme=t;}catch(e){}" }} />
+        <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('ssTheme');if(['cupertino','pixel','watercolor','lowpoly','bonsai'].indexOf(t)>=0)document.documentElement.dataset.theme=t;}catch(e){}" }} />
         <ThemeProvider>
           <TopChrome />
           {children}
