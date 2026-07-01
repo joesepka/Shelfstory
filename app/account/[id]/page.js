@@ -423,7 +423,22 @@ export default function AccountOverview() {
       : skuComp.pct <= -5 ? `Carries ${acc.live_placements} SKUs — ${Math.abs(skuComp.pct)}% fewer than ${skuComp.label}`
         : `Carries ${acc.live_placements} SKUs — about the same as ${skuComp.label}`)
     : `Carries ${acc.live_placements || 0} active SKUs`;
-  const bullets = [brief.signals[0] ? brief.signals[0].t : "Holding its pace quarter over quarter.", sizeBucket(bench, chTitle)];
+  // lapsed account: the SKUs it used to carry + its former standing (percentile by
+  // annualized volume among same-premise peers, since account_weight still carries
+  // the trailing year of pre-lapse depletions).
+  const lapsed = acc.headline === "Lapsed";
+  const lostSkus = [...items].filter((i) => i.cell_state === "lost_recent").sort((a, b) => (a.last_sale_w ?? 99) - (b.last_sale_w ?? 99));
+  const wgt = acc.account_weight || 0;
+  const peersW = cohort.filter((a) => a.account_id !== acc.account_id && a.account_weight != null);
+  const topPct = peersW.length >= 12 && wgt > 0 ? Math.max(1, Math.round((100 * (peersW.filter((a) => a.account_weight > wgt).length + 1)) / (peersW.length + 1))) : null;
+
+  const bullets = lapsed
+    ? [
+        topPct ? `Was a top ${topPct}% account by annualized volume — now dark${acc.last_order_w != null ? ` ${acc.last_order_w} weeks` : ""}.`
+               : `Gone dark${acc.last_order_w != null ? ` ${acc.last_order_w} weeks ago` : ""} — no orders in the last 90 days.`,
+        `${acc.account_weight ? acc.account_weight.toLocaleString() + " cs/yr" : "Real volume"} across ${lostSkus.length} SKU${lostSkus.length === 1 ? "" : "s"} before it went quiet.`,
+      ]
+    : [brief.signals[0] ? brief.signals[0].t : "Holding its pace quarter over quarter.", sizeBucket(bench, chTitle)];
 
   // profit/mo (real, item-level) + rounded display + ± vs nearby peers
   const accountMo = items.reduce((s, i) => s + ((i.l90 || 0) / 3) * profitPerCase(i.item_name, 0.30), 0);
@@ -557,7 +572,20 @@ export default function AccountOverview() {
         );
       })}
 
-      {wsList.length > 0 && (
+      {lapsed && lostSkus.length > 0 ? (
+        <>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "16px 0 3px", letterSpacing: "0.3px" }}>LOST SKUS · win these back</div>
+          {colHead("", "last sold")}
+          {lostSkus.slice(0, 6).map((k, i) => (
+            <div key={i} onClick={() => openItem(k)} style={{ display: "flex", alignItems: "center", padding: "8px 6px", borderBottom: "0.5px solid var(--border)", cursor: "pointer", background: sel && sel.product_key === k.product_key ? "var(--surface-2)" : "transparent" }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "var(--pop-warm-deep)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.item_name}</span>
+              <span style={{ width: chW }} />
+              <span style={{ width: pW, textAlign: "right", fontSize: 12, fontWeight: 600, color: "var(--text-3)" }}>{k.last_sale_w != null ? `${k.last_sale_w}w ago` : "—"}</span>
+              <span aria-hidden="true" style={{ width: tW, textAlign: "right", color: "var(--accent-deep)", fontWeight: 700, fontSize: 12 }}>{sel && sel.product_key === k.product_key ? "▾" : "›"}</span>
+            </div>
+          ))}
+        </>
+      ) : wsList.length > 0 ? (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "16px 0 3px", letterSpacing: "0.3px" }}>{wsReal.length ? "WHITESPACE · top sellers nearby, not carried here" : "WHITESPACE · top market sellers, not carried here"}</div>
           {colHead(wsReal.length ? "cases/mo" : "", wsReal.length ? "est. $/mo" : "market rank")}
@@ -579,7 +607,7 @@ export default function AccountOverview() {
             </div>
           ))}
         </>
-      )}
+      ) : null}
       </>
       ); })()}
 

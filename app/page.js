@@ -174,15 +174,22 @@ function SplashClouds() {
 }
 
 // simple loader: the ShelfStory mark + wordmark on the sky, a gentle fade in/out
-function Splash({ onDone }) {
+function Splash({ onDone, ready }) {
   const [out, setOut] = useState(false);
+  const [minDone, setMinDone] = useState(false);
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
+  const firedRef = useRef(false);
+  useEffect(() => { const t = setTimeout(() => setMinDone(true), 1180); return () => clearTimeout(t); }, []);
+  // hold the splash until BOTH the intro has played AND the book's data is ready,
+  // so the home appears fully-formed instead of loading in piecemeal
   useEffect(() => {
-    const t1 = setTimeout(() => setOut(true), 1180);
-    const t2 = setTimeout(() => onDoneRef.current(), 1520);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, []);
+    if (!minDone || !ready || firedRef.current) return;
+    firedRef.current = true;
+    setOut(true);
+    const t = setTimeout(() => onDoneRef.current(), 360);
+    return () => clearTimeout(t);
+  }, [minDone, ready]);
   return (
     <div style={{
       position: "fixed", inset: 0, background: "linear-gradient(180deg,#b6dcf1 0%,#cce4f4 24%,#d7e6df 62%,var(--bg) 100%)", zIndex: 50,
@@ -492,7 +499,7 @@ export default function Home() {
 
   return (
     <>
-      {phase === "splash" && <Splash onDone={() => { booted = true; setPhase("ready"); }} />}
+      {phase === "splash" && <Splash ready={!!slides || !!err} onDone={() => { booted = true; setPhase("ready"); }} />}
       {pickerOpen && <ThemeChooser onChoose={() => setPickerOpen(false)} onClose={() => setPickerOpen(false)} />}
 
       <main className="pagefade" style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,var(--bg) 500px)", padding: "14px 20px 12px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
