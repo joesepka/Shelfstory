@@ -7,10 +7,12 @@ import { useState } from "react";
 // - display(opt): formats an option for display (defaults to String)
 // - allValue: the "no filter" value (default "All"); when set, the pill goes
 //   accent-active and shows a ✕ to clear without opening the sheet.
-export default function FilterSelect({ label, value, options, onChange, display, allValue = "All" }) {
+// plain: a always-has-a-value selector (no "All"/clear, always shows the value + a
+// caret) — same look as the filter pill. style: extra styles merged onto the pill.
+export default function FilterSelect({ label, value, options, onChange, display, allValue = "All", plain = false, style: styleOverride }) {
   const [open, setOpen] = useState(false);
   const fmt = display || (o => String(o));
-  const active = value !== allValue;
+  const active = !plain && value !== allValue;
   const pick = (o) => { onChange(o); setOpen(false); };
   return (
     <>
@@ -18,8 +20,8 @@ export default function FilterSelect({ label, value, options, onChange, display,
         style={{ flexShrink: 0, minWidth: 104, maxWidth: 190, boxSizing: "border-box", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 5,
           fontSize: 11.5, fontWeight: active ? 700 : 500, padding: "8px 13px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
           border: active ? "1px solid var(--accent)" : "0.5px solid var(--border-strong)",
-          background: active ? "var(--accent-soft)" : "var(--surface)", color: active ? "var(--accent-deep)" : "var(--text-2)" }}>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{active ? fmt(value) : label}</span>
+          background: active ? "var(--accent-soft)" : "var(--surface)", color: active ? "var(--accent-deep)" : "var(--text-2)", ...styleOverride }}>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{plain || active ? fmt(value) : label}</span>
         {active
           ? <span role="button" aria-label={`Clear ${label}`} onClick={(e) => { e.stopPropagation(); onChange(allValue); }} style={{ flexShrink: 0, fontWeight: 700, fontSize: 11, opacity: .75 }}>✕</span>
           : <span aria-hidden="true" style={{ flexShrink: 0, fontSize: 9, opacity: .5 }}>▾</span>}

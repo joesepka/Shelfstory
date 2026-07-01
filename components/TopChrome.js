@@ -16,7 +16,7 @@ export default function TopChrome() {
           position: "absolute", left: 14, bottom: 18, pointerEvents: "auto",
           height: 40, borderRadius: 20, border: "0.5px solid var(--border-strong)", cursor: "pointer",
           background: "var(--surface)", color: "var(--text-2)",
-          boxShadow: "0 4px 16px rgba(40,55,35,.18)", fontSize: 13.5, fontWeight: 700, lineHeight: 1,
+          boxShadow: "var(--shadow)", fontSize: 13.5, fontWeight: 700, lineHeight: 1, letterSpacing: "-0.2px",
           display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
           fontFamily: "inherit", padding: "0 16px 0 11px",
         }}>

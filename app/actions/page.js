@@ -4,7 +4,11 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
 import FilterSelect from "../../components/FilterSelect";
+import TreeGlyph from "../../components/TreeGlyph";
 import { getScope } from "../../lib/scope";
+
+// each play bucket gets a small tree that reads its situation at a glance
+const TONE_TREE = { red: "atrisk", amber: "slipping", green: "thriving", blue: "new", ink: "steady" };
 
 
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
@@ -31,10 +35,13 @@ function PlayCard({ play, open, onToggle, go }) {
   const border = { red: "var(--pop-warm)", amber: "var(--watch-ink)", green: "var(--accent)", blue: "var(--pop-cool)", ink: "var(--text-3)" }[tone];
   const chip = { red: ["var(--atrisk-ink)", "var(--atrisk-bg)"], amber: ["var(--watch-ink)", "var(--watch-bg)"], green: ["var(--growing-ink)", "var(--growing-bg)"], blue: ["var(--new-ink)", "var(--new-bg)"], ink: ["var(--text-2)", "var(--surface-2)"] }[tone];
   return (
-    <div onClick={onToggle} style={{ position: "relative", background: "var(--surface)", borderRadius: 14, margin: "0 16px 10px", padding: "14px 15px", boxShadow: "var(--shadow)", cursor: "pointer" }}>
+    <div onClick={onToggle} style={{ position: "relative", background: "var(--surface)", borderRadius: 14, margin: "0 16px 10px", padding: "14px 15px", boxShadow: "var(--shadow-sm)", cursor: "pointer" }}>
       <Brackets color={border} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 7 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .4, padding: "3px 8px", borderRadius: 9, color: chip[0], background: chip[1] }}>{play.tag}</span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 7, minWidth: 0 }}>
+          <span style={{ flexShrink: 0 }}><TreeGlyph state={TONE_TREE[tone] || "steady"} h={26} /></span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .4, padding: "3px 8px", borderRadius: 6, color: chip[0], background: chip[1] }}>{play.tag}</span>
+        </span>
         {play.impact && <span style={{ fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", color: play.impactTone === "opp" ? "var(--up)" : "var(--down)" }}>{play.impact}</span>}
       </div>
       <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", lineHeight: 1.25 }}>{play.title}</div>
@@ -165,7 +172,7 @@ function ActionsInner() {
       const atRisk = wb.reduce((s, r) => s + (r.cases_per_month || 0), 0);
       out.push({
         id: "winback", tag: "WIN-BACK", tone: "red", section: "urgent",
-        impact: `−${Math.round(atRisk)} cs/mo at risk`, impactTone: "risk",
+        impact: `−${Math.round(atRisk).toLocaleString()} cs/mo at risk`, impactTone: "risk",
         title: `${wb.length} steady buyers have gone quiet`,
         detail: `No order in 60+ days, but each ran a steady ${Math.min(...wb.map(r => Math.round(r.cases_per_month || 0)))}–${Math.max(...wb.map(r => Math.round(r.cases_per_month || 0)))} cs/mo. Catch them before they read as lapsed.`,
         expandLabel: `see the ${Math.min(wb.length, 8)} accounts`,
@@ -184,7 +191,7 @@ function ActionsInner() {
       const lost = sorted.reduce((s, r) => s + Math.max(0, (r.prev90 || 0) - (r.cur90 || 0)), 0);
       out.push({
         id: "cluster", tag: "RISK CLUSTER", tone: "red", section: "urgent",
-        impact: `−${Math.round(lost / 3)} cs/mo`, impactTone: "risk",
+        impact: `−${Math.round(lost / 3).toLocaleString()} cs/mo`, impactTone: "risk",
         title: `${sorted.length} ${titleCase(cluster.chain)} locations are softening at once`,
         detail: `Not random — ${sorted.length} ${titleCase(cluster.chain)} stores all turned down this quarter. A shared chain thread usually means one fixable cause, not ${sorted.length} separate problems.`,
         expandLabel: "see the cluster",
@@ -257,12 +264,12 @@ function ActionsInner() {
       out.push({
         id: "distributor", tag: "DISTRIBUTOR", tone: "ink", section: "fix",
         impact: "concentration", impactTone: "risk",
-        title: `${titleCase(distWatch.name)} moves ${distWatch.share}% of this book — and it's down ${Math.abs(distWatch.g)}%`,
+        title: `${titleCase(distWatch.name)} moves ${distWatch.share.toLocaleString()}% of this book — and it's down ${Math.abs(distWatch.g).toLocaleString()}%`,
         detail: `One distributor carries ${distWatch.share}% of the volume in scope and it's declining. That's both your biggest lever and a concentration risk. Worth a direct conversation.`,
         expandLabel: "break it down",
         targets: [
-          { name: "Share of scope", sub: null, metric: `${distWatch.share}%` },
-          { name: "90-day trend", sub: null, metric: `${distWatch.g}%` },
+          { name: "Share of scope", sub: null, metric: `${distWatch.share.toLocaleString()}%` },
+          { name: "90-day trend", sub: null, metric: `${distWatch.g.toLocaleString()}%` },
         ],
         foot: `Open ${titleCase(distWatch.name)} accounts`, footHref: `/book?distributor=${encodeURIComponent(distWatch.name)}`,
       });
@@ -347,7 +354,7 @@ function ActionsInner() {
     let bigDist = null;
     for (const [k, e] of Object.entries(byDist)) if (!bigDist || e.cur > bigDist.cur) bigDist = { k, cur: e.cur, g: gpct(e.cur, e.prev), share: cur ? Math.round(100 * e.cur / cur) : 0 };
     let topLost = null;
-    for (const sku in lostBy) { const n = lostBy[sku].size; if (!topLost || n > topLost.n) topLost = { sku, n }; }
+    for (const sku in lostBy) { const n = lostBy[sku].size; if (!topLost || n > topLost.n) topLost = { sku, n, ids: [...lostBy[sku]] }; }
     return { bookG: gpct(cur, prev), states: movers(byState), channels: movers(byCh), bigDist, topLost };
   }, [rows]);
 
@@ -359,7 +366,7 @@ function ActionsInner() {
   const skuLoading = plays && skuGaps === null;   // account plays ready, grid still loading
 
   const toggle = id => setOpen(o => ({ ...o, [id]: !o[id] }));
-  const Sec = ({ label }) => <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: .5, padding: "6px 16px 6px" }}>{label}</div>;
+  const Sec = ({ label }) => <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.3px", textTransform: "uppercase", padding: "6px 16px 6px" }}>{label}</div>;
   const render = list => list.map(p => <PlayCard key={p.id} play={p} open={!!open[p.id]} onToggle={() => toggle(p.id)} go={go} />);
   const clearAll = () => { setStF("All"); setDistF("All"); setChF("All"); setChainF("All"); };
 
@@ -379,7 +386,7 @@ function ActionsInner() {
         <FilterSelect label="Channel" value={chF} options={channels} onChange={setChF} display={c => c === "All" ? "All channels" : c} />
         <FilterSelect label="Chain" value={chainF} options={chains} onChange={setChainF} display={c => c === "All" ? "All chains" : titleCase(c)} />
         {anyFilter && (
-          <button onClick={clearAll} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "8px 12px", borderRadius: 10, border: "1.5px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>↺ Clear</button>
+          <button onClick={clearAll} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "8px 12px", borderRadius: 20, border: "1px solid var(--accent)", background: "var(--surface)", color: "var(--accent-deep)", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>↺ Clear</button>
         )}
       </div>
 
@@ -388,26 +395,30 @@ function ActionsInner() {
 
         {plays && !anyFilter && execBrief && (() => {
           const eb = execBrief, ms = [];
-          if (eb.states.up) ms.push({ ind: "▲", c: "var(--up)", label: `${STNAME[eb.states.up.k] || eb.states.up.k} is leading`, val: `+${eb.states.up.g}% · +${Math.round(eb.states.up.d).toLocaleString()} cs`, vc: "var(--up)", on: () => setStF(eb.states.up.k) });
-          if (eb.states.down) ms.push({ ind: "▼", c: "var(--down)", label: `${STNAME[eb.states.down.k] || eb.states.down.k} is the drag`, val: `${eb.states.down.g}% · ${Math.round(eb.states.down.d).toLocaleString()} cs`, vc: "var(--down)", on: () => setStF(eb.states.down.k) });
-          if (eb.channels.up) ms.push({ ind: "▲", c: "var(--up)", label: `${titleCase(eb.channels.up.k)} channel rising`, val: `+${eb.channels.up.g}%`, vc: "var(--up)", on: () => setChF(eb.channels.up.k) });
-          if (eb.channels.down) ms.push({ ind: "▼", c: "var(--down)", label: `${titleCase(eb.channels.down.k)} channel slipping`, val: `${eb.channels.down.g}%`, vc: "var(--down)", on: () => setChF(eb.channels.down.k) });
-          if (eb.bigDist) ms.push({ ind: "◆", c: "var(--text-3)", label: `${titleCase(eb.bigDist.k)} carries ${eb.bigDist.share}% of the book`, val: `${eb.bigDist.g >= 0 ? "+" : ""}${eb.bigDist.g}%`, vc: eb.bigDist.g >= 0 ? "var(--up)" : "var(--down)", on: () => setDistF(eb.bigDist.k) });
-          if (eb.topLost) ms.push({ ind: "✕", c: "var(--pop-warm)", label: `${titleCase(eb.topLost.sku)} dropping out of placements`, val: `−${eb.topLost.n}`, vc: "var(--down)", on: null });
+          const cs = d => `${d >= 0 ? "+" : ""}${Math.round(d).toLocaleString()} cs`;
+          if (eb.states.up) ms.push({ tree: "thriving", label: `${STNAME[eb.states.up.k] || eb.states.up.k} is leading`, sub: cs(eb.states.up.d), val: `+${eb.states.up.g}%`, vc: "var(--up)", on: () => setStF(eb.states.up.k) });
+          if (eb.states.down) ms.push({ tree: "slipping", label: `${STNAME[eb.states.down.k] || eb.states.down.k} is the drag`, sub: cs(eb.states.down.d), val: `${eb.states.down.g}%`, vc: "var(--down)", on: () => setStF(eb.states.down.k) });
+          if (eb.channels.up) ms.push({ tree: "thriving", label: `${titleCase(eb.channels.up.k)} channel rising`, sub: cs(eb.channels.up.d), val: `+${eb.channels.up.g}%`, vc: "var(--up)", on: () => setChF(eb.channels.up.k) });
+          if (eb.channels.down) ms.push({ tree: "slipping", label: `${titleCase(eb.channels.down.k)} channel slipping`, sub: cs(eb.channels.down.d), val: `${eb.channels.down.g}%`, vc: "var(--down)", on: () => setChF(eb.channels.down.k) });
+          if (eb.bigDist) ms.push({ tree: eb.bigDist.g >= 0 ? "thriving" : "slipping", label: `${titleCase(eb.bigDist.k)} · ${eb.bigDist.share}% of book`, sub: "90-day trend", val: `${eb.bigDist.g >= 0 ? "+" : ""}${eb.bigDist.g}%`, vc: eb.bigDist.g >= 0 ? "var(--up)" : "var(--down)", on: () => setDistF(eb.bigDist.k) });
+          if (eb.topLost) ms.push({ tree: "lapsed", label: `${titleCase(eb.topLost.sku)} losing placements`, sub: "dropped recently", val: `${eb.topLost.n.toLocaleString()} accts`, vc: "var(--down)", on: () => go(idsHref(eb.topLost.ids)) });
           return (
             <>
               <Sec label="THE BIG PICTURE" />
-              <div style={{ position: "relative", background: "var(--surface)", borderRadius: 14, margin: "0 16px 10px", padding: "15px 16px 8px", boxShadow: "var(--shadow)" }}>
+              <div style={{ position: "relative", background: "var(--surface)", borderRadius: 14, margin: "0 16px 10px", padding: "14px 15px", boxShadow: "var(--shadow-sm)" }}>
                 <Brackets color="var(--accent)" />
                 <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text)", lineHeight: 1.25 }}>
                   Your book is {eb.bookG >= 0 ? `up ${eb.bookG}%` : `down ${Math.abs(eb.bookG)}%`} over 90 days
                 </div>
-                <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3, marginBottom: 4 }}>What's moving it — tap any line to drill in.</div>
+                <div style={{ fontSize: 12, color: "var(--text-3)", marginTop: 3, marginBottom: 6 }}>What's moving it — tap a line to drill in.</div>
                 {ms.map((m, i) => (
-                  <div key={i} onClick={m.on || undefined} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 0", borderBottom: i < ms.length - 1 ? "1px solid var(--border)" : "none", cursor: m.on ? "pointer" : "default" }}>
-                    <span style={{ color: m.c, fontWeight: 700, fontSize: 12, width: 12, flexShrink: 0, textAlign: "center" }}>{m.ind}</span>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "var(--text)" }}>{m.label}</span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: m.vc, whiteSpace: "nowrap" }}>{m.val}</span>
+                  <div key={i} onClick={m.on || undefined} style={{ display: "flex", alignItems: "center", gap: 9, padding: "7px 0", borderBottom: i < ms.length - 1 ? "1px solid var(--border)" : "none", cursor: m.on ? "pointer" : "default" }}>
+                    <span style={{ flexShrink: 0 }}><TreeGlyph state={m.tree} h={24} /></span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--text-3)" }}>{m.sub}</div>
+                    </div>
+                    <span style={{ fontSize: 13.5, fontWeight: 700, color: m.vc, whiteSpace: "nowrap", flexShrink: 0, fontFeatureSettings: '"tnum" 1' }}>{m.val}</span>
                     {m.on && <span style={{ color: "var(--accent-deep)", fontWeight: 700, fontSize: 12, flexShrink: 0 }}>→</span>}
                   </div>
                 ))}

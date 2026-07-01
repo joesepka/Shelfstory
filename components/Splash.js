@@ -62,15 +62,20 @@ export default function Splash({ fixed = true }) {
   return (
     <div style={{ ...outer, background: "var(--bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <svg viewBox="0 0 340 260" style={{ width: 260, height: "auto" }} aria-label="Loading">
-        <path d={L} stroke="#B5B0A2" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />
-        <path d={R} stroke="#B5B0A2" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />
+        {/* Faint branded leaf anchor behind the mark — subliminal only, no motion */}
+        <g aria-hidden="true" fill="var(--accent)" opacity={0.09} transform="translate(170 138)">
+          <path d="M 0 34 C -30 14 -30 -22 0 -34 C 30 -22 30 14 0 34 Z" />
+          <path d="M 0 34 L 0 -34" stroke="var(--bg)" strokeWidth={2.4} fill="none" strokeLinecap="round" />
+        </g>
+        <path d={L} stroke="var(--text-3)" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />
+        <path d={R} stroke="var(--text-3)" strokeWidth={1.8} fill="none" strokeLinejoin="round" opacity={0.55} />
         {drawnPts.length > 1 && (
-          <path d={linePath} stroke="#9A968C" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d={linePath} stroke="var(--text-2)" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
         )}
         {pts.slice(0, fullSeg + 1).map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r={2.6} fill="#9A968C" />
+          <circle key={i} cx={p.x} cy={p.y} r={2.6} fill="var(--text-2)" />
         ))}
-        {arrow && <path d={arrow} stroke="#9A968C" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
+        {arrow && <path d={arrow} stroke="var(--text-2)" strokeWidth={3} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
       </svg>
     </div>
   );

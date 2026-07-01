@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import LoadingScreen from "../../../components/LoadingScreen";
 import TreeGlyph from "../../../components/TreeGlyph";
-import SellStory from "../../../components/SellStory";
+import ItemEstimator from "../../../components/ItemEstimator";
 import AccountTag from "../../../components/AccountTag";
 import { greenBar } from "../../../lib/utils";
 import { profitPerCase } from "../../../lib/pricing";
@@ -34,6 +34,7 @@ function sigColor(k) {
 }
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
 function median(arr) { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+const round5 = n => Math.round(n / 5) * 5;   // approximate item $ to the nearest $5
 function monthLabel(monthsAgo) {
   const d = new Date(SNAPSHOT);
   d.setDate(d.getDate() - 30 * monthsAgo);
@@ -139,10 +140,31 @@ function graphColor(hd) {
   }
 }
 
-function Trend({ spark, color, barColor }) {
+// trend bar coloring: light grey, with the last ~4 bars fading into the account's
+// health color (dark green accelerating · light green new · yellow slowing ·
+// orange at-risk · red lapsed · grey steady = maintain).
+const TREND_GREY = "#d3d7db";
+function hexMix(a, b, t) {
+  const p = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const A = p(a), B = p(b);
+  return "#" + A.map((x, i) => Math.round(x + (B[i] - x) * t).toString(16).padStart(2, "0")).join("");
+}
+function healthColor(hd) {
+  switch (String(hd || "").toLowerCase()) {
+    case "accelerating": return "#2f8f5e";
+    case "new": return "#7bc49a";
+    case "decelerating": return "#e0b32e";
+    case "at-risk": case "atrisk": case "at risk": return "#d9662a";
+    case "lapsed": return "#c0392b";
+    default: return "#b8bcc2"; // steady / stable → grey (maintain)
+  }
+}
+
+function Trend({ spark, color, healthCol }) {
   if (!spark || spark.length < 2) return null;
-  const bc = barColor || "#6aa06a";
+  const hc = healthCol || "#b8bcc2";
   const n = spark.length;
+  const fadeStart = Math.max(0, n - 4);
   const W = 620, H = 156, padL = 34, padR = 12, padT = 16, padB = 26;
   const top = Math.max(...spark) || 1;
   const loV = Math.min(...spark.filter(x => x > 0), top);
@@ -168,11 +190,11 @@ function Trend({ spark, color, barColor }) {
         const x = X(i) + gap;
         const y = Y(v);
         const h = Math.max(v > 0 ? 2 : 0, base - y);
-        const norm = top > loV ? (v - loV) / (top - loV) : 1;
-        const op = (0.5 + 0.5 * Math.max(0, Math.min(1, norm))).toFixed(2);
+        const t = i < fadeStart ? 0 : (n - 1 - fadeStart > 0 ? (i - fadeStart) / (n - 1 - fadeStart) : 1);
+        const fill = i < fadeStart ? TREND_GREY : hexMix(TREND_GREY, hc, Math.max(0, Math.min(1, t)));
         return (
           <rect key={i} x={x.toFixed(1)} y={(base - h).toFixed(1)} width={barW.toFixed(1)} height={h.toFixed(1)}
-            rx="2" fill={bc} fillOpacity={op}
+            rx="2" fill={fill}
             style={{ transformBox: "fill-box", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 25}ms` }} />
         );
       })}
@@ -285,7 +307,7 @@ export default function AccountOverview() {
         }
         // ---- real sell-story peer aggregates (city + channel, fallback to state) ----
         // resilient: a peer-query hiccup falls back to empty aggregates, never blanks the page
-        let areaAvgMoReal = null, wsReal = [], penetration = null, peerTopGrowth = 0;
+        let areaAvgMoReal = null, wsReal = [], penetration = null, peerTopGrowth = 0, peerAvgGrowth = null;
         try {
           const chT = acc.channel_type;
           let peers = cohort.filter((a) => a.account_id !== acc.account_id && (!chT || a.channel_type === chT) && a.city === acc.city);
@@ -313,8 +335,9 @@ export default function AccountOverview() {
           }).sort((a, b) => b.dollars - a.dollars).slice(0, 5);
           penetration = { carry: carrying.size, total: peers.length };
           peerTopGrowth = peers.reduce((m, a) => Math.max(m, a.prior90_pct || 0), 0);
+          peerAvgGrowth = peers.length ? peers.reduce((s, a) => s + (a.prior90_pct || 0), 0) / peers.length : null;
         } catch { /* leave empty aggregates */ }
-        setD({ acc, bench: benRes.data, items, white, cohort, onP, areaAvgMoReal, wsReal, penetration, peerTopGrowth });
+        setD({ acc, bench: benRes.data, items, white, cohort, onP, areaAvgMoReal, wsReal, penetration, peerTopGrowth, peerAvgGrowth });
       } catch (e) {
         setErr(e.message || "load failed");
       }
@@ -345,7 +368,7 @@ export default function AccountOverview() {
   if (err) return <div className="wrap"><p className="state-msg">Couldn’t load account. {err}</p></div>;
   if (!d) return <LoadingScreen />;
 
-  const { acc, bench, items, white, cohort = [], onP, areaAvgMoReal = null, wsReal = [], penetration = null, peerTopGrowth = 0 } = d;
+  const { acc, bench, items, white, cohort = [], onP, areaAvgMoReal = null, wsReal = [], penetration = null, peerTopGrowth = 0, peerAvgGrowth = null } = d;
   const head = HEAD[acc.headline] || HEAD["Stable"];
   const pct = acc.prior90_pct;
   const dl = acc.placements_delta;
@@ -400,7 +423,22 @@ export default function AccountOverview() {
       : skuComp.pct <= -5 ? `Carries ${acc.live_placements} SKUs — ${Math.abs(skuComp.pct)}% fewer than ${skuComp.label}`
         : `Carries ${acc.live_placements} SKUs — about the same as ${skuComp.label}`)
     : `Carries ${acc.live_placements || 0} active SKUs`;
-  const bullets = [brief.signals[0] ? brief.signals[0].t : "Holding its pace quarter over quarter.", skuBullet, sizeBucket(bench, chTitle)];
+  const bullets = [brief.signals[0] ? brief.signals[0].t : "Holding its pace quarter over quarter.", sizeBucket(bench, chTitle)];
+
+  // profit/mo (real, item-level) + rounded display + ± vs nearby peers
+  const accountMo = items.reduce((s, i) => s + ((i.l90 || 0) / 3) * profitPerCase(i.item_name, 0.30), 0);
+  const profitPct = areaAvgMoReal ? Math.round((accountMo / areaAvgMoReal - 1) * 100) : null;
+  const profitApprox = "$" + round5(accountMo).toLocaleString();
+  // one plain line about the overall market: channel + area + trend from nearby peers
+  const mkTrend = peerAvgGrowth == null ? null : peerAvgGrowth > 3 ? "growing" : peerAvgGrowth < -3 ? "softening" : "holding steady";
+  const mkChan = titleCase(acc.channel_type || acc.channel || "these") ;
+  const mkWhere = acc.city ? `around ${titleCase(acc.city)}` : "in the area";
+  const marketLine = mkTrend ? `${mkChan} accounts ${mkWhere} are ${mkTrend}.` : null;
+  // whitespace: prefer the real nearby-velocity list; if peers were thin, fall back to
+  // the market-wide top sellers this account doesn't carry — so the section never blanks
+  const wsList = wsReal.length
+    ? wsReal.slice(0, 5).map((w) => ({ name: w.name, vel: w.vel, dollars: w.dollars }))
+    : white.slice(0, 5).map((w) => ({ name: w.item_name, rank: w.market_rank }));
 
   return (
     <div className="wrap pagefade">
@@ -428,28 +466,51 @@ export default function AccountOverview() {
           ["annualized", <>{acc.account_weight} <span style={{ fontSize: 11, color: "var(--text-2)" }}>cs</span></>, null],
           ["L90 cases", <>{acc.cur90} {pct != null && <span style={{ fontSize: 11, color: pct < 0 ? "var(--down)" : pct > 0 ? "var(--up)" : "var(--text-3)" }}>{pct > 0 ? "▲" : pct < 0 ? "▼" : ""}{Math.abs(pct)}%</span>}</>, "vs prior 90D"],
           ["active SKUs", <>{acc.live_placements} {dl !== 0 && <span style={{ fontSize: 11, color: dl < 0 ? "var(--down)" : "var(--up)" }}>{dl > 0 ? "+" : ""}{dl}</span>}</>, skuComp ? <span style={{ color: skuDelta > 0 ? "var(--up)" : skuDelta < 0 ? "var(--down)" : "var(--text-3)" }}>{skuDelta === 0 ? "≈ peers" : `${skuDelta > 0 ? "+" : ""}${skuDelta} SKU${Math.abs(skuDelta) === 1 ? "" : "s"} vs peers`}</span> : null],
+          ["profit / mo", <span style={{ color: "var(--accent-deep)" }}>{profitApprox}</span>, profitPct != null ? <span style={{ color: profitPct > 0 ? "var(--up)" : profitPct < 0 ? "var(--down)" : "var(--text-3)" }}>{profitPct > 0 ? "+" : ""}{profitPct}% vs nearby</span> : "at 30% margin"],
         ].map(([label, val, note], i) => (
-          <div key={i} style={{ flex: 1, padding: "10px 12px", borderRight: i < 2 ? "0.5px solid var(--border)" : "none" }}>
-            <div style={{ fontSize: 11, color: "var(--text-3)" }}>{label}</div>
-            <div style={{ fontSize: 16, fontWeight: 600, color: "var(--text)" }}>{val}</div>
+          <div key={i} style={{ flex: 1, padding: "9px 10px", borderRight: i < 3 ? "0.5px solid var(--border)" : "none" }}>
+            <div style={{ fontSize: 10, color: "var(--text-3)" }}>{label}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)" }}>{val}</div>
             {note && <div style={{ fontSize: 8.5, color: "var(--text-3)", marginTop: 2 }}>{note}</div>}
           </div>
         ))}
       </div>
 
-      {/* overview — quick read: trend, SKU depth vs peers, relative size */}
-      <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "13px 14px", marginBottom: 11, boxShadow: "var(--shadow-sm)" }}>
+      {/* story brief — headline · two facts · market chips · plays */}
+      <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "14px 15px", marginBottom: 12, boxShadow: "var(--shadow-sm)" }}>
         <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${head.bc}`, borderLeft: `2px solid ${head.bc}`, borderTopLeftRadius: 7 }} />
         <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${head.bc}`, borderRight: `1.5px solid ${head.bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
-        <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4, color: "var(--text)" }}>{headline}</div>
-        <div style={{ marginTop: 9, display: "flex", flexDirection: "column", gap: 7 }}>
+
+        <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, color: "var(--text)", letterSpacing: "-0.2px" }}>{headline}</div>
+        <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>
           {bullets.map((t, i) => (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <span aria-hidden="true" style={{ flexShrink: 0, width: 6, height: 6, borderRadius: 3, marginTop: 5, background: head.bc }} />
+              <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: head.bc, opacity: 0.7 }} />
               <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{t}</span>
             </div>
           ))}
         </div>
+
+        {marketLine && (
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 7 }}>
+            <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: "var(--text-3)" }} />
+            <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{marketLine}</span>
+          </div>
+        )}
+
+        {brief.moves.length > 0 && (
+          <div style={{ marginTop: 12, paddingTop: 11, borderTop: "0.5px solid var(--border)" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)" }}>Plays to consider <span style={{ fontWeight: 500, opacity: 0.75 }}>· you know the account best</span></div>
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 9 }}>
+              {brief.moves.map((m, i) => { const col = moveColor(m); const [lead, ...rest] = m.split(" — "); const tail = rest.join(" — "); return (
+                <div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}>
+                  <span aria-hidden="true" style={{ flexShrink: 0, width: 3, height: 15, borderRadius: 2, marginTop: 1, background: col }} />
+                  <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}><span style={{ fontWeight: 700, color: "var(--text)" }}>{lead}</span>{tail ? ` — ${tail}` : ""}</span>
+                </div>
+              ); })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div ref={chartRef} style={{ scrollMarginTop: 12, minHeight: 96 }}>
@@ -464,45 +525,70 @@ export default function AccountOverview() {
         ) : (
           <>
             <div style={{ fontSize: 11, color: "var(--text-3)", padding: "8px 2px 2px" }}>rolling-90 cases · last 12 months</div>
-            <Trend spark={acc.spark} color={head.fg} barColor={graphColor(acc.headline)} />
+            <Trend spark={acc.spark} color={head.fg} healthCol={healthColor(acc.headline)} />
           </>
         )}
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 6, letterSpacing: "0.3px" }}>WHAT&apos;S ON THE SHELF</div>
+      {(() => { const chW = 50, pW = 60, tW = 12; const colHead = (a, b) => (
+        <div style={{ display: "flex", alignItems: "center", padding: "0 6px 3px" }}>
+          <span style={{ flex: 1 }} />
+          <span style={{ width: chW, textAlign: "right", fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: 0.3 }}>{a}</span>
+          <span style={{ width: pW, textAlign: "right", fontSize: 9, fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: 0.3 }}>{b}</span>
+          <span style={{ width: tW }} />
+        </div>
+      ); return (
+      <>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", marginBottom: 3, letterSpacing: "0.3px" }}>WHAT&apos;S ON THE SHELF</div>
+      {colHead("cases/mo", "profit/mo")}
       {skus.map((k, i) => {
         const [bg, fg, lbl] = SK[k.cell_state] || SK.stable;
+        const lost = k.cell_state === "lost_recent";
         return (
-          <div key={i} onClick={() => openItem(k)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 6px", borderRadius: 7, borderBottom: "0.5px solid var(--border)", cursor: "pointer", background: sel && sel.product_key === k.product_key ? "var(--surface-2)" : "transparent" }}>
-            <span style={{ fontSize: 13, color: "var(--text)" }}>{k.item_name}</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 11, padding: "1px 8px", borderRadius: 7, background: bg, color: fg }}>{lbl}</span>
-              <span style={{ fontSize: 13, fontWeight: 600, minWidth: 34, textAlign: "right", color: "var(--text)" }}>
-                {k.cell_state === "lost_recent" ? <span style={{ color: "var(--atrisk-ink)", fontWeight: 700 }}>✕</span> : `${k.l90} cs`}
-              </span>
-              <span aria-hidden="true" style={{ color: "var(--accent-deep)", fontWeight: 700, fontSize: 12, width: 8 }}>{sel && sel.product_key === k.product_key ? "▾" : "›"}</span>
+          <div key={i} onClick={() => openItem(k)} style={{ display: "flex", alignItems: "center", padding: "8px 6px", borderRadius: 7, borderBottom: "0.5px solid var(--border)", cursor: "pointer", background: sel && sel.product_key === k.product_key ? "var(--surface-2)" : "transparent" }}>
+            <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 7 }}>
+              <span style={{ fontSize: 13, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{k.item_name}</span>
+              <span style={{ flexShrink: 0, fontSize: 10.5, padding: "1px 7px", borderRadius: 6, background: bg, color: fg }}>{lbl}</span>
             </span>
+            <span style={{ width: chW, textAlign: "right", fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{lost ? <span style={{ color: "var(--atrisk-ink)", fontWeight: 700 }}>✕</span> : ((k.l90 || 0) / 3).toFixed(1)}</span>
+            <span style={{ width: pW, textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "var(--accent-deep)" }}>{lost || !(k.l90 > 0) ? "" : `$${round5((k.l90 / 3) * profitPerCase(k.item_name, 0.30)).toLocaleString()}`}</span>
+            <span aria-hidden="true" style={{ width: tW, textAlign: "right", color: "var(--accent-deep)", fontWeight: 700, fontSize: 12 }}>{sel && sel.product_key === k.product_key ? "▾" : "›"}</span>
           </div>
         );
       })}
 
-      {white.length > 0 && (
+      {wsList.length > 0 && (
         <>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "16px 0 6px", letterSpacing: "0.3px" }}>WHITESPACE · sells nearby, not carried here</div>
-          {white.slice(0, 3).map((w, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 2px", borderBottom: "0.5px solid var(--border)" }}>
-              <span style={{ fontSize: 13, color: "var(--text)" }}>{w.item_name}</span>
-              <span style={{ fontSize: 11, color: "var(--text-3)" }}>#{w.market_rank} in market</span>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", margin: "16px 0 3px", letterSpacing: "0.3px" }}>{wsReal.length ? "WHITESPACE · top sellers nearby, not carried here" : "WHITESPACE · top market sellers, not carried here"}</div>
+          {colHead(wsReal.length ? "cases/mo" : "", wsReal.length ? "est. $/mo" : "market rank")}
+          {wsList.map((w, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "center", padding: "8px 6px", borderBottom: "0.5px solid var(--border)" }}>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "var(--text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{w.name}</span>
+              {w.vel != null ? (
+                <>
+                  <span style={{ width: chW, textAlign: "right", fontSize: 13, fontWeight: 600, color: "var(--text-3)" }}>{w.vel.toFixed(1)}</span>
+                  <span style={{ width: pW, textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "var(--text-3)" }}>${round5(w.dollars).toLocaleString()}</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ width: chW }} />
+                  <span style={{ width: pW, textAlign: "right", fontSize: 12.5, fontWeight: 700, color: "var(--text-3)" }}>#{w.rank}</span>
+                </>
+              )}
+              <span style={{ width: tW }} />
             </div>
           ))}
         </>
       )}
+      </>
+      ); })()}
 
-      <div style={{ height: 18 }} />
-      <SellStory acc={acc} items={items} white={white} moves={brief.moves} areaAvgMo={areaAvgMoReal} wsReal={wsReal} penetration={penetration} peerTopGrowth={peerTopGrowth} praise={praise.slice(0, 3)} />
+      <div style={{ height: 16 }} />
+      <ItemEstimator items={items} wsReal={wsReal} />
+      <div style={{ height: 12 }} />
       <AccountTag acc={acc} items={items} white={white} />
 
-      <div style={{ height: 24 }} />
+      <div style={{ height: 76 }} />
     </div>
   );
 }

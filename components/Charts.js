@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { kfmt, greenBar, blueBar, purpleBar } from "../lib/utils";
 
-const PURPLE_DEEP = "rgb(70,58,118)";  // dashed benchmark + accents (matches purpleBar deep end)
+const PURPLE_DEEP = "var(--purple-benchmark)";  // dashed benchmark + accents (matches purpleBar deep end)
 
 // Shared ON-SCREEN charts (Harbor Green). Animated: bars pop up from the axis,
 // the ROS line draws on left->right. The PDF-deck print charts are intentionally
@@ -16,7 +16,7 @@ export function BarCard({ title, sub, data, labels, hi, unit }) {
   const showLab = i => n <= 6 || i % 3 === 0 || i === n - 1;   // only a few x labels
   const lo = Math.min(...data.filter(x => x > 0), mx); // case bars: green, shaded by value (softer=lighter, better=darker)
   return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
+    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
         <div style={{ fontSize: 9.5, color: "var(--text-3)" }}>{Math.round(data[n - 1]).toLocaleString()} {unit} latest</div>
@@ -65,7 +65,7 @@ export function AcctRosCard({ title, sub, accts, ros, labels, hi }) {
   }, []);
   const arrowAng = n > 1 ? Math.atan2((ye - yOf(ros[n - 2])) / 100 * 120, (pw || 420) / (n - 1)) * 180 / Math.PI : 0;
   return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
+    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
         <div style={{ fontSize: 9.5, color: "var(--text-3)" }}>{Math.round(accts[n - 1]).toLocaleString()} accts · {ros[n - 1].toFixed(1)} ROS</div>
@@ -89,16 +89,16 @@ export function AcctRosCard({ title, sub, accts, ros, labels, hi }) {
               <rect x="0" y="0" width="0" height="100"><animate attributeName="width" from="0" to="100" dur="0.7s" begin="0.25s" fill="freeze" /></rect>
             </clipPath>
           </defs>
-          <polyline points={pts} fill="none" stroke="var(--pop-warm)" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" clipPath={`url(#${clipId})`} />
+          <polyline points={pts} fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" clipPath={`url(#${clipId})`} />
         </svg>
         {/* ROS value at start / middle / end of the line */}
         {[0, Math.floor((n - 1) / 2), n - 1].filter((p, i, a) => a.indexOf(p) === i).map((p) => (
-          <div key={p} style={{ position: "absolute", left: p === 0 ? "1%" : p === n - 1 ? undefined : `${xOf(p)}%`, right: p === n - 1 ? "1%" : undefined, top: `${yOf(ros[p])}%`, transform: `translate(${p === 0 || p === n - 1 ? "0" : "-50%"}, -160%)`, fontSize: 8, fontWeight: 700, color: "var(--pop-warm-deep)", whiteSpace: "nowrap", fontFeatureSettings: '"tnum" 1', opacity: 0, animation: "dotIn .25s ease-out .95s forwards" }}>{ros[p].toFixed(1)}</div>
+          <div key={p} style={{ position: "absolute", left: p === 0 ? "1%" : p === n - 1 ? undefined : `${xOf(p)}%`, right: p === n - 1 ? "1%" : undefined, top: `${yOf(ros[p])}%`, transform: `translate(${p === 0 || p === n - 1 ? "0" : "-50%"}, -160%)`, fontSize: 9.5, fontWeight: 800, color: "var(--gold)", whiteSpace: "nowrap", fontFeatureSettings: '"tnum" 1', opacity: 0, animation: "dotIn .25s ease-out .95s forwards" }}>{ros[p].toFixed(1)}</div>
         ))}
         {/* arrow on the latest ROS point, tilted along the line */}
         <div style={{ position: "absolute", right: 0, top: `${ye}%`, transform: "translate(50%,-50%)", opacity: 0, animation: "dotIn .25s ease-out .95s forwards" }}>
           <svg width="13" height="13" viewBox="0 0 12 12" style={{ display: "block", overflow: "visible", transform: `rotate(${arrowAng}deg)` }}>
-            <path d="M3 2 L9 6 L3 10" fill="none" stroke="var(--pop-warm)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3 2 L9 6 L3 10" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
       </div>
@@ -107,7 +107,7 @@ export function AcctRosCard({ title, sub, accts, ros, labels, hi }) {
       </div>
       <div style={{ display: "flex", gap: 12, marginTop: 7, fontSize: 9, color: "var(--text-3)" }}>
         <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--pop-cool)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />accounts</span>
-        <span><span style={{ display: "inline-block", width: 12, height: 2, background: "var(--pop-warm)", marginRight: 3, verticalAlign: "middle" }} />ROS / mo</span>
+        <span><span style={{ display: "inline-block", width: 12, height: 3, background: "var(--gold)", marginRight: 3, verticalAlign: "middle", borderRadius: 1 }} />ROS / mo</span>
       </div>
     </div>
   );
@@ -123,7 +123,7 @@ export function ChannelRosCard({ title, sub, bars, benchmark }) {
   const scale = mx * 1.18;                                    // headroom above tallest bar for labels
   const benchTop = benchmark > 0 ? (1 - benchmark / scale) * 100 : -1;
   return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
+    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
         <div style={{ fontSize: 9.5, color: "var(--text-3)" }}>{benchmark.toFixed(1)} ROS overall</div>
@@ -135,12 +135,12 @@ export function ChannelRosCard({ title, sub, bars, benchmark }) {
             <span style={{ position: "absolute", right: 0, top: -11, fontSize: 7, fontWeight: 700, color: PURPLE_DEEP, opacity: 0.85, fontFeatureSettings: '"tnum" 1' }}>benchmark</span>
           </div>
         )}
-        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", gap: 5 }}>
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", gap: 7 }}>
           {bars.map((b, i) => {
             const d = b.ros - b.prevRos, up = d > 0.05, down = d < -0.05;
             return (
-              <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0 }}>
-                <div style={{ fontSize: 8.5, fontWeight: 700, lineHeight: 1, textAlign: "center", color: "var(--text-2)", fontFeatureSettings: '"tnum" 1' }}>{b.ros.toFixed(1)}</div>
+              <div key={i} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", minWidth: 0, background: "var(--surface-2)", borderRadius: "8px 8px 0 0" }}>
+                <div style={{ fontSize: 9.5, fontWeight: 800, lineHeight: 1, textAlign: "center", color: "var(--text)", fontFeatureSettings: '"tnum" 1' }}>{b.ros.toFixed(1)}</div>
                 <div style={{ fontSize: 6.5, lineHeight: 1.1, textAlign: "center", marginBottom: 3, color: up ? "var(--up)" : down ? "var(--down)" : "var(--text-3)", fontWeight: 700, fontFeatureSettings: '"tnum" 1' }}>{up ? "▲" : down ? "▼" : "·"}{(up || down) ? Math.abs(d).toFixed(1) : ""}</div>
                 <div style={{ width: "100%", height: `${b.ros > 0 ? Math.max(2, (b.ros / scale) * 100) : 0}%`, background: purpleBar(b.ros, lo, mx), borderRadius: "2px 2px 0 0", transformOrigin: "bottom", animation: "barGrow .45s cubic-bezier(.34,1.56,.64,1) both", animationDelay: `${i * 30}ms` }} />
               </div>
@@ -148,8 +148,8 @@ export function ChannelRosCard({ title, sub, bars, benchmark }) {
           })}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 5, marginTop: 4 }}>
-        {bars.map((b, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</div>)}
+      <div style={{ display: "flex", gap: 7, marginTop: 5 }}>
+        {bars.map((b, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 10.5, fontWeight: 700, color: "var(--text-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.label}</div>)}
       </div>
     </div>
   );
@@ -168,12 +168,12 @@ export function ItemRosLines({ title, sub, series, labels }) {
   const clipId = "itemros-" + String(title).replace(/[^a-zA-Z0-9]/g, "");
   const showLab = i => n <= 6 || i % 2 === 0 || i === n - 1;
   return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
+    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{title}</div>
         <div style={{ display: "flex", gap: 3 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: 7, background: "var(--text-2)", color: "#fff" }}>Items</span>
-          <span style={{ fontSize: 9.5, fontWeight: 600, padding: "3px 8px", borderRadius: 7, background: "var(--surface-2)", color: "var(--text-3)", opacity: 0.6 }}>Brands · soon</span>
+          <span style={{ fontSize: 9.5, fontWeight: 700, padding: "3px 8px", borderRadius: "var(--r-sm)", background: "var(--text-2)", color: "#fff" }}>Items</span>
+          <span style={{ fontSize: 9.5, fontWeight: 600, padding: "3px 8px", borderRadius: "var(--r-sm)", background: "var(--surface-2)", color: "var(--text-3)", opacity: 0.6 }}>Brands · soon</span>
         </div>
       </div>
       <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{sub}</div>

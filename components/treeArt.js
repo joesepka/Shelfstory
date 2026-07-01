@@ -46,6 +46,37 @@ function classicBare() {
     + [[30, 18, 2.2], [18, 24, 2.2], [42, 24, 2.2], [22, 30, 1.8], [38, 30, 1.8]].map(([x, y, w]) => `<line x1="30" y1="36" x2="${x}" y2="${y}" stroke="#9a958c" stroke-width="${w}" stroke-linecap="round"/>`).join("")
     + [[22, 55], [34, 55]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="2.3" ry="1.2" fill="#8d877d" opacity="0.85"/>`).join("");
 }
+// DECLINING ("super at risk") = a dying tree: dead grey-brown branches, only a few
+// clinging yellow leaf-spots, and the whole right side left bare. One rung from lapsed.
+function classicDying() {
+  const wood = "#8a7862", woodDk = "#726250", y1 = "#e6b93c", y2 = "#cf9f3e";
+  let o = `<ellipse cx="30" cy="59" rx="9" ry="2.1" fill="#000" opacity="0.04"/>`;
+  o += `<rect x="28" y="34" width="4" height="24" rx="1.4" fill="${wood}"/>`;
+  // bare dead branches — right side reaches out with nothing on it
+  o += [[30, 17, 2.2], [18, 23, 2.2], [43, 21, 2.4], [22, 31, 1.8], [39, 29, 1.8]].map(([x, y, w]) => `<line x1="30" y1="37" x2="${x}" y2="${y}" stroke="${woodDk}" stroke-width="${w}" stroke-linecap="round"/>`).join("");
+  o += `<line x1="25" y1="26" x2="20" y2="20" stroke="${woodDk}" stroke-width="1.3" stroke-linecap="round"/>`;
+  // spots of yellow clinging to the left + center; right branch stays bare
+  o += [[30, 16, 2.7], [18, 22, 2.3], [22, 30, 2.0], [25, 20, 1.6]].map(([x, y, r], i) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${i % 2 ? y2 : y1}"/>`).join("");
+  // a couple of dropped leaves at the base
+  o += `<ellipse cx="23" cy="55" rx="2.1" ry="1.1" fill="${y2}" opacity="0.9" transform="rotate(20 23 55)"/>`;
+  o += `<ellipse cx="35" cy="56" rx="2.1" ry="1.1" fill="${y1}" opacity="0.8" transform="rotate(-16 35 56)"/>`;
+  return o;
+}
+// cupertino equivalent — smooth bare limbs, soft yellow leaf-blobs, right limb bare
+function cupDying() {
+  const w = "#a99e8e", trunk = "#b09a7c", y1 = "#e6b93c", y2 = "#cf9f3e";
+  let o = `<ellipse cx="30" cy="59" rx="9" ry="2.1" fill="#000" opacity="0.04"/><rect x="28" y="36" width="4" height="22" rx="2" fill="${trunk}"/>`;
+  o += `<line x1="30" y1="38" x2="20" y2="22" stroke="${w}" stroke-width="2.6" stroke-linecap="round"/>`;
+  o += `<line x1="30" y1="38" x2="40" y2="23" stroke="${w}" stroke-width="2.6" stroke-linecap="round"/>`;
+  o += `<line x1="30" y1="42" x2="23" y2="31" stroke="${w}" stroke-width="2" stroke-linecap="round"/>`;
+  o += `<line x1="30" y1="42" x2="37" y2="31" stroke="${w}" stroke-width="2" stroke-linecap="round"/>`;
+  o += `<line x1="30" y1="36" x2="30" y2="20" stroke="${w}" stroke-width="2" stroke-linecap="round"/>`;
+  o += `<ellipse cx="20" cy="22" rx="3.4" ry="3.6" fill="${y1}"/>` + sheen(20, 22, 3.4, 3.6);
+  o += `<ellipse cx="23" cy="31" rx="2.6" ry="2.8" fill="${y2}"/>`;
+  o += `<ellipse cx="30" cy="20" rx="2.8" ry="3" fill="${y1}"/>` + sheen(30, 20, 2.8, 3);
+  o += `<ellipse cx="36" cy="55" rx="2.1" ry="1.1" fill="${y2}" opacity="0.85" transform="rotate(-16 36 55)"/>`;
+  return o;
+}
 const fruitDot = (x, y, fill, stroke) => `<circle cx="${x}" cy="${y}" r="2.2" fill="${fill}" stroke="${stroke}" stroke-width="0.4"/><circle cx="${(x - 0.6).toFixed(1)}" cy="${(y - 0.7).toFixed(1)}" r="0.6" fill="#fff" opacity="0.5"/>`;
 const fall = (x, y, c) => `<ellipse cx="${x}" cy="${y}" rx="2.1" ry="1.1" fill="${c}" opacity="0.85" transform="rotate(${(x % 2 ? 22 : -18)} ${x} ${y})"/>`;
 const spark = (x, y, c) => `<path d="M${x} ${y - 3.2} L${(x + 0.9).toFixed(1)} ${(y - 0.9).toFixed(1)} L${x + 3.2} ${y} L${(x + 0.9).toFixed(1)} ${(y + 0.9).toFixed(1)} L${x} ${y + 3.2} L${(x - 0.9).toFixed(1)} ${(y + 0.9).toFixed(1)} L${x - 3.2} ${y} L${(x - 0.9).toFixed(1)} ${(y - 0.9).toFixed(1)} Z" fill="${c}"/>`;
@@ -71,6 +102,7 @@ function saplingArt(theme) {
 function classicA(st, f) {
   if (st === "new") return saplingArt("classic");
   if (st === "lapsed") return classicBare();
+  if (st === "declining") return classicDying();
   const { m, d } = cf(st), N = Math.round(2 + f * 13);
   let o = shadow(12) + TR;
   CL.slice(0, N).forEach(([dx, dy], i) => { o += `<circle cx="${30 + dx}" cy="${32 + dy}" r="6.1" fill="${i % 3 === 0 ? d : m}"/>`; });
@@ -81,6 +113,7 @@ function classicA(st, f) {
 function cupA(st, f) {
   if (st === "new") return saplingArt("cupertino");
   if (st === "lapsed") return smoothDead();
+  if (st === "declining") return cupDying();
   const { m } = cf(st), ry = 8 + f * 10, rx = ry * 0.92, cy = 30;
   let o = shadow(rx) + TR + `<ellipse cx="30" cy="${cy}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${m}"/>` + sheen(30, cy, rx, ry);
   if (st === "accelerating") o += POS.slice(0, 4).map(([x, y]) => fruitDot(x, y, "#f0d27a", "#d9a93f")).join("");

@@ -16,7 +16,7 @@ function label(hd) {
     case "at-risk": case "atrisk": case "at risk": return { t: "At risk", c: "var(--atrisk-ink)", bg: "var(--atrisk-bg)" };
     case "decelerating": return { t: "Softening", c: "var(--watch-ink)", bg: "var(--watch-bg)" };
     case "new": return { t: "New", c: "var(--new-ink)", bg: "var(--new-bg)" };
-    case "lapsed": return { t: "Lapsed", c: "#fff", bg: "#8B3A2B" };
+    case "lapsed": return { t: "Lapsed", c: "#fff", bg: "var(--lapsed-bg)" };
     default: return null;
   }
 }
@@ -86,7 +86,7 @@ function Spark({ data }) {
   }).join(" ");
   return (
     <svg width={w} height={h} style={{ display: "block" }} aria-hidden="true">
-      <polyline points={pts} fill="none" stroke="#C6CFBC" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" opacity="0.85" />
+      <polyline points={pts} fill="none" stroke="var(--text-3)" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" opacity="0.85" />
     </svg>
   );
 }
@@ -184,13 +184,13 @@ function GridMatrix({ accounts }) {
   const ACCT_W = acctW;
 
   const corner = { position: "sticky", top: 0, left: 0, zIndex: 6, width: ACCT_W, minWidth: ACCT_W, maxWidth: ACCT_W, height: HEAD_H,
-    background: "#E8EDE0", boxShadow: "2px 2px 4px rgba(45,60,40,.05)", padding: "0 9px", textAlign: "left",
+    background: "var(--surface-3)", boxShadow: "2px 2px 4px rgba(45,60,40,.05)", padding: "0 9px", textAlign: "left",
     fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", verticalAlign: "middle" };
   const totalHead = { position: "sticky", top: 0, zIndex: 5, width: TOTAL_W, minWidth: TOTAL_W, height: HEAD_H,
-    background: "#EDEFE9", boxShadow: "0 2px 4px rgba(45,60,40,.05)", padding: "3px 4px", verticalAlign: "middle",
+    background: "var(--surface-3)", boxShadow: "0 2px 4px rgba(45,60,40,.05)", padding: "3px 4px", verticalAlign: "middle",
     fontSize: 9, fontWeight: 600, color: "var(--text-3)", lineHeight: 1.1, textAlign: "center" };
   const headCell = { position: "sticky", top: 0, zIndex: 5, width: ITEM_W, minWidth: ITEM_W, height: HEAD_H,
-    background: "#E8EDE0", boxShadow: "0 2px 4px rgba(45,60,40,.05)", padding: "3px 4px", verticalAlign: "middle",
+    background: "var(--surface-3)", boxShadow: "0 2px 4px rgba(45,60,40,.05)", padding: "3px 4px", verticalAlign: "middle",
     fontSize: 9, fontWeight: 600, color: "var(--text-2)", lineHeight: 1.1, textAlign: "center" };
   const rowHead = { position: "sticky", left: 0, zIndex: 4, width: ACCT_W, minWidth: ACCT_W, maxWidth: ACCT_W, height: ROW_H,
     background: "var(--surface)", boxShadow: "2px 0 4px rgba(45,60,40,.04)", padding: "5px 9px", verticalAlign: "middle",
@@ -267,16 +267,16 @@ function GridMatrix({ accounts }) {
                       </div>
                     </a>
                   </th>
-                  <td style={{ width: TOTAL_W, minWidth: TOTAL_W, height: ROW_H, background: "#F6F7F2", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
+                  <td style={{ width: TOTAL_W, minWidth: TOTAL_W, height: ROW_H, background: "var(--surface-2)", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", verticalAlign: "middle" }}>
                     <span style={{ fontSize: 12.5, fontWeight: 500, color: "var(--text-3)", fontFeatureSettings: '"tnum" 1, "lnum" 1' }}>{tot90.toLocaleString()}</span>
                   </td>
                   {cols.map(c => {
                     const it = byAcct[a.account_id]?.[c.key];
-                    if (!it) return <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "#F4F7EF", borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8" }} />;
+                    if (!it) return <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: "var(--surface-2)", borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)" }} />;
                     const tone = cellTone(it.cell_state);
                     const lost = it.cell_state === "lost_recent";
                     return (
-                      <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid var(--border)", borderLeft: "1px solid #EEF2E8", textAlign: "center", verticalAlign: "middle" }}>
+                      <td key={c.key} style={{ width: ITEM_W, minWidth: ITEM_W, height: ROW_H, background: tone.bg, borderBottom: "1px solid var(--border)", borderLeft: "1px solid var(--border)", textAlign: "center", verticalAlign: "middle" }}>
                         <a href={`/account/${a.account_id}/item/${c.key}`} style={{ textDecoration: "none", display: "block" }}>
                           {lost
                             ? <span style={{ fontSize: 13, fontWeight: 700, color: "var(--atrisk-ink)" }}>✕</span>
@@ -304,18 +304,28 @@ const menuSub = { display: "block", fontSize: 8.5, fontWeight: 500, color: "var(
 
 // ---------- TREE ----------
 function treeHeat(p) {
-  if (p == null) return "#9AA593";
-  if (p >= 15) return "#2E7D54";
-  if (p >= 6) return "#4A9068";
-  if (p >= 2) return "#6AA06A";
-  if (p > -2) return "#9AA593";
-  if (p >= -8) return "#C2922E";
-  if (p >= -20) return "#C56A4A";
-  return "#B0573A";
+  if (p == null) return "var(--text-3)";
+  if (p >= 15) return "var(--accent-deep)";
+  if (p >= 6) return "var(--accent)";
+  if (p >= 2) return "var(--bar-grow)";
+  if (p > -2) return "var(--text-3)";
+  if (p >= -8) return "var(--gold)";
+  if (p >= -20) return "var(--pop-warm)";
+  return "var(--bar-dip)";
+}
+function resolveHex(c) {
+  const s = String(c || "").trim();
+  const m = s.match(/^var\(\s*(--[\w-]+)\s*\)$/);
+  if (m && typeof window !== "undefined") {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(m[1]).trim();
+    if (v) return v;
+  }
+  return s;
 }
 function hexA(hex, a) {
-  const h = hex.replace("#", "");
+  const h = resolveHex(hex).replace("#", "");
   const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) return `rgba(133,147,122,${a})`;
   return `rgba(${r},${g},${b},${a})`;
 }
 const TREE_HEAD = [[1, 150], [1, 130], [2, 108], [2, 96], [3, 80], [3, 72], [4, 62], [4, 56], [4, 50]];
@@ -549,7 +559,7 @@ function BookInner() {
       <style>{`.nobar{scrollbar-width:none;-ms-overflow-style:none;}.nobar::-webkit-scrollbar{display:none;width:0;height:0;}`}</style>
 
       {linkScope && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "var(--pop-cool-soft)", borderRadius: 10, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "var(--pop-cool-soft)", borderRadius: 10, flexShrink: 0, boxShadow: "var(--shadow-sm)" }}>
           <span style={{ fontSize: 12, color: "var(--pop-cool-deep)" }}>
             {linkScope.kind === "ids" ? `Showing ${linkScope.n} flagged account${linkScope.n === 1 ? "" : "s"}` : linkScope.kind === "tier" ? `Showing ${linkScope.label}` : `Filtered to ${linkScope.label}`}
           </span>
@@ -592,7 +602,7 @@ function BookInner() {
 
       {bal && (
         <div style={{ padding: "0 12px 10px", flexShrink: 0 }}>
-          <div style={{ display: "flex", height: 15, borderRadius: 6, overflow: "hidden", marginBottom: 7, boxShadow: "0 1px 2px rgba(45,60,40,.06)" }}>
+          <div style={{ display: "flex", height: 15, borderRadius: 6, overflow: "hidden", marginBottom: 7, boxShadow: "var(--shadow-sm)" }}>
             <div onClick={() => toggleHealth("new")}
               style={{ width: `${bal.np}%`, background: "var(--pop-cool)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 30, overflow: "hidden",
                 opacity: healthFilter && healthFilter !== "new" ? 0.32 : 1,
@@ -612,7 +622,7 @@ function BookInner() {
               <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.rp}%</span>
             </div>
             <div onClick={() => toggleHealth("lapsed")}
-              style={{ width: `${bal.lp}%`, background: "#8B3A2B", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 26, overflow: "hidden",
+              style={{ width: `${bal.lp}%`, background: "var(--lapsed-bg)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", minWidth: 26, overflow: "hidden",
                 opacity: healthFilter && healthFilter !== "lapsed" ? 0.32 : 1,
                 boxShadow: healthFilter === "lapsed" ? "inset 0 0 0 2px rgba(255,255,255,.72)" : "none", transition: "opacity .15s" }}>
               <span style={{ color: "#fff", fontSize: 8.5, fontWeight: 700 }}>{bal.lp}%</span>
@@ -629,7 +639,7 @@ function BookInner() {
               <span style={{ color: "var(--pop-warm)", fontWeight: 700 }}>●</span> At Risk <b style={{ color: "var(--text)" }}>{bal.atrisk.n.toLocaleString()}</b>
             </span>
             <span onClick={() => toggleHealth("lapsed")} style={{ cursor: "pointer" }}>
-              <span style={{ color: "#8B3A2B", fontWeight: 700 }}>●</span> Lapsed <b style={{ color: "var(--text)" }}>{bal.lapsed.n.toLocaleString()}</b>
+              <span style={{ color: "var(--lapsed-bg)", fontWeight: 700 }}>●</span> Lapsed <b style={{ color: "var(--text)" }}>{bal.lapsed.n.toLocaleString()}</b>
             </span>
           </div>
           {healthFilter && (
@@ -675,7 +685,7 @@ function BookInner() {
           return (
             <a key={r.account_id} href={href}
               onClick={(e) => { e.preventDefault(); setTapId(r.account_id); burst(r.account_id, () => router.push(href)); }}
-              style={{ position: "relative", display: "block", background: tapId === r.account_id ? cardTapBg(r.headline) : lapsed ? "var(--lapsed-card-bg)" : (pct != null && pct >= 30 ? "#e3f3db" : "var(--surface)"), transition: "background .15s ease", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)", ...(styleFor(r.account_id) || {}) }}>
+              style={{ position: "relative", display: "block", background: tapId === r.account_id ? cardTapBg(r.headline) : lapsed ? "var(--lapsed-card-bg)" : (pct != null && pct >= 30 ? "var(--accent-soft)" : "var(--surface)"), transition: "background .15s ease", borderRadius: "var(--r-md)", padding: "9px 13px 10px", marginBottom: 9, textDecoration: "none", boxShadow: "var(--shadow)", ...(styleFor(r.account_id) || {}) }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 15, height: 15, borderTop: `2px solid ${bc}`, borderLeft: `2px solid ${bc}`, borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 12, height: 12, borderBottom: `1.5px solid ${bc}`, borderRight: `1.5px solid ${bc}`, borderBottomRightRadius: 7, opacity: 0.4 }} />
 

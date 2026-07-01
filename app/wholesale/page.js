@@ -259,7 +259,7 @@ export default function WholesalePage() {
   }, [snap]);
   const itemLineSeries = useMemo(() => {
     if (!itemRos || !itemRos.length) return null;
-    const colors = ["#3C6E47", "#2C5378", "#C0703A", "#6E4FA3", "#B23A48"];
+    const colors = ["var(--accent)", "var(--pop-cool)", "var(--pop-warm)", "var(--purple-benchmark)", "var(--down)"];
     return itemRos.map((s, i) => ({ name: items.find(x => x.key === s.key)?.name || s.key, color: colors[i % colors.length], ros: s.ros }));
   }, [itemRos, items]);
 
@@ -297,7 +297,7 @@ export default function WholesalePage() {
         {err && <div style={{ fontSize: 13, color: "var(--down)", padding: "10px 2px" }}>Couldn’t load. {err}</div>}
 
         {!err && noMatch && (
-          <div style={{ marginTop: 16, padding: "16px", textAlign: "center", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, color: "var(--text-2)", fontSize: 12.5 }}>No accounts match these filters.</div>
+          <div style={{ marginTop: 16, padding: "16px", textAlign: "center", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow-sm)", color: "var(--text-2)", fontSize: 12.5 }}>No accounts match these filters.</div>
         )}
 
         {!err && !noMatch && loading && (
@@ -311,7 +311,7 @@ export default function WholesalePage() {
               <div style={{ display: "flex", gap: 3, flexShrink: 0, background: "var(--surface-2)", borderRadius: 9, padding: 2 }}>
                 {[["month", "12 mo"], ["quarter", "Qtr"]].map(([k, t]) => (
                   <button key={k} onClick={() => setMode(k)} className="tapd"
-                    style={{ fontSize: 11, fontWeight: 600, padding: "4px 11px", borderRadius: 7, cursor: "pointer", border: "none", fontFamily: "inherit",
+                    style={{ fontSize: 11, fontWeight: mode === k ? 700 : 500, padding: "4px 11px", borderRadius: 7, cursor: "pointer", border: "none", fontFamily: "inherit",
                       background: mode === k ? "var(--surface)" : "transparent", color: mode === k ? "var(--text)" : "var(--text-3)", boxShadow: mode === k ? "var(--shadow-sm)" : "none" }}>
                     {t}
                   </button>

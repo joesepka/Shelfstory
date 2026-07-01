@@ -195,11 +195,11 @@ function PerfInner() {
         </button>
       </div>
 
-      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", padding: "2px 14px 5px", flexShrink: 0 }}>
-        {vtitle()} <span style={{ fontWeight: 400, color: "var(--text-3)", fontSize: 11 }}>· size = L52W volume · color = 90-day growth</span>
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3px", color: "var(--text-3)", padding: "2px 14px 5px", flexShrink: 0 }}>
+        {vtitle()} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-3)", fontSize: 11 }}>· size = L52W volume · color = 90-day growth</span>
       </div>
       <div style={{ display: "flex", gap: 11, flexWrap: "wrap", padding: "0 14px 8px", fontSize: 9.5, color: "var(--text-3)", flexShrink: 0 }}>
-        {[["#4A9068", "material growth"], ["#9AA593", "flat"], ["#C2922E", "moderate decline"], ["#C56A4A", "material decline"]].map(([c, t]) => (
+        {[["var(--up)", "material growth"], ["var(--text-3)", "flat"], ["var(--gold)", "moderate decline"], ["var(--down)", "material decline"]].map(([c, t]) => (
           <span key={t}><span style={{ display: "inline-block", width: 10, height: 10, borderRadius: 2, background: c, marginRight: 3, verticalAlign: "middle" }} />{t}</span>
         ))}
       </div>
@@ -225,7 +225,7 @@ function PerfInner() {
                 <div key={b.key} onClick={() => clickBox(b)}
                   style={{ flex: 1, minWidth: 0, height: row.h, position: "relative", zIndex: z, background: col, borderRadius: 9, overflow: "hidden", cursor: "pointer",
                     display: "flex", flexDirection: "column", justifyContent: "space-between", padding: isNL ? "10px 12px" : isMov ? "9px 10px" : isMed ? "7px 9px" : "5px 7px",
-                    boxShadow: "inset 0 0 0 .5px rgba(255,255,255,.28)", transform: tf, opacity: op, transition: `transform ${dur} ease, opacity .2s ease` }}>
+                    boxShadow: INSET_HL, transform: tf, opacity: op, transition: `transform ${dur} ease, opacity .2s ease` }}>
                   {isNL ? (
                     <>
                       <div><div style={{ ...tNm, fontSize: 16 }}>{b.label}</div>
@@ -276,6 +276,7 @@ export default function PerfPage() {
 
 const wrap = { background: "var(--bg)", height: "100vh", maxWidth: 430, margin: "0 auto", display: "flex", flexDirection: "column", fontFamily: "var(--font-sans)" };
 const crumbC = { cursor: "pointer", color: "var(--accent-deep)" };
+const INSET_HL = "inset 0 0 0 .5px rgba(255,255,255,.28)";   // subtle top-edge highlight on colored tiles
 const tNm = { fontWeight: 600, color: "#fff", fontSize: 14, lineHeight: 1.05, textShadow: "0 1px 2px rgba(0,0,0,.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 const tMv = { fontSize: 10.5, color: "#fff", opacity: .96, textShadow: "0 1px 2px rgba(0,0,0,.45)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 };
 const tV = { fontWeight: 700, color: "#fff", fontSize: 16, textShadow: "0 1px 2px rgba(0,0,0,.45)", lineHeight: 1 };

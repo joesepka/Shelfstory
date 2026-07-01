@@ -6,6 +6,7 @@ import Splash from "../../../components/Splash";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { BarCard, AcctRosCard } from "../../../components/Charts";
+import { buildDeckSlides } from "../../../components/deckSlides";
 import { gpct, kfmt, titleCase, healthBucket, vol, isOn, monthLabels } from "../../../lib/utils";
 
 const PREPARED_BY = "Joe Sepka";
@@ -116,6 +117,7 @@ function OvInner() {
       name: e.name, l90: Math.round(e.l90), prev: Math.round(e.prev),
       dCases: Math.round(e.l90 - e.prev), gPct: gpct(e.l90, e.prev),
       dDoors: e.doorsNow - e.doorsPrev, doorsNow: e.doorsNow,
+      ros: e.doorsNow ? e.l90 / e.doorsNow / 3 : 0, rosPrev: e.doorsPrev ? e.prev / e.doorsPrev / 3 : 0,
     })).filter(e => e.l90 > 0 || e.prev > 0).sort((a, b) => b.l90 - a.l90);
     return { all: arr, count: arr.length };
   }, [grid]);
@@ -217,7 +219,7 @@ function OvInner() {
   const bookLists = useMemo(() => {
     if (!rows || !rows.length) return null;
     const tagFor = h => { const x = String(h || "").toLowerCase(); return x === "lapsed" ? "lapsed" : x === "at-risk" ? "at-risk" : x === "decelerating" ? "softening" : x === "new" ? "new" : x === "accelerating" ? "accelerating" : ""; };
-    const wd = rows.map(a => ({ account_id: a.account_id, account_name: a.account_name, city: a.city, chain: a.chain, channel_type: a.channel_type, cur90: a.cur90 || 0, prev90: a.prev90 || 0, delta: Math.round((a.cur90 || 0) - (a.prev90 || 0)), weight: Math.round(a.account_weight || 0), plcDelta: (a.live_placements || 0) - (a.live_prev || 0), tag: tagFor(a.headline), lapsed: String(a.headline || "").toLowerCase() === "lapsed" }));
+    const wd = rows.map(a => ({ account_id: a.account_id, account_name: a.account_name, city: a.city, chain: a.chain, channel_type: a.channel_type, cur90: a.cur90 || 0, prev90: a.prev90 || 0, delta: Math.round((a.cur90 || 0) - (a.prev90 || 0)), pct: gpct(a.cur90 || 0, a.prev90 || 0), weight: Math.round(a.account_weight || 0), plcDelta: (a.live_placements || 0) - (a.live_prev || 0), tag: tagFor(a.headline), lapsed: String(a.headline || "").toLowerCase() === "lapsed" }));
     let growers = wd.filter(a => a.delta > 0).sort((x, y) => y.delta - x.delta).slice(0, 10);
     let growMode = "growing";
     if (growers.length === 0) { growers = wd.filter(a => a.delta >= 0 && a.cur90 > 0).sort((x, y) => y.cur90 - x.cur90).slice(0, 10); growMode = "top"; }
@@ -310,7 +312,7 @@ function OvInner() {
             <section>
               <SecTag n="01" label="Pulse" />
               <H1>The last 90 days</H1>
-              <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, boxShadow: "var(--shadow)", padding: "13px 6px", marginTop: 10 }}>
+              <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "13px 6px", marginTop: 10 }}>
                 <Bracket />
                 <div style={{ display: "flex" }}>
                   <Kpi label="90D Cases" value={Math.round(m.cur).toLocaleString()} pct={m.pct} />
@@ -318,7 +320,7 @@ function OvInner() {
                   <Kpi label="ROS / mo" value={m.rosNow.toFixed(1)} pct={m.rosPct} divider />
                 </div>
               </div>
-              <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, boxShadow: "var(--shadow)", padding: "13px 15px", marginTop: 9 }}>
+              <div style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "13px 15px", marginTop: 9 }}>
                 <Bracket cool />
                 <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55 }}>{verdict}</div>
               </div>
@@ -389,15 +391,15 @@ function OvInner() {
         )}
       </div>
 
-      {ready && <PrintDeck deckRef={deckRef} title={title} kind={kind} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} demoRows={demoRows} bookLists={bookLists} />}
+      {ready && <DeckV2 deckRef={deckRef} title={title} kind={kind} m={m} health={health} items={items} movers={movers} verdict={verdict} tableA={tableA} tableB={tableB} dims={dims} summary={summary} demoRows={demoRows} bookLists={bookLists} />}
     </div>
   );
 }
 
 /* ================= PRINT DECK ================= */
 const PRINT_CSS = `
-.print-deck { position: absolute; left: -20000px; top: 0; width: 11in; }
-.pslide { width: 11in; height: 8.5in; min-height: 8.5in; max-height: 8.5in; overflow: hidden; position: relative; box-sizing: border-box; display: flex; flex-direction: column; background: #FFFFFF; font-family: var(--font-sans), system-ui, sans-serif; }
+.print-deck { position: absolute; left: -20000px; top: 0; }
+.pslide { position: relative; width: 940px; height: 726px; overflow: hidden; background: #FFFFFF; box-sizing: border-box; }
 `;
 
 // Deck palette — white pages (clean to print), light cards, the app's value-shaded
@@ -557,6 +559,84 @@ function PAcctRos({ accts, ros, labels, hi }) {
   );
 }
 function PPanelHead({ children }) { return <div style={{ fontSize: 9.5, fontWeight: 700, color: PT.mut, textTransform: "uppercase", letterSpacing: .3, marginBottom: 7 }}>{children}</div>; }
+
+// Redesigned deck: builds a flat data object D from the live report data, then renders
+// each slide via the ported HTML generators (components/deckSlides.js). aspect-ratio is
+// swapped to height:100% so html2canvas captures the fixed-size .pslide correctly.
+function DeckV2({ deckRef, title, kind, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows, bookLists }) {
+  const lbls = monthLabels(m.cases.length);
+  const hiFrom = Math.max(0, m.cases.length - 3);
+  const tc = s => titleCase(s || "");
+  const noteFor = a => (a.lapsed ? "lapsed" : a.plcDelta < 0 ? `lost ${Math.abs(a.plcDelta)} SKU` : "");
+  const velLed = m.pct != null && m.acctPct != null && (m.pct - m.acctPct) >= 3;
+  const upMov = movers.up || [], downMov = movers.down || [];
+  const gain = upMov.reduce((s, it) => s + it.dCases, 0);
+  const decl = downMov.reduce((s, it) => s + it.dCases, 0);
+  const allR = [...(tableA.rows || []), ...(tableB.rows || [])].filter(r => r.gPct != null && !String(r.key).startsWith("All other"));
+  const topR = allR.slice().sort((a, b) => b.gPct - a.gPct)[0];
+  const softR = allR.slice().sort((a, b) => a.gPct - b.gPct)[0];
+  const sellsRead = `${topR ? `${topR.label} leads at ${topR.gPct > 0 ? "+" : ""}${topR.gPct}%` : "Growth is mixed across the territory"}${softR && softR.gPct < 0 ? `, while ${softR.label} is the soft spot at ${softR.gPct}%` : ""}. Rate of sale climbs with income and urban density.`;
+  const rosOf = t => r => (t.lastCol === "plc/ac" ? (r.avgPlc || 0) : (r.ros || 0)).toFixed(1);
+
+  const D = {
+    kind, title,
+    scopeTag: `${String(title).toUpperCase()} · ${String(kind).toUpperCase()} REVIEW`,
+    dataThru: DATA_THRU, preparedBy: PREPARED_BY,
+    kpi: {
+      cases90: Math.round(m.cur).toLocaleString(), casesPct: m.pct,
+      accounts: m.aNow.toLocaleString(), accountsPct: m.acctPct,
+      rosMo: m.rosNow.toFixed(1), rosPct: m.rosPct,
+      placements: m.pNow.toLocaleString(), placementsPct: m.distPct,
+      vol52: kfmt(m.l52),
+    },
+    thesis: `Volume ${m.pct == null ? "held roughly flat" : m.pct >= 0 ? `up ${m.pct}%` : `down ${Math.abs(m.pct)}%`} over 90 days${velLed ? " on stronger velocity, not just new doors" : ""} — but ${health.badPct}% of the book needs attention.`,
+    pulse: {
+      volume: m.cases.map((v, i) => ({ m: lbls[i] || "", v: Math.round(v), hi: i >= hiFrom })),
+      accounts: m.accts.map((v, i) => ({ m: lbls[i] || "", v: Math.round(v), hi: i >= hiFrom })),
+      ros: m.ros.map(r => Math.round(r * 10) / 10),
+      verdict: verdict || "",
+      movers: [...upMov, ...downMov].slice(0, 4).map(it => ({ name: tc(it.name), cases: it.dCases, why: it.why, up: it.dCases > 0 })),
+      net: { gain: Math.round(gain), decl: Math.round(Math.abs(decl)), net: Math.round(gain + decl) },
+    },
+    items: (items.all || []).slice(0, 8).map(it => ({ name: tc(it.name), cur: it.l90, prev: it.prev, ros: Math.round(it.ros * 10) / 10, rosPrev: Math.round(it.rosPrev * 10) / 10 })),
+    health: {
+      statuses: [
+        { key: "new", label: "New", accts: health.new.n, pct: health.new.pct },
+        { key: "healthy", label: "Healthy", accts: health.healthy.n, pct: health.healthy.pct },
+        { key: "atrisk", label: "At risk", accts: health.atrisk.n, pct: health.atrisk.pct },
+        { key: "lapsed", label: "Lapsed", accts: health.lapsed.n, pct: health.lapsed.pct },
+      ],
+      goodPct: health.goodPct, badPct: health.badPct,
+      growers: (bookLists.growers || []).slice(0, 7).map(a => ({ name: tc(a.account_name), city: tc(a.city), cs: a.delta, pct: a.pct })),
+      decliners: (bookLists.decliners || []).slice(0, 7).map(a => ({ name: tc(a.account_name), city: tc(a.city), cs: Math.abs(a.delta), pct: Math.abs(a.pct), note: noteFor(a) })),
+    },
+    sells: {
+      channelTitle: `By ${dims[0]}`,
+      channel: (tableA.rows || []).map(r => ({ label: r.label || tc(r.key), cases: (r.cases || 0).toLocaleString(), gPct: r.gPct, accts: (r.accts || 0).toLocaleString(), ros: rosOf(tableA)(r) })),
+      regionTitle: `By ${dims[1]}`,
+      region: (tableB.rows || []).map(r => ({ label: r.label || tc(r.key), cases: (r.cases || 0).toLocaleString(), gPct: r.gPct, accts: (r.accts || 0).toLocaleString(), ros: rosOf(tableB)(r) })),
+      area: (demoRows.area || []).map(b => ({ label: b.label, ros: Math.round(b.ros * 10) / 10 })),
+      income: (demoRows.income || []).map(b => ({ label: b.label, ros: Math.round(b.ros * 10) / 10 })),
+      benchmark: Math.round((demoRows.benchmark || 0) * 10) / 10,
+      read: sellsRead,
+    },
+    exec: {
+      headwinds: (summary.head || []).map(x => ({ t: x.t, d: x.d })),
+      opps: (summary.opp || []).map(x => ({ t: x.t, d: x.d })),
+      ask: `${summary.head && summary.head[0] ? `Address ${summary.head[0].t.toLowerCase()}` : "Protect the base"}${summary.opp && summary.opp[0] ? `, and press ${summary.opp[0].t.toLowerCase()}` : ""}.`,
+      signature: `Prepared by ${PREPARED_BY} · ShelfStory Field Analytics · data thru ${DATA_THRU}`,
+    },
+  };
+
+  const slides = buildDeckSlides(D);
+  return (
+    <div className="print-deck" ref={deckRef}>
+      {slides.map((html, i) => (
+        <div key={i} className="pslide" dangerouslySetInnerHTML={{ __html: String(html).replace(/aspect-ratio:\s*11\s*\/\s*8\.5/g, "height:100%") }} />
+      ))}
+    </div>
+  );
+}
 
 function PrintDeck({ deckRef, title, kind, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows, bookLists }) {
   const labels = monthLabels(11);
@@ -865,7 +945,7 @@ function ItemsSection({ items }) {
   if (!top.length) return null;
   const mx = Math.max(...top.map(it => Math.max(it.l90, it.prev)), 1);
   return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "13px 14px", marginTop: 12 }}>
+    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "15px 15px", marginTop: 12 }}>
       <div style={{ display: "flex", gap: 12, fontSize: 9, color: "var(--text-2)", marginBottom: 11 }}>
         <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--accent)", borderRadius: 2, verticalAlign: "middle", marginRight: 3 }} />current 90D</span>
         <span><span style={{ display: "inline-block", width: 9, height: 9, background: "#C3CBBA", borderRadius: 2, verticalAlign: "middle", marginRight: 3 }} />prior 90D</span>
@@ -906,7 +986,15 @@ function MoverRow({ it, up }) {
 }
 
 function HealthCircles({ health, scope, router }) {
-  const qs = () => { const p = new URLSearchParams(); if (scope.st) p.set("st", scope.st); if (scope.city) p.set("city", scope.city); if (scope.channel) p.set("channel", scope.channel); if (scope.chain) p.set("chain", scope.chain); return p.toString(); };
+  // tap a bubble → the account list, filtered to that health group within this scope
+  const go = (key) => {
+    const p = new URLSearchParams();
+    if (scope.st) p.set("state", scope.st);
+    if (scope.city) p.set("city", scope.city);
+    if (scope.chain) p.set("chain", scope.chain);
+    p.set("health", key);
+    router.push("/book?" + p.toString());
+  };
   const order = [
     { key: "new", lab: "New", bg: "var(--pop-cool-soft)", ink: "var(--pop-cool-deep)" },
     { key: "healthy", lab: "Healthy", bg: "var(--accent-soft)", ink: "var(--accent-deep)" },
@@ -922,7 +1010,9 @@ function HealthCircles({ health, scope, router }) {
         {order.map(o => {
           const b = health[o.key], d = sizeOf(b.pct);
           return (
-            <div key={o.key} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0 }}>
+            <div key={o.key} onClick={() => go(o.key)} title={`View ${o.lab} accounts`} role="button" tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") go(o.key); }}
+              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", minWidth: 0, cursor: "pointer" }}>
               <div style={{ width: d, height: d, borderRadius: "50%", background: o.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <span style={{ fontSize: d >= 86 ? 21 : d >= 70 ? 18 : 15, fontWeight: 700, color: o.ink, letterSpacing: "-0.5px" }}>{b.n.toLocaleString()}</span>
               </div>
@@ -932,6 +1022,7 @@ function HealthCircles({ health, scope, router }) {
           );
         })}
       </div>
+      <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 9 }}>tap a bubble to see those accounts</div>
       <div style={{ display: "flex", marginTop: 16 }}>
         <div style={{ width: "50%", padding: "0 12px" }}>
           <div style={{ height: 10, border: "2px solid var(--accent)", borderTop: "none", borderRadius: "0 0 8px 8px" }} />
@@ -950,7 +1041,7 @@ function ExecCard({ x, warm }) {
   const bg = warm ? "var(--pop-warm-soft)" : "var(--accent-soft)";
   const ink = warm ? "var(--pop-warm-deep)" : "var(--accent-deep)";
   return (
-    <div style={{ background: bg, borderRadius: 10, padding: "9px 10px", marginBottom: 7 }}>
+    <div style={{ background: bg, borderRadius: "var(--r-md)", padding: "9px 10px", marginBottom: 7 }}>
       <div style={{ fontSize: 11.5, fontWeight: 700, color: ink, lineHeight: 1.3 }}>{x.t}</div>
       <div style={{ fontSize: 10, color: ink, opacity: .9, lineHeight: 1.4, marginTop: 3 }}>{x.d}</div>
     </div>
@@ -972,9 +1063,9 @@ function BreakdownTable({ table, scope, router }) {
     router.push("/perf/overview?" + p.toString());
   };
   const col = { borderLeft: "1px solid var(--border)" };
-  const head = { fontSize: 8, fontWeight: 700, letterSpacing: .2, color: "var(--text-3)", textTransform: "uppercase", padding: "7px 6px", textAlign: "right" };
+  const head = { fontSize: 10, fontWeight: 700, letterSpacing: .2, color: "var(--text-3)", textTransform: "uppercase", padding: "7px 6px", textAlign: "right" };
   return (
-    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", overflow: "hidden" }}>
+    <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", overflow: "hidden" }}>
       <div style={{ display: "flex", borderBottom: "1px solid var(--border-strong)" }}>
         <span style={{ ...head, flex: 1, textAlign: "left", paddingLeft: 12 }}>{kind}</span>
         <span style={{ ...head, width: 48, ...col }}>90D cs</span>
@@ -1022,7 +1113,7 @@ function Top({ title, kind, back, canPrint, onExport, exporting }) {
   );
 }
 
-function SecTag({ n, label }) { return <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: .5, color: "var(--text-3)", textTransform: "uppercase", paddingTop: 18 }}>{n} · {label}</div>; }
+function SecTag({ n, label }) { return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: .5, color: "var(--text-3)", textTransform: "uppercase", paddingTop: 18 }}>{n} · {label}</div>; }
 function H1({ children }) { return <div style={{ fontFamily: "var(--font-serif)", fontSize: 20, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.3px", marginTop: 2 }}>{children}</div>; }
 function Bracket({ cool }) {
   const c = cool ? "var(--pop-cool)" : "var(--accent)";

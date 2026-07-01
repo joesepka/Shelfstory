@@ -68,7 +68,7 @@ export default function ItemHistory() {
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 0 10px" }}>
         <button
           onClick={() => router.back()}
-          style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 22, color: "var(--text-2)", lineHeight: 1, padding: 0 }}
+          style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 22, color: "var(--text-3)", lineHeight: 1, padding: 0 }}
           aria-label="Back"
         >‹</button>
         <div style={{ flex: 1, minWidth: 0 }}>
@@ -77,14 +77,14 @@ export default function ItemHistory() {
             {data.package ? `${data.package} · ` : ""}{data.account}
           </div>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: "var(--r-sm)",
+        <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: "var(--r-sm)",
                        background: data.lost ? "var(--atrisk-bg)" : "var(--growing-bg)",
                        color: data.lost ? "var(--atrisk-ink)" : "var(--growing-ink)" }}>
           {data.lost ? "lost" : "active"}
         </span>
       </div>
 
-      <div style={{ display: "flex", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden", marginBottom: 14 }}>
+      <div style={{ display: "flex", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", overflow: "hidden", marginBottom: 14, boxShadow: "var(--shadow-sm)" }}>
         {[
           ["last ordered", data.lastOrdered],
           ["12-mo total", `${data.total} cs`],
@@ -98,7 +98,7 @@ export default function ItemHistory() {
         ))}
       </div>
 
-      <div style={{ fontSize: 11, color: "var(--text-3)", paddingBottom: 4 }}>cases ordered · each 30-day period</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", paddingBottom: 4 }}>cases ordered · each 30-day period</div>
 
       <div style={{ display: "flex", gap: 5, marginTop: 6 }} role="img" aria-label="Monthly order history">
         {series.map((m, i) => {
@@ -106,9 +106,9 @@ export default function ItemHistory() {
           const txt = t > 0.5 ? "#fff" : "var(--accent-deep)";
           return (
             <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 6, opacity: 0, animation: "dotIn .3s ease both", animationDelay: `${i * 28}ms` }}>
-              <div style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600,
+              <div style={{ width: "100%", aspectRatio: "1 / 1", borderRadius: "var(--r-sm)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 600,
                 background: m.cases > 0 ? greenBar(m.cases, lo, hi) : "var(--surface)",
-                border: m.cases > 0 ? "none" : "1px dashed var(--border-strong)",
+                border: m.cases > 0 ? "none" : "0.5px dashed var(--border-strong)",
                 color: m.cases > 0 ? txt : "var(--text-3)" }}>
                 {m.cases > 0 ? m.cases : ""}
               </div>

@@ -12,6 +12,9 @@
   --font-serif: var(--font-fraunces), Georgia, serif;
   --font-mono:  var(--font-spline), "SF Mono", ui-monospace, monospace;
   --lapsed-card-bg: #f1ddd2;
+  --lapsed-bg: #8B3A2B;         /* lapsed headline background (was hardcoded) */
+  --surface-3: #e7e9e3;         /* third inset tone: grid headers/totals, ~3% under --surface-2 */
+  --purple-benchmark: #463a76;  /* wholesale benchmark + item-line series */
 
   /* ---- Layout & shape ---- */
   --maxw: 520px;
@@ -117,6 +120,9 @@
   --shadow-sm:  0 1px 2px rgba(0,0,0,.04);
   --shadow:     0 2px 10px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
   --shadow-pop: 0 16px 40px rgba(0,0,0,.14);
+  --lapsed-bg: #b0573a;
+  --surface-3: #e8e8ec;
+  --purple-benchmark: #6e4fa3;
 }
 
 /* ---- Pen & Ink: warm cream paper, near-black ink, engraved feel, muted accents ---- */
@@ -146,6 +152,9 @@
   --shadow-sm:  0 1px 1px rgba(60,45,20,.06);
   --shadow:     0 1px 3px rgba(60,45,20,.09);
   --shadow-pop: 0 12px 30px rgba(60,45,20,.18);
+  --lapsed-bg: #7e3a24;
+  --surface-3: #ded2b3;
+  --purple-benchmark: #5a4a86;
 }
 
 /* =====================================================================

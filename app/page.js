@@ -210,7 +210,7 @@ function Stat({ label, value, unit, pct, divider, delay = 0 }) {
   const arrow = pct == null ? "" : pct > 0 ? "▲" : pct < 0 ? "▼" : "▬";
   return (
     <div style={{ flex: 1, minWidth: 0, textAlign: "center", borderLeft: divider ? "1px solid var(--border-strong)" : "none" }}>
-      <div style={{ fontSize: 8.5, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, height: 22, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 10, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, height: 22, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
       <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 2, marginTop: 3 }}>
         <span className="statfloat" style={{ fontSize: 21, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1', animationDelay: `${delay}s` }}>{value}</span>
         {unit && <span style={{ fontSize: 9.5, color: "var(--text-3)" }}>{unit}</span>}
@@ -462,10 +462,10 @@ export default function Home() {
       for (const r of sorted) { const f = cum / totW; cum += r.account_weight || 0; (f < 0.25 ? groups.top : f < 0.5 ? groups.mid : f < 0.75 ? groups.small : groups.tail).push(r); }
       const tiers = TIER_DEFS.map(t => {
         const g = groups[t.key];
-        let c = 0, p = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
-        for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; cnt[tierBucket(r.headline)]++; }
+        let c = 0, p = 0, an = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
+        for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; if ((r.cur90 || 0) > 0) an++; cnt[tierBucket(r.headline)]++; }
         const pct = gpct(c, p), sc = tierScore(pct, cnt, g.length);
-        return { key: t.key, label: t.label, n: g.length, cur: c, pct, vit: sc.vit, color: sc.color, desc: tierDesc(pct, cnt, g.length) };
+        return { key: t.key, label: t.label, n: g.length, cur: c, ros: an ? c / an : 0, pct, vit: sc.vit, color: sc.color, desc: tierDesc(pct, cnt, g.length) };
       });
       return { label, key, cur, curPct: gpct(cur, prev), acctNow, acctPct: gpct(acctNow, acctPrev), rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers };
     };
@@ -516,7 +516,9 @@ export default function Home() {
             <div key={c.href} onClick={() => navTo(c.href)}
               style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "9px 12px 8px", minHeight: 66, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <NavIcon href={c.href} />
+                <span style={{ display: "inline-flex", alignItems: "center" }}>
+                  <NavIcon href={c.href} />
+                </span>
                 <span style={{ fontSize: 15, color: c.color, lineHeight: 1 }}>→</span>
               </div>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginTop: 5, letterSpacing: "-0.2px" }}>{c.title}</div>
@@ -585,13 +587,17 @@ export default function Home() {
         {/* the book by tier — four health trees, each ~25% of volume */}
         {cur && (
           <div style={{ marginTop: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.5 }}>THE BOOK BY TIER</div>
+            <div style={{ display: "inline-flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.3 }}>THE BOOK BY TIER</span>
+              <span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", opacity: 0.75 }}>· ROS / acct above each</span>
+            </div>
             <div key={"t4" + cur.key} className="sceneFade tier4row">
               {cur.tiers.map((t, idx) => (
                 <Fragment key={t.key}>
                   {idx > 0 && <div className="t4div" aria-hidden="true" />}
                   <div className="t4col" style={{ cursor: t.n ? "pointer" : "default" }}
                     onClick={() => { if (t.n) router.push(`/book?tier=${t.key}${cur.key !== "ALL" ? `&state=${cur.key}` : ""}`); }}>
+                    <div className="t4ros">{t.n ? <>{t.ros.toFixed(1)}<span> cs</span></> : " "}</div>
                     <div className="t4tree">{t.n ? <TierTree t={t.vit} color={t.color} h={[54, 47, 41, 35][idx]} /> : <span style={{ fontSize: 11, color: "var(--text-3)" }}>—</span>}</div>
                     <div className="t4lbl">{t.label}</div>
                     <div className="t4n">{t.n.toLocaleString()} acct{t.n === 1 ? "" : "s"}</div>
@@ -651,10 +657,12 @@ export default function Home() {
         .tier4row{display:flex;align-items:flex-end;margin-top:8px;}
         .t4div{width:1px;background:#e2e4df;align-self:stretch;flex-shrink:0;}
         .t4col{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;padding:0 5px;}
+        .t4ros{font-size:13px;font-weight:800;color:var(--text);line-height:1;margin-bottom:3px;font-variant-numeric:tabular-nums;}
+        .t4ros span{font-size:8.5px;font-weight:600;color:var(--text-3);}
         .t4tree{display:flex;align-items:flex-end;justify-content:center;min-height:56px;}
         .t4lbl{font-size:11.5px;font-weight:700;color:var(--text);margin-top:5px;}
         .t4n{font-size:10px;color:var(--text-3);margin-top:1px;}
-        .t4desc{font-size:9.5px;color:var(--text-3);margin-top:2px;line-height:1.2;}
+        .t4desc{font-size:9.5px;color:var(--text-3);margin-top:2px;line-height:1.2;min-height:23px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
         .edrow{transition:opacity .15s ease, background .15s ease;}
         .edrow:active{opacity:.6;}
         @media (hover:hover){.edrow:hover{opacity:.72;}}
