@@ -22,6 +22,17 @@ const TREND = "#5E9277";  // --accent (climbing line / arrow / dots / progress)
 // data-as-of label — bump this when you reload the book
 const DATA_UPDATED = "June 15th, 2026";
 
+// a daily line at the top — resilience + doing the right thing
+const QUOTES = [
+  { t: "You may encounter many defeats, but you must not be defeated.", a: "Maya Angelou" },
+  { t: "Do what is right, not what is easy nor what is popular.", a: "Roy T. Bennett" },
+  { t: "When they go low, we go high.", a: "Michelle Obama" },
+  { t: "It always seems impossible until it's done.", a: "Nelson Mandela" },
+  { t: "If it is not right, do not do it; if it is not true, do not say it.", a: "Marcus Aurelius" },
+  { t: "The world breaks everyone, and afterward many are strong at the broken places.", a: "Ernest Hemingway" },
+  { t: "Success is measured not by the position reached, but by the obstacles overcome.", a: "Booker T. Washington" },
+];
+
 const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
 const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
 const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
@@ -291,10 +302,10 @@ function buildBrief(rows) {
 // home nav — big-editorial list. order here is display order; `color` tints the
 // arrow, `highlight` gives the row a subtle coral wash (the priority action).
 const NAV = [
-  { href: "/book", title: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list." },
-  { href: "/perf", title: "Decision Tree", color: "#3D6E93", sub: "Drill territory, channel, chain, or distributor to the biggest distress — and a report." },
-  { href: "/wholesale", title: "Historical Trends", color: "#534AB7", sub: "Depletion and inventory momentum over time." },
-  { href: "/actions", title: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true },
+  { href: "/book", title: "Accounts", tab: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list." },
+  { href: "/perf", title: "Decision Tree", tab: "Decisions", color: "#3D6E93", sub: "Drill territory, channel, chain, or distributor to the biggest distress — and a report." },
+  { href: "/wholesale", title: "Historical Trends", tab: "Trends", color: "#534AB7", sub: "Depletion and inventory momentum over time." },
+  { href: "/actions", title: "Actions", tab: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true },
 ];
 
 const chevBtn = { border: "none", background: "var(--surface-2)", color: "var(--text-2)", width: 20, height: 20, borderRadius: 10, fontSize: 13, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 };
@@ -346,8 +357,8 @@ function allocStates(cnt, total, slots) {
 }
 
 // light-grey section glyphs for the four-square nav (replaces the colored dots)
-function NavIcon({ href }) {
-  const p = { width: 22, height: 22, viewBox: "0 0 24 24", fill: "none", stroke: "#aab2a3", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
+function NavIcon({ href, color = "#aab2a3", size = 22 }) {
+  const p = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": true };
   if (href === "/book") return <svg {...p}><rect x="3" y="4" width="7" height="7" rx="1.2" /><rect x="14" y="4" width="7" height="7" rx="1.2" /><rect x="3" y="14" width="7" height="7" rx="1.2" /><rect x="14" y="14" width="7" height="7" rx="1.2" /></svg>;
   if (href === "/perf") return <svg {...p}><circle cx="5" cy="6" r="2" /><circle cx="19" cy="6" r="2" /><circle cx="12" cy="19" r="2" /><path d="M12 17 V11 M12 11 H5 V8 M12 11 H19 V8" /></svg>;
   if (href === "/wholesale") return <svg {...p}><path d="M4 4 V20 H20" /><polyline points="7 15 11 11 14 13 19 7" /></svg>;
@@ -421,6 +432,7 @@ export default function Home() {
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
+  const [quote, setQuote] = useState(QUOTES[0]);
   const [briefOpen, setBriefOpen] = useState(false);
   const [slide, setSlide] = useState(0);
   const [confirm, setConfirm] = useState(null);
@@ -449,7 +461,7 @@ export default function Home() {
     })();
   }, []);
 
-  useEffect(() => { setGreet(greeting()); }, []);
+  useEffect(() => { setGreet(greeting()); setQuote(QUOTES[Math.floor(Date.now() / 86400000) % QUOTES.length]); }, []);
 
   // swipeable header: the whole book, then each state high→low by 90-day volume.
   // each slide carries its 3 stats, a state-specific brief, and four volume tiers
@@ -517,21 +529,10 @@ export default function Home() {
           <div style={{ flexShrink: 0, marginTop: 2 }}><HeaderLogo /></div>
         </div>
 
-        {/* buttons — four square */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-          {NAV.map(c => (
-            <div key={c.href} onClick={() => navTo(c.href)}
-              style={{ cursor: "pointer", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "9px 12px 8px", minHeight: 66, display: "flex", flexDirection: "column", boxShadow: "var(--shadow-sm)", ...(styleFor(c.href) || {}) }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ display: "inline-flex", alignItems: "center" }}>
-                  <NavIcon href={c.href} />
-                </span>
-                <span style={{ fontSize: 15, color: c.color, lineHeight: 1 }}>→</span>
-              </div>
-              <div style={{ fontSize: 14.5, fontWeight: 700, color: "var(--text)", marginTop: 5, letterSpacing: "-0.2px" }}>{c.title}</div>
-              <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 2, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{c.sub}</div>
-            </div>
-          ))}
+        {/* motivational quote — rotates daily */}
+        <div className="riseIn" style={{ marginTop: 9, padding: "9px 13px", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ fontSize: 12.5, color: "var(--text-2)", fontStyle: "italic", lineHeight: 1.45 }}>&ldquo;{quote.t}&rdquo;</div>
+          <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 600, marginTop: 3 }}>— {quote.a}</div>
         </div>
 
         {/* loading / error */}
@@ -623,9 +624,21 @@ export default function Home() {
             Change style
           </button>
         </div>
-        <div style={{ height: 4 }} />
+        <div style={{ height: 76 }} />
         </div>
       </main>
+
+      {/* bottom icon nav */}
+      <nav style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 0, width: "100%", maxWidth: 480, background: "var(--surface)", borderTop: "0.5px solid var(--border)", boxShadow: "0 -3px 14px rgba(40,55,35,.07)", zIndex: 30, display: "flex", padding: "7px 4px calc(8px + env(safe-area-inset-bottom))" }}>
+        {NAV.map(c => (
+          <div key={c.href} onClick={() => router.push(c.href)} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, cursor: "pointer", padding: "3px 2px" }}>
+            <div style={{ width: 34, height: 34, borderRadius: 17, display: "flex", alignItems: "center", justifyContent: "center", background: c.highlight ? "var(--accent-soft)" : "transparent" }}>
+              <NavIcon href={c.href} color={c.color} size={23} />
+            </div>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-2)", letterSpacing: "-0.1px" }}>{c.tab}</span>
+          </div>
+        ))}
+      </nav>
 
       {confirm && (
         <div onClick={() => setConfirm(null)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(40,55,35,.34)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
