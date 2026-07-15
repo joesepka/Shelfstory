@@ -427,7 +427,12 @@ function TierTrees({ tiers }) {
         </svg>
         <div style={{ position: "relative", zIndex: 1, height: "100%", display: "flex", alignItems: "flex-end", justifyContent: "space-around", padding: "0 2px" }}>
           {tiers.map(t => (
-            <div key={t.label} style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "center", alignItems: "flex-end" }}>
+            <div key={t.label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}>
+              <div style={{ textAlign: "center", marginBottom: 3, lineHeight: 1.05 }}>
+                <div style={{ fontSize: 8, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.4 }}>ROS</div>
+                <div style={{ fontSize: 14.5, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{t.ros != null ? t.ros.toFixed(1) : "—"}</div>
+                <div style={{ fontSize: 9, marginTop: 1 }}>{deltaTiny(t.rosPct)}</div>
+              </div>
               <TierTree t={t.vit} color={t.color} h={88} />
             </div>
           ))}
@@ -632,7 +637,7 @@ export default function Home() {
       // Mid (20–60%), Small (60–80%); ranked by L52W volume (fallback 90-day)
       const bySize = list.filter(r => (r.account_weight || r.cur90 || 0) > 0).sort((a, b) => (b.account_weight || b.cur90 || 0) - (a.account_weight || a.cur90 || 0));
       const NB = bySize.length, c1 = Math.round(NB * 0.2), c2 = Math.round(NB * 0.6), c3 = Math.round(NB * 0.8);
-      const tstat = (lbl, rws) => { let c = 0, p = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { c += r.cur90 || 0; p += r.prev90 || 0; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length); return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color }; };
+      const tstat = (lbl, rws) => { let c = 0, p = 0, an = 0, ap = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { const cc = r.cur90 || 0, pp = r.prev90 || 0; c += cc; p += pp; if (cc > 0) an++; if (pp > 0) ap++; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length), ros = an ? c / an : 0, rosPrev = ap ? p / ap : 0; return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color, ros, rosPct: rosPrev > 0 ? Math.round((100 * (ros - rosPrev)) / rosPrev) : null }; };
       const tiers3 = [tstat("Large", bySize.slice(0, c1)), tstat("Mid", bySize.slice(c1, c2)), tstat("Small", bySize.slice(c2, c3))];
       return { label, key, cur, curPct, acctNow, acctPct: acctNow ? Math.round((100 * (newA - lostA)) / acctNow) : null, rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers, treeVit: stSc.vit, treeColor: stSc.color, quarters, windows, tiers3 };
     };
