@@ -454,7 +454,7 @@ function renderPulse(D) {
               <span style="font-size:9px; color:#85937A;">Jul &rarr; Jun</span>
             </div>
             <div style="flex:1; min-height:0;">
-              <svg viewBox="0 0 560 190" preserveAspectRatio="none" style="width:100%; height:100%;" role="img" aria-label="Rolling-90-day volume in cases with the most recent months highlighted green.">
+              <svg viewBox="0 0 560 190" preserveAspectRatio="xMidYMid meet" style="width:100%; height:100%;" role="img" aria-label="Rolling-90-day volume in cases with the most recent months highlighted green.">
                 <line x1="42" y1="46" x2="560" y2="46" stroke="#E4EBDB" stroke-width="1"/>
                 <line x1="42" y1="100" x2="560" y2="100" stroke="#E4EBDB" stroke-width="1"/>
                 <line x1="42" y1="154" x2="560" y2="154" stroke="#E4EBDB" stroke-width="1"/>
@@ -471,7 +471,7 @@ function renderPulse(D) {
               <span style="font-size:9px; color:#85937A;">Jul &rarr; Jun</span>
             </div>
             <div style="flex:1; min-height:0;">
-              <svg viewBox="0 0 560 190" preserveAspectRatio="none" style="width:100%; height:100%;" role="img" aria-label="Active accounts bars with the most recent months highlighted blue and a gold rate-of-sale line.">
+              <svg viewBox="0 0 560 190" preserveAspectRatio="xMidYMid meet" style="width:100%; height:100%;" role="img" aria-label="Active accounts bars with the most recent months highlighted blue and a gold rate-of-sale line.">
                 <line x1="42" y1="46" x2="560" y2="46" stroke="#E4EBDB" stroke-width="1"/>
                 <line x1="42" y1="100" x2="560" y2="100" stroke="#E4EBDB" stroke-width="1"/>
                 <line x1="42" y1="154" x2="560" y2="154" stroke="#E4EBDB" stroke-width="1"/>
@@ -870,8 +870,11 @@ function renderSells(D) {
 
   // ---- CHANNEL TABLE ROWS ----
   // last row is highlighted (background:#D8ECD0) like sample "Mass / Club"
+  // highlight the biggest REAL channel (never an "All other" catch-all, which sorts last)
+  var lead = 0;
+  for (var lj = 0; lj < channel.length; lj++) { if (String(channel[lj].label || '').toLowerCase().indexOf('all other') !== 0) { lead = lj; break; } }
   var channelRows = channel.map(function (r, i) {
-    var last = (i === channel.length - 1);
+    var last = (i === lead);
     if (last) {
       return '<tr style="background:#D8ECD0;">' +
         '<td style="text-align:left; padding:6px 5px 6px 6px; font-weight:700;">' + esc(r.label) + '</td>' +

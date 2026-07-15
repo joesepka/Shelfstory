@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
-import LoadingScreen from "../../../../../components/LoadingScreen";
+import Splash from "../../../../../components/Splash";
 import { greenBar } from "../../../../../lib/utils";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00"); // window 0 "data thru" date
@@ -55,7 +55,7 @@ export default function ItemHistory() {
   }, [id, code]);
 
   if (err) return <div className="wrap"><p className="state-msg">Couldn’t load history. {err}</p></div>;
-  if (!data) return <LoadingScreen />;
+  if (!data) return <Splash />;
 
   // order grid — oldest (left) -> newest (right); each 30-day period is a box
   const series = [...data.months].reverse();

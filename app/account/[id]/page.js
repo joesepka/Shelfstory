@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
-import LoadingScreen from "../../../components/LoadingScreen";
+import Splash from "../../../components/Splash";
 import TreeGlyph from "../../../components/TreeGlyph";
 import ItemEstimator from "../../../components/ItemEstimator";
 import AccountTag from "../../../components/AccountTag";
@@ -366,7 +366,7 @@ export default function AccountOverview() {
   function closeItem() { selRef.current = null; setSel(null); setItemData(null); setItemErr(false); }
 
   if (err) return <div className="wrap"><p className="state-msg">Couldn’t load account. {err}</p></div>;
-  if (!d) return <LoadingScreen />;
+  if (!d) return <Splash />;
 
   const { acc, bench, items, white, cohort = [], onP, areaAvgMoReal = null, wsReal = [], penetration = null, peerTopGrowth = 0, peerAvgGrowth = null } = d;
   const head = HEAD[acc.headline] || HEAD["Stable"];

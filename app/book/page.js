@@ -480,7 +480,7 @@ function BookInner() {
         const { data, error } = await supabase
           .from("account_list")
           .select("account_id,account_name,channel,chain,city,state,zip,distributor,account_weight,cur90,prior90_pct,cases_per_month,placements_delta,live_placements,live_prev,headline,lost_sku,growing_count,active_count,spark,last_invoice_date,last_order_w")
-          .order("account_weight", { ascending: false })
+          .order("account_weight", { ascending: false, nullsFirst: false })
           .range(from, from + 4999);
         if (error) { setErr(error.message); return; }
         all = all.concat(data || []);

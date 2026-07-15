@@ -76,6 +76,10 @@ a { color: inherit; text-decoration: none; }
 
 .filters { display:flex; gap:7px; overflow-x:auto; padding: 10px 0 12px; scrollbar-width:none; }
 .filters::-webkit-scrollbar{ display:none; }
+
+/* rule: never show a visible scrollbar anywhere (scrolling still works) */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .chip { white-space:nowrap; font-size:13px; padding:6px 12px; border-radius: var(--r-md);
   border:0.5px solid var(--border-strong); background:transparent; color:var(--text); cursor:pointer; font-family:inherit; }
 .chip.on { background: var(--accent-bg); border-color: transparent; color: var(--accent-ink); }
