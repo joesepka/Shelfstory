@@ -239,7 +239,7 @@ function OvInner() {
     if (m.pct != null && m.pct <= -3) {
       const fast = m.acctPct != null && (m.pct - m.acctPct) <= -4;
       head.push({ mag: Math.abs(m.pct), t: `Volume down ${Math.abs(m.pct)}%`,
-        d: `The territory moved ${Math.round(m.cur).toLocaleString()} cs over the last 90 days, off ${Math.abs(m.pct)}% from the prior quarter. ${fast ? "Accounts are dropping faster than volume, so this reads as a distribution problem first — doors are going quiet, not just slowing down." : "The account base is roughly holding, which points at rate of sale: the same doors are simply buying less each week."} The soft spots below are where to put the floor in first.` });
+        d: `The territory moved ${Math.round(m.cur).toLocaleString()} cs over the last 90 days, off ${Math.abs(m.pct)}% from the prior quarter. ${fast ? "Accounts are dropping faster than volume, so this reads as a distribution problem first — accounts are going quiet, not just slowing down." : "The account base is roughly holding, which points at rate of sale: the same accounts are simply buying less each week."} The soft spots below are where to put the floor in first.` });
     }
     if (health.lapsed.n > 0) head.push({ mag: health.lapsed.pct + 8, t: `${health.lapsed.n} accounts lapsed`,
       d: `${health.lapsed.n} accounts that ordered last quarter have gone dark, pulling ${health.lapsed.pct}% of volume off the board. Another ${health.atrisk.pct}% sits in at-risk, one slow month from joining them. These are win-back calls — recovering even half defends the base without a single new placement.` });
@@ -258,7 +258,7 @@ function OvInner() {
       d: `${health.new.n} new accounts already make up ${health.new.pct}% of volume and haven't hit full stride yet — that upside is banked, not yet earned. Lock them in with a second SKU or an intro promo before they drift. New-account momentum is the cheapest growth on this page.` });
     const grItem = (items.all || []).filter(it => it.gPct != null && it.gPct >= 5).sort((a, b) => b.dCases - a.dCases)[0];
     if (grItem) opp.push({ mag: grItem.gPct, t: `${titleCase(grItem.name)} momentum`,
-      d: `${titleCase(grItem.name)} added ${grItem.dCases.toLocaleString()} cs (${grItem.gPct > 0 ? "+" : ""}${grItem.gPct}%) on the quarter.${grItem.dDoors > 0 ? ` New placements are driving it (+${grItem.dDoors}) — keep feeding distribution while velocity holds.` : " It's pure velocity — the same doors are pulling more, so push for extra facings and displays."} Lead with it in the next pitch.` });
+      d: `${titleCase(grItem.name)} added ${grItem.dCases.toLocaleString()} cs (${grItem.gPct > 0 ? "+" : ""}${grItem.gPct}%) on the quarter.${grItem.dDoors > 0 ? ` New placements are driving it (+${grItem.dDoors}) — keep feeding distribution while velocity holds.` : " It's pure velocity — the same accounts are pulling more, so push for extra facings and displays."} Lead with it in the next pitch.` });
     const grGrp = [...allRows].filter(r => r.gPct != null && r.gPct >= 4 && !String(r.key).startsWith("All other")).sort((a, b) => b.gPct - a.gPct)[0];
     if (grGrp) opp.push({ mag: grGrp.gPct, t: `${grGrp.label} up ${grGrp.gPct}%`,
       d: `${grGrp.label} is up ${grGrp.gPct}% and running ${grGrp.ros.toFixed(1)} ROS on ${grGrp.cases.toLocaleString()} cs — the strongest mover in the territory. Concentrate incremental placements and promo dollars here for the best return per case. Momentum compounds, so ride it while it's hot.` });
@@ -589,7 +589,7 @@ function DeckV2({ deckRef, title, kind, m, health, items, movers, verdict, table
       placements: m.pNow.toLocaleString(), placementsPct: m.distPct,
       vol52: kfmt(m.l52),
     },
-    thesis: `Volume ${m.pct == null ? "held roughly flat" : m.pct >= 0 ? `up ${m.pct}%` : `down ${Math.abs(m.pct)}%`} over 90 days${velLed ? " on stronger velocity, not just new doors" : ""} — but ${health.badPct}% of the book needs attention.`,
+    thesis: `Volume ${m.pct == null ? "held roughly flat" : m.pct >= 0 ? `up ${m.pct}%` : `down ${Math.abs(m.pct)}%`} over 90 days${velLed ? " on stronger velocity, not just new accounts" : ""} — but ${health.badPct}% of the book needs attention.`,
     pulse: {
       volume: m.cases.map((v, i) => ({ m: lbls[i] || "", v: Math.round(v), hi: i >= hiFrom })),
       accounts: m.accts.map((v, i) => ({ m: lbls[i] || "", v: Math.round(v), hi: i >= hiFrom })),

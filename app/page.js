@@ -290,7 +290,7 @@ function buildBrief(rows) {
   let topCur = 0, topPrev = 0;
   for (let i = 0; i < topN; i++) { topCur += sized[i].cur90 || 0; topPrev += sized[i].prev90 || 0; }
   const topG = gpct(topCur, topPrev);
-  // crude brand-stage read: lots of fresh doors / expanding shelf = growing; flat & few new = mature
+  // crude brand-stage read: lots of fresh accounts / expanding shelf = growing; flat & few new = mature
   const newShare = actNow ? newC / actNow : 0;
   const stage = (newShare >= 0.08 || (distPct != null && distPct >= 6)) ? "growing" : (newShare <= 0.03 && (distPct == null || distPct <= 1)) ? "mature" : "balanced";
 
@@ -305,11 +305,14 @@ function Snappy({ cur }) {
   const trendColor = g == null ? "var(--text-3)" : g >= 6 ? "var(--up)" : g >= -2 ? "var(--accent-deep)" : "var(--gold)";
   const amber = { color: "var(--gold)", fontWeight: 600 }, green = { color: "var(--up)", fontWeight: 600 };
 
-  // tie the story to the trees below — which size tier is shedding vs. gaining doors, and the brand's stage
+  // tie the story to the trees below — name ONLY the tiers whose pill actually fires, so the
+  // brief above and the pills below are a clean 1-to-1 (same tierSignal drives both).
   const tiers = cur.tiers3 || [];
-  const worstLoss = tiers.filter(t => t.lostN > t.newN).sort((a, x) => (x.lostN - x.newN) - (a.lostN - a.newN))[0];
-  const bestGain = tiers.filter(t => t.newN > t.lostN).sort((a, x) => (x.newN - x.lostN) - (a.newN - a.lostN))[0];
-  const lossWhere = worstLoss ? worstLoss.label.toLowerCase() : null, gainWhere = bestGain ? bestGain.label.toLowerCase() : null;
+  const losing = tiers.filter(t => tierSignal(t).kind === "losing").sort((a, x) => (x.lostN - x.newN) - (a.lostN - a.newN));
+  const gaining = tiers.filter(t => tierSignal(t).kind === "gaining").sort((a, x) => (x.newN - x.lostN) - (a.newN - a.lostN));
+  const nameTiers = arr => arr.length === 0 ? null : arr.map(t => t.label.toLowerCase()).reduce((s, x, i, a) => i === 0 ? x : i === a.length - 1 ? `${s} and ${x}` : `${s}, ${x}`, "");
+  const lossWhere = nameTiers(losing), gainWhere = nameTiers(gaining);
+  const gainPl = gaining.length > 1;
   const stage = b && b.stage;
 
   // divergence read — volume and account-count moving opposite ways, with the WHY (rate of sale)
@@ -317,9 +320,9 @@ function Snappy({ cur }) {
   if (b && g != null) {
     if (g >= 3 && b.acctNet != null && b.acctNet <= -3) {
       const strong = b.topG != null && b.topG > 0;
-      diverge = <>But it&rsquo;s on a <b style={amber}>shrinking base</b> — you&rsquo;ve net-lost accounts ({b.acctNet}%){lossWhere ? <>, mostly your <b style={amber}>{lossWhere}</b> doors</> : null} while <b style={green}>rate of sale is up {b.rosPct != null && b.rosPct > 0 ? `${b.rosPct}%` : "sharply"}</b>{strong ? <>, so your strongest are getting stronger (top accounts +{b.topG}%)</> : null}. Fewer, bigger accounts carrying the book — mind the concentration.</>;
+      diverge = <>But it&rsquo;s on a <b style={amber}>shrinking base</b> — you&rsquo;ve net-lost accounts ({b.acctNet}%){lossWhere ? <>, mostly your <b style={amber}>{lossWhere}</b> accounts</> : null} while <b style={green}>rate of sale is up {b.rosPct != null && b.rosPct > 0 ? `${b.rosPct}%` : "sharply"}</b>{strong ? <>, so your strongest are getting stronger (top accounts +{b.topG}%)</> : null}. Fewer, bigger accounts carrying the book — mind the concentration.</>;
     } else if (g <= -3 && b.acctNet != null && b.acctNet >= 3) {
-      diverge = <>But you&rsquo;re <b style={amber}>spreading thin</b> — adding accounts (+{b.acctNet}%) faster than they sell{b.rosPct != null && b.rosPct < 0 ? <>, so <b style={amber}>rate of sale slipped {Math.abs(b.rosPct)}%</b></> : null}. The new points of distribution need a velocity push.</>;
+      diverge = <>But you&rsquo;re <b style={amber}>spreading thin</b> — adding accounts (+{b.acctNet}%){gainWhere ? <> in your <b style={amber}>{gainWhere}</b> tier{gainPl ? "s" : ""}</> : null} faster than they sell{b.rosPct != null && b.rosPct < 0 ? <>, so <b style={amber}>rate of sale slipped {Math.abs(b.rosPct)}%</b></> : null}. The new points of distribution need a velocity push.</>;
     }
   }
 
@@ -327,7 +330,7 @@ function Snappy({ cur }) {
   // (skip the plain account-loss line when the divergence read already explains it)
   const concerns = [];
   if (b && !diverge) {
-    if (b.acctNet != null && b.acctNet <= -3) concerns.push({ sev: Math.abs(b.acctNet) * 1.5 + 12, node: <>You&rsquo;re <b style={amber}>losing accounts — net {b.acctNet}%</b>{lossWhere ? <>, mostly your <b style={amber}>{lossWhere}</b> doors</> : null} ({b.lostCount} lapsed vs {b.newCount} new); {stage === "mature" ? "expected as the book rationalizes — mind the shelf" : "shore up the base"}.</> });
+    if (b.acctNet != null && b.acctNet <= -3) concerns.push({ sev: Math.abs(b.acctNet) * 1.5 + 12, node: <>You&rsquo;re <b style={amber}>losing accounts — net {b.acctNet}%</b>{lossWhere ? <>, mostly your <b style={amber}>{lossWhere}</b> accounts</> : null} ({b.lostCount} lapsed vs {b.newCount} new); {stage === "mature" ? "expected as the book rationalizes — mind the shelf" : "shore up the base"}.</> });
     if (b.distPct != null && b.distPct <= -2) concerns.push({ sev: Math.abs(b.distPct) * 1.6 + 9, node: <><b style={amber}>Watch your distribution</b> — placements down {Math.abs(b.distPct)}%.</> });
     if (b.rosPct != null && b.rosPct <= -3) concerns.push({ sev: Math.abs(b.rosPct) + 6, node: <>Rate of sale is <b style={amber}>softening — {b.rosNow} cs/acct, off {Math.abs(b.rosPct)}%</b>.</> });
     if (b.chDown) concerns.push({ sev: Math.abs(b.chDown.g) + 4, node: <><b style={amber}>{b.chDown.name}</b> is your soft spot, down {Math.abs(b.chDown.g)}% ({b.chDown.n} accounts).</> });
@@ -343,7 +346,7 @@ function Snappy({ cur }) {
     if (b.chUp) pos = <><b style={green}>{b.chUp.name}</b> is pulling hard, +{b.chUp.g}%</>;
     else if (b.stUp) pos = <><b style={green}>{STNAME[b.stUp.k] || b.stUp.k}</b> is carrying you, up {b.stUp.g}%</>;
     else if (b.distPct != null && b.distPct >= 3) pos = <>distribution grew <b style={green}>+{b.distPct}%</b></>;
-    else if (b.newCount > 0) pos = <><b style={green}>{b.newCount} new account{b.newCount === 1 ? "" : "s"}</b>{gainWhere ? <> in your {gainWhere} tier</> : null} just opened</>;
+    else if (b.newCount > 0) pos = <><b style={green}>{b.newCount} new account{b.newCount === 1 ? "" : "s"}</b>{gainWhere ? <> in your {gainWhere} tier{gainPl ? "s" : ""}</> : null} just opened</>;
   }
   return (
     <p style={{ position: "relative", margin: 0, paddingLeft: 13, fontFamily: "var(--font-serif)", fontSize: 14.5, lineHeight: 1.52, color: "var(--text-2)", letterSpacing: "0.1px" }}>
@@ -498,18 +501,22 @@ function FluidTree({ h, size = 78, play = true, delay = 0 }) {
   return <svg width={W} height={size} viewBox="0 0 60 62" style={{ display: "block" }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: fluidArt(theme, hv, sfx) }} />;
 }
 
-// a tasteful per-tier callout that localizes the brief's story to the tree below:
-// which tier is shedding doors (lapsing) vs. where the new doors are landing.
-function tierTag(t) {
+// SINGLE SOURCE OF TRUTH for a tier's account/shelf story. The brief (above) and the
+// tier pill (below) BOTH read this, so they can never disagree — `kind` drives the
+// brief's wording, `text`/`tone` draw the pill. Change a threshold here and both move.
+function tierSignal(t) {
   const n = t.n || 1, net = (t.newN - t.lostN) / n, fortifying = t.distPerPct != null && t.distPerPct >= 4;
-  // losing doors — but if each remaining door carries MORE shelf, that's healthy concentration
-  if (net <= -0.03 && t.lostN >= 3) return fortifying ? { text: "fortifying", tone: "good" } : { text: `▾ ${t.lostN.toLocaleString()} lapsed`, tone: "warn" };
-  // shelf eroding — placements slipping while the doors mostly hold (the early warning)
-  if (t.distPct != null && t.distPct <= -5 && net > -0.03) return { text: `shelf ▾${Math.abs(t.distPct)}%`, tone: "warn" };
-  // new doors landing
-  if (net >= 0.05 && t.newN >= 3) return { text: `+${t.newN.toLocaleString()} new`, tone: "good" };
-  return null;
+  // losing accounts — unless each remaining account carries MORE shelf (healthy concentration)
+  if (t.lostN >= 3 && net <= -0.03) return fortifying
+    ? { kind: "fortifying", tone: "good", text: "fortifying" }
+    : { kind: "losing", tone: "warn", text: `▾ ${t.lostN.toLocaleString()} lapsed` };
+  // shelf eroding — placements slipping while the accounts mostly hold (the early warning)
+  if (t.distPct != null && t.distPct <= -5 && net > -0.03) return { kind: "shelf", tone: "warn", text: `shelf ▾${Math.abs(t.distPct)}%` };
+  // new accounts landing
+  if (t.newN >= 3 && net >= 0.05) return { kind: "gaining", tone: "good", text: `+${t.newN.toLocaleString()} new` };
+  return { kind: null };
 }
+function tierTag(t) { const s = tierSignal(t); return s.kind ? { text: s.text, tone: s.tone } : null; }
 
 // three volume tiers standing on the Fair Skies rolling ground — Large / Mid / Small,
 // each a fluid health tree (color + fullness) with its stats, split by a soft divider.
