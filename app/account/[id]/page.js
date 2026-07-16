@@ -537,31 +537,6 @@ export default function AccountOverview() {
         )}
       </div>
 
-      {/* IPA news — up to 3 state-tuned talking points, each opens its source headline */}
-      {news.length > 0 && (
-        <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "12px 14px", marginBottom: 12, boxShadow: "var(--shadow-sm)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-deep)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h13v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /><path d="M17 8h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2" /><path d="M7 8h7M7 11h7M7 14h4" /></svg>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.3px", textTransform: "uppercase" }}>{FOCUS.label} news · {newsScope}</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {news.map((s, i) => (
-              <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer"
-                style={{ display: "flex", gap: 9, alignItems: "flex-start", textDecoration: "none", padding: "8px 2px", borderBottom: i < news.length - 1 ? "0.5px solid var(--border)" : "none" }}>
-                <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: "var(--pop-cool)" }} />
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: "block", fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{s.angle}</span>
-                  <span style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent-deep)" }}>
-                    {s.source}
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
-                  </span>
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div ref={chartRef} style={{ scrollMarginTop: 12, minHeight: 96 }}>
         {sel ? (
           itemErr ? (
@@ -646,6 +621,30 @@ export default function AccountOverview() {
       ); })()}
 
       <div style={{ height: 16 }} />
+      {/* IPA news — up to 3 state-tuned talking points, each opens its source headline */}
+      {news.length > 0 && (
+        <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "12px 14px", marginBottom: 12, boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-deep)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h13v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /><path d="M17 8h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2" /><path d="M7 8h7M7 11h7M7 14h4" /></svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.3px", textTransform: "uppercase" }}>{FOCUS.label} news · {newsScope}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {news.map((s, i) => (
+              <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", gap: 9, alignItems: "flex-start", textDecoration: "none", padding: "8px 2px", borderBottom: i < news.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: "var(--pop-cool)" }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{s.angle}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent-deep)" }}>
+                    {s.source}
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
       <ItemEstimator items={items} wsReal={wsReal} />
       <div style={{ height: 12 }} />
       <AccountTag acc={acc} items={items} white={white} />
