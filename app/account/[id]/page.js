@@ -8,7 +8,7 @@ import ItemEstimator from "../../../components/ItemEstimator";
 import AccountTag from "../../../components/AccountTag";
 import { greenBar } from "../../../lib/utils";
 import { profitPerCase } from "../../../lib/pricing";
-import { getBullets, FOCUS } from "../../../lib/news";
+import { getBullets, getPositive, FOCUS } from "../../../lib/news";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
 
@@ -463,6 +463,9 @@ export default function AccountOverview() {
   // falls back to national when the state has no fresh signal. Each opens its source.
   const news = getBullets(acc.state, 3);
   const newsScope = news.some((s) => s.scope === acc.state) ? (STNAME[acc.state] || acc.state) : "National";
+  // the freshest positive story for this account (state-first, national fallback), or
+  // null if the news carries no genuine good news — closes the brief on an up note.
+  const positive = getPositive(acc.state, 1)[0] || null;
 
   return (
     <div className="wrap pagefade">
@@ -534,6 +537,17 @@ export default function AccountOverview() {
               ); })}
             </div>
           </div>
+        )}
+
+        {positive && (
+          <a href={positive.url} target="_blank" rel="noopener noreferrer"
+            style={{ display: "flex", gap: 8, alignItems: "center", textDecoration: "none", marginTop: 12, padding: "9px 11px", borderRadius: 9, background: "var(--growing-bg)" }}>
+            <span aria-hidden="true" style={{ flexShrink: 0, fontSize: 11, color: "var(--growing-ink)" }}>▲</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.4, color: "var(--growing-ink)" }}>
+              {positive.angle}
+              <span style={{ marginLeft: 5, fontWeight: 700, fontSize: 9.5, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap", opacity: 0.85 }}>{positive.source} ↗</span>
+            </span>
+          </a>
         )}
       </div>
 
