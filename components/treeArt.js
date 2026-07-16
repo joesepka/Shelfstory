@@ -34,6 +34,34 @@ export const NEW_COLOR = "#4fbf86", LAPSED_COLOR = "#9a958c";
 function cf(st) { const m = RAMP[st] || "#34a94e"; return { m, d: darken(m, 0.76), h: lighten(m, 0.24) }; }
 const DISTRESS = { softening: 1, slipping: 2, atrisk: 3, declining: 4 };
 
+// ===== FLUID health tree — one continuous build from bare (h=0) → lush (h=1) =====
+// color, canopy fullness, branch-reveal, fruit & leaf-drop all slide off a single h,
+// so a tree can grow smoothly instead of snapping between discrete states.
+function mix(a, b, t) {
+  const A = [parseInt(a.slice(1, 3), 16), parseInt(a.slice(3, 5), 16), parseInt(a.slice(5, 7), 16)];
+  const B = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
+  return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join("");
+}
+const FSTOPS = [[0, "#9e978d"], [0.13, "#b07d4a"], [0.27, "#db7a26"], [0.41, "#e8b62b"], [0.55, "#86c96f"], [0.70, "#5fb84e"], [0.85, "#34a94e"], [1, "#0f9d54"]];
+export function fluidRamp(h) { h = clamp(h, 0, 1); for (let i = 0; i < FSTOPS.length - 1; i++) { if (h <= FSTOPS[i + 1][0]) { const lo = FSTOPS[i], hi = FSTOPS[i + 1], t = (h - lo[0]) / ((hi[0] - lo[0]) || 1); return mix(lo[1], hi[1], t); } } return FSTOPS[FSTOPS.length - 1][1]; }
+const FCL = [[0, 2], [-8, 3], [8, 3], [0, -6], [-6, -3], [6, -3], [-11, 1], [11, 1], [0, 9], [-7, 7], [7, 7], [-4, -9], [4, -9], [0, -1], [-10, 6], [10, 6]];
+export function fluidTree(h) {
+  h = clamp(h, 0, 1);
+  const f = h, col = fluidRamp(h), dk = darken(col, 0.76), wood = mix("#9a958c", "#87684a", h);
+  const cy = 33 - h * 5, spread = 0.6 + 0.4 * h, blobR = f * 6.6;
+  let o = `<ellipse cx="30" cy="59" rx="${(6 + f * 6).toFixed(1)}" ry="2.2" fill="#2f3d28" opacity="0.07"/>`;
+  o += `<rect x="28.4" y="${(37 - h * 3).toFixed(1)}" width="3.2" height="${(21 + h * 3).toFixed(1)}" rx="1.6" fill="${wood}"/>`;
+  const bo = (0.9 - 0.7 * h).toFixed(2);
+  [[30, 18, 2], [19, 25, 2], [41, 24, 2.2], [23, 31, 1.6], [38, 30, 1.6]].forEach(b => { o += `<line x1="30" y1="41" x2="${b[0]}" y2="${b[1]}" stroke="${wood}" stroke-width="${b[2]}" stroke-linecap="round" opacity="${bo}"/>`; });
+  FCL.forEach((p, i) => { const r = blobR * (0.78 + ((i * 53) % 9) / 22); if (r < 0.7) return; const x = 30 + p[0] * spread, y = cy + p[1] * spread; o += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${i % 3 === 0 ? dk : col}"/>`; });
+  o += `<ellipse cx="${(30 - 4 * spread).toFixed(1)}" cy="${(cy - 5).toFixed(1)}" rx="${(4 * f).toFixed(1)}" ry="${(3 * f).toFixed(1)}" fill="#fff" opacity="${(0.2 * f).toFixed(2)}"/>`;
+  const fr = clamp((h - 0.82) * 6, 0, 1);
+  if (fr > 0.03) [[24, 25], [35, 23], [30, 18]].forEach(p => { o += `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="#f0d27a" stroke="#d9a93f" stroke-width="0.4" opacity="${fr.toFixed(2)}"/>`; });
+  const dr = clamp((0.5 - h) * 2.2, 0, 1);
+  if (dr > 0.03) { const dc = fluidRamp(clamp(h - 0.12, 0, 1)); [[22, 55, 20], [34, 56, -15], [27, 57, 8]].forEach(p => { o += `<ellipse cx="${p[0]}" cy="${p[1]}" rx="2.1" ry="1.1" fill="${dc}" opacity="${(0.85 * dr).toFixed(2)}" transform="rotate(${p[2]} ${p[0]} ${p[1]})"/>`; }); }
+  return o;
+}
+
 // ---- shared primitives ----
 const TR = `<rect x="28" y="38" width="4" height="20" rx="1.6" fill="#bfa988"/>`;
 const shadow = rx => `<ellipse cx="30" cy="59" rx="${(rx * 0.85).toFixed(1)}" ry="2.1" fill="#000" opacity="0.05"/>`;
@@ -263,4 +291,67 @@ export function tierArt(theme, t, color, sfx) {
   if (theme === "lowpoly") return lowpolyT(t, color);
   if (theme === "bonsai") return bonsaiT(t, color);
   return classicT(t, color);
+}
+
+// ===== FLUID variants of every skin — each grows continuously from bare (h=0) to lush (h=1) =====
+// cupertino: a single canopy ellipse swells over smooth bare limbs
+function fluidCupertino(h) {
+  h = clamp(h, 0, 1); const f = h, col = fluidRamp(h), wood = mix("#a99e8e", "#b09a7c", h);
+  const ry = f * 18, rx = ry * 0.92, cy = 30 - h * 2, bo = (0.85 - 0.7 * h).toFixed(2);
+  let o = shadow(6 + f * 8) + `<rect x="28" y="${(36 - h * 2).toFixed(1)}" width="4" height="${(22 + h * 2).toFixed(1)}" rx="2" fill="${wood}"/>`;
+  [[20, 22, 2.6], [40, 23, 2.6], [23, 31, 2], [37, 31, 2], [30, 20, 2]].forEach(b => { o += `<line x1="30" y1="38" x2="${b[0]}" y2="${b[1]}" stroke="${wood}" stroke-width="${b[2]}" stroke-linecap="round" opacity="${bo}"/>`; });
+  if (ry > 0.6) o += `<ellipse cx="30" cy="${cy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="${col}"/>` + sheen(30, cy, rx, ry);
+  const fr = clamp((h - 0.82) * 6, 0, 1); if (fr > 0.03)[[24, 27], [35, 24], [30, 20]].forEach(p => o += `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="#f0d27a" stroke="#d9a93f" stroke-width="0.4" opacity="${fr.toFixed(2)}"/>`);
+  const dr = clamp((0.5 - h) * 2.2, 0, 1); if (dr > 0.03) { const dc = fluidRamp(clamp(h - 0.12, 0, 1)); [[24, 55], [36, 56]].forEach(p => o += `<ellipse cx="${p[0]}" cy="${p[1]}" rx="2.1" ry="1.1" fill="${dc}" opacity="${(0.85 * dr).toFixed(2)}" transform="rotate(${p[0] % 2 ? 18 : -16} ${p[0]} ${p[1]})"/>`); }
+  return o;
+}
+// pixel: canopy blocks fill outward from a grey stalk
+function fluidPixel(h) {
+  h = clamp(h, 0, 1); const cx = 30, cy = 26, col = fluidRamp(h), dk = darken(col, 0.78), trunkC = mix("#9c8a72", "#9c6a3a", h), rG = h * 3.4;
+  let o = pxGround(cx);
+  for (let gj = Math.max(1, Math.ceil(rG)); gj <= 5; gj++) o += pxRect(cx - PXC / 2, cy + gj * PXC - PXC / 2, trunkC);
+  for (let gi = -4; gi <= 4; gi++) for (let gj = -4; gj <= 4; gj++) { if (gi * gi + gj * gj <= rG * rG) o += pxRect(cx + gi * PXC - PXC / 2, cy + gj * PXC - PXC / 2, ((gi + gj) & 1) ? dk : col); }
+  const fr = clamp((h - 0.85) * 7, 0, 1); if (fr > 0.15)[[-1, -1], [1, 0], [0, -2]].forEach(p => { o += pxRect(cx + p[0] * PXC - PXC / 2, cy + p[1] * PXC - PXC / 2, "#e0492e"); });
+  return o;
+}
+// watercolor: a blurred wash spreads over faint bare limbs
+function fluidWatercolor(h, sfx) {
+  h = clamp(h, 0, 1); const f = h, col = fluidRamp(h), wood = mix("#9a958c", "#b09a7c", h), R = f * 15, bo = (0.7 - 0.65 * h).toFixed(2);
+  let o = shadow(6 + f * 8) + `<rect x="28" y="${(36 - h * 2).toFixed(1)}" width="4" height="${(22 + h * 2).toFixed(1)}" rx="2" fill="${wood}"/>`;
+  [[20, 24, 2.2], [40, 24, 2.2], [30, 20, 2]].forEach(b => o += `<line x1="30" y1="38" x2="${b[0]}" y2="${b[1]}" stroke="${wood}" stroke-width="${b[2]}" stroke-linecap="round" opacity="${bo}"/>`);
+  if (R > 1) o += washCanopy(col, R, 30 - h * 2, "fwc" + (sfx || ""));
+  const fr = clamp((h - 0.82) * 6, 0, 1); if (fr > 0.03)[[24, 27], [35, 24], [30, 20]].forEach(p => o += `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="#f0d27a" stroke="#d9a93f" stroke-width="0.4" opacity="${fr.toFixed(2)}"/>`);
+  const dr = clamp((0.5 - h) * 2.2, 0, 1); if (dr > 0.03) { const dc = fluidRamp(clamp(h - 0.12, 0, 1)); [[24, 55], [36, 56]].forEach(p => o += `<ellipse cx="${p[0]}" cy="${p[1]}" rx="2.1" ry="1.1" fill="${dc}" opacity="${(0.85 * dr).toFixed(2)}" transform="rotate(${p[0] % 2 ? 18 : -16} ${p[0]} ${p[1]})"/>`); }
+  return o;
+}
+// low-poly: facets accrete and the whole cluster scales up from the trunk
+function fluidLowpoly(h) {
+  h = clamp(h, 0, 1); const col = fluidRamp(h), wood = mix("#9a958c", "#7a5a3e", h), K = Math.max(0, Math.round(h * 6)), sc = 0.35 + 0.65 * h;
+  let o = shadow(6 + h * 8) + `<polygon points="27,58 33,58 31,40 29,40" fill="${wood}"/>`;
+  if (h < 0.3) { const lo = Math.max(0, 0.7 - 2 * h).toFixed(2); [[22, 26, 2], [38, 26, 2], [30, 22, 2]].forEach(b => o += `<line x1="30" y1="40" x2="${b[0]}" y2="${b[1]}" stroke="${wood}" stroke-width="${b[2]}" stroke-linecap="round" opacity="${lo}"/>`); }
+  const shades = [lighten(col, 0.22), col, darken(col, 0.8)];
+  o += `<g transform="translate(30 40) scale(${sc.toFixed(2)}) translate(-30 -40)">` + LP_TRIS.slice(0, K).map((p, i) => `<polygon points="${p.map(q => q.join(",")).join(" ")}" fill="${shades[i % 3]}" stroke="#fff" stroke-width="0.5" stroke-opacity="0.35"/>`).join("") + `</g>`;
+  const fr = clamp((h - 0.82) * 6, 0, 1); if (fr > 0.03)[[24, 26], [36, 24]].forEach(p => o += `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="#f0d27a" stroke="#d9a93f" stroke-width="0.4" opacity="${fr.toFixed(2)}"/>`);
+  return o;
+}
+// bonsai: sculpted pads swell on the curved S-trunk
+function fluidBonsai(h) {
+  h = clamp(h, 0, 1); const col = fluidRamp(h), trunk = mix("#b09a7c", "#9a8366", h), sc = h * 1.05, d = darken(col, 0.82);
+  let o = `<ellipse cx="30" cy="59" rx="9" ry="2" fill="#000" opacity="0.05"/><path d="M30 58 C26 50 33 46 30 38 C28 32 34 30 31 22" stroke="${trunk}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  if (h < 0.28) o += `<path d="M30 40 q-8 -2 -12 -7 M30 34 q9 0 13 -5 M31 26 q4 -4 9 -4" stroke="#a99e8e" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="${Math.max(0, 0.7 - 2.2 * h).toFixed(2)}"/>`;
+  if (sc > 0.05) {
+    o += `<path d="M30 40 L20 31 M30 36 L40 27 M30 30 L30 20" stroke="#9a8366" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="${Math.min(1, sc * 1.5).toFixed(2)}"/>`;
+    [[20, 30, 7], [40, 26, 6.5], [30, 18, 6]].forEach((p, i) => { const rr = p[2] * sc; if (rr < 0.5) return; o += `<ellipse cx="${p[0]}" cy="${p[1]}" rx="${(rr * 1.15).toFixed(1)}" ry="${rr.toFixed(1)}" fill="${i === 1 ? d : col}"/><ellipse cx="${(p[0] - rr * 0.4).toFixed(1)}" cy="${(p[1] - rr * 0.4).toFixed(1)}" rx="${(rr * 0.45).toFixed(1)}" ry="${(rr * 0.3).toFixed(1)}" fill="#fff" opacity="0.16"/>`; });
+  }
+  const fr = clamp((h - 0.82) * 6, 0, 1); if (fr > 0.03)[[20, 30], [40, 26], [30, 18]].forEach(p => o += `<circle cx="${p[0]}" cy="${p[1]}" r="2.1" fill="#f0d27a" stroke="#d9a93f" stroke-width="0.4" opacity="${fr.toFixed(2)}"/>`);
+  return o;
+}
+// dispatch: the active skin's fluid build for health h (0..1)
+export function fluidArt(theme, h, sfx) {
+  if (theme === "cupertino") return fluidCupertino(h);
+  if (theme === "pixel") return fluidPixel(h);
+  if (theme === "watercolor") return fluidWatercolor(h, sfx);
+  if (theme === "lowpoly") return fluidLowpoly(h);
+  if (theme === "bonsai") return fluidBonsai(h);
+  return fluidTree(h);
 }

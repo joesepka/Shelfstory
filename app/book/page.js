@@ -7,7 +7,7 @@ import { useExplode } from "../../lib/useExplode";
 import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
 import { getScope } from "../../lib/scope";
-import { tierIdSet, TIER_LABEL } from "../../lib/tiers";
+import { tierIdSet, TIER_LABEL, sizeIdSet, SIZE_LABEL } from "../../lib/tiers";
 
 
 function label(hd) {
@@ -419,6 +419,7 @@ function BookInner() {
   const linkDist = searchParams.get("distributor");
   const linkHealth = searchParams.get("health"); // new | healthy | atrisk | lapsed
   const linkTier = searchParams.get("tier"); // top | mid | small | tail
+  const linkSize = searchParams.get("size"); // large | mid | small (home book-by-size trees)
 
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState(null);
@@ -432,6 +433,7 @@ function BookInner() {
   const [distF, setDistF] = useState("All");
   const [healthFilter, setHealthFilter] = useState(null);
   const [tierFilter, setTierFilter] = useState(null);
+  const [sizeFilter, setSizeFilter] = useState(null);
   const [linkScope, setLinkScope] = useState(null);
 
   useEffect(() => {
@@ -448,8 +450,11 @@ function BookInner() {
     if (linkDist) setDistF(linkDist);
     if (linkHealth && ["new", "healthy", "atrisk", "lapsed"].includes(linkHealth)) setHealthFilter(linkHealth);
     if (linkTier && TIER_LABEL[linkTier]) setTierFilter(linkTier);
+    if (linkSize && SIZE_LABEL[linkSize]) setSizeFilter(linkSize);
     if (linkTier && TIER_LABEL[linkTier]) {
       setLinkScope({ kind: "tier", label: TIER_LABEL[linkTier] });
+    } else if (linkSize && SIZE_LABEL[linkSize]) {
+      setLinkScope({ kind: "size", label: SIZE_LABEL[linkSize] });
     } else if (linkIds && linkIds.length) {
       setLinkScope({ kind: "ids", ids: new Set(linkIds), n: linkIds.length });
     } else if (linkCity) {
@@ -459,11 +464,11 @@ function BookInner() {
     } else if (linkDist) {
       setLinkScope({ kind: "distributor", label: titleCase(linkDist) });
     } else setLinkScope(null);
-  }, [linkIds, linkCity, linkState, linkChain, linkDist, linkHealth, linkTier]);
+  }, [linkIds, linkCity, linkState, linkChain, linkDist, linkHealth, linkTier, linkSize]);
 
   function clearLink() {
     setLinkScope(null);
-    setStF("All"); setCityF("All"); setChainF("All"); setDistF("All"); setHealthFilter(null); setTierFilter(null);
+    setStF("All"); setCityF("All"); setChainF("All"); setDistF("All"); setHealthFilter(null); setTierFilter(null); setSizeFilter(null);
     router.replace(view === "account" ? "/book" : `/book?view=${view}`, { scroll: false });
   }
 
@@ -534,16 +539,18 @@ function BookInner() {
 
   // clicked a home tier → the set of account_ids in that volume tier of the scoped book
   const tierSet = useMemo(() => (tierFilter && geo) ? tierIdSet(geo, tierFilter) : null, [tierFilter, geo]);
+  const sizeSet = useMemo(() => (sizeFilter && geo) ? sizeIdSet(geo, sizeFilter) : null, [sizeFilter, geo]);
 
   const shownFull = useMemo(() => {
     let f = geo || [];
     if (tierSet) f = f.filter(r => tierSet.has(r.account_id));
+    if (sizeSet) f = f.filter(r => sizeSet.has(r.account_id));
     if (healthFilter === "lapsed") f = f.filter(r => isLapsed(r.headline));
     else if (healthFilter) f = f.filter(r => groupOf(r.headline) === healthFilter);
     const t = q.trim().toLowerCase();
     if (t) f = f.filter(r => String(r.account_name || "").toLowerCase().includes(t));
     return f;
-  }, [geo, tierSet, healthFilter, q]);
+  }, [geo, tierSet, sizeSet, healthFilter, q]);
 
   const shown = useMemo(() => shownFull.slice(0, CAP), [shownFull]);
   const shownTree = useMemo(() => shownFull.slice(0, TREE_CAP), [shownFull]);
@@ -561,7 +568,7 @@ function BookInner() {
       {linkScope && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "10px 12px 0", padding: "8px 12px", background: "var(--pop-cool-soft)", borderRadius: 10, flexShrink: 0, boxShadow: "var(--shadow-sm)" }}>
           <span style={{ fontSize: 12, color: "var(--pop-cool-deep)" }}>
-            {linkScope.kind === "ids" ? `Showing ${linkScope.n} flagged account${linkScope.n === 1 ? "" : "s"}` : linkScope.kind === "tier" ? `Showing ${linkScope.label}` : `Filtered to ${linkScope.label}`}
+            {linkScope.kind === "ids" ? `Showing ${linkScope.n} flagged account${linkScope.n === 1 ? "" : "s"}` : (linkScope.kind === "tier" || linkScope.kind === "size") ? `Showing ${linkScope.label}` : `Filtered to ${linkScope.label}`}
           </span>
           <button onClick={clearLink} style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 700, padding: "4px 11px", borderRadius: 16, border: "none", background: "var(--surface)", color: "var(--pop-cool-deep)", cursor: "pointer", fontFamily: "inherit" }}>clear ✕</button>
         </div>

@@ -1,9 +1,11 @@
 "use client";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
 import TreeGlyph, { tierBucket, TierTree } from "../components/TreeGlyph";
+import { fluidArt } from "../components/treeArt";
+import { useTheme } from "../lib/theme";
 import { getScope, setScope } from "../lib/scope";
 import ThemeChooser from "../components/ThemeChooser";
 import LogoMark from "../components/LogoMark";
@@ -110,7 +112,7 @@ function HeaderLogo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
       <LogoMark size={30} />
-      <span style={{ fontFamily: "var(--font-serif)", fontSize: 17, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.2px" }}>ShelfStory</span>
+      <span style={{ fontFamily: "var(--font-sans)", fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px" }}>ShelfStory</span>
     </div>
   );
 }
@@ -202,7 +204,7 @@ function Splash({ onDone, ready }) {
       <SplashClouds />
       <div className="splashIn" style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
         <LogoMark size={94} />
-        <div style={{ fontFamily: "var(--font-serif)", fontSize: 30, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.4px", marginTop: 12 }}>ShelfStory</div>
+        <div style={{ fontFamily: "var(--font-sans)", fontSize: 30, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.5px", marginTop: 12 }}>ShelfStory</div>
       </div>
     </div>
   );
@@ -294,19 +296,13 @@ function Snappy({ cur }) {
 
 // home nav — big-editorial list. order here is display order; `color` tints the
 // arrow, `highlight` gives the row a subtle coral wash (the priority action).
+// nav as a 2×2 grid: Accounts + Actions on top, Drill Down + Trends below.
+// icon = the exact Fair Skies green line-icon for each destination.
 const NAV = [
-  { href: "/book", title: "Accounts", tab: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list." },
-  { href: "/perf", title: "Decision Tree", tab: "Decisions", color: "#3D6E93", sub: "Drill territory, channel, chain, or distributor to the biggest distress — and a report." },
-  { href: "/wholesale", title: "Historical Trends", tab: "Trends", color: "#534AB7", sub: "Depletion and inventory momentum over time." },
-  { href: "/actions", title: "Actions", tab: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true },
-];
-
-// exact Fair Skies nav icons (green line-icons): Accounts / Decisions / Trends / Actions
-const FS_ICONS = [
-  <><path d="M4 9l1.6-4h12.8L20 9" /><path d="M5 9v10h14V9" /><path d="M10 19v-5h4v5" /></>,
-  <><path d="M12 20v-9" /><path d="M12 11L7 6" /><path d="M12 11l5-5" /><circle cx="7" cy="5" r="1.4" fill="#3f6e4a" stroke="none" /><circle cx="17" cy="5" r="1.4" fill="#3f6e4a" stroke="none" /></>,
-  <><path d="M4 16l5-5 3 3 6-7" /><path d="M15 7h4v4" /></>,
-  <><path d="M6 21V4" /><path d="M6 5h11l-2.2 3L17 11H6" /></>,
+  { href: "/book", title: "Accounts", tab: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list.", icon: <><path d="M4 9l1.6-4h12.8L20 9" /><path d="M5 9v10h14V9" /><path d="M10 19v-5h4v5" /></> },
+  { href: "/actions", title: "Actions", tab: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true, icon: <><path d="M6 21V4" /><path d="M6 5h11l-2.2 3L17 11H6" /></> },
+  { href: "/perf", title: "Drill Down", tab: "Drill Down", color: "#3D6E93", sub: "Drill territory, channel, chain, or distributor to the biggest distress — and a report.", icon: <><path d="M12 20v-9" /><path d="M12 11L7 6" /><path d="M12 11l5-5" /><circle cx="7" cy="5" r="1.4" fill="#3f6e4a" stroke="none" /><circle cx="17" cy="5" r="1.4" fill="#3f6e4a" stroke="none" /></> },
+  { href: "/wholesale", title: "Trends", tab: "Trends", color: "#534AB7", sub: "Depletion and inventory momentum over time.", icon: <><path d="M4 16l5-5 3 3 6-7" /><path d="M15 7h4v4" /></> },
 ];
 
 const chevBtn = { border: "none", background: "var(--surface-2)", color: "var(--text-2)", width: 20, height: 20, borderRadius: 10, fontSize: 13, lineHeight: 1, cursor: "pointer", fontFamily: "inherit", display: "inline-flex", alignItems: "center", justifyContent: "center", padding: 0, flexShrink: 0 };
@@ -413,11 +409,52 @@ function RootedPair({ windows }) {
     </div>
   );
 }
+// a fluid health tree that can GROW IN: from bare (h=0) to its real health `h`.
+// on the home the tier trees fill in (fast + snappy) the moment they scroll into view;
+// pass play=false to hold at bare, or animate=false elsewhere to just appear.
+function FluidTree({ h, size = 78, play = true, delay = 0 }) {
+  const { theme } = useTheme();
+  const sfx = useId().replace(/[:]/g, "");
+  const target = Math.max(0, Math.min(1, h || 0));
+  const [hv, setHv] = useState(0);
+  const cur = useRef(0), started = useRef(false);
+  useEffect(() => {
+    if (!play) { cur.current = target; setHv(target); return; }
+    const from = started.current ? cur.current : 0, wait = started.current ? 0 : delay;
+    started.current = true;
+    let raf, startAt = null; const dur = 500, ease = t => 1 - Math.pow(1 - t, 3);
+    const step = now => {
+      if (startAt === null) startAt = now + wait;
+      if (now < startAt) { raf = requestAnimationFrame(step); return; }
+      const t = Math.min(1, (now - startAt) / dur), v = from + (target - from) * ease(t);
+      cur.current = v; setHv(v);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [play, target, delay]);
+  const W = Math.round((size * 60) / 62);
+  return <svg width={W} height={size} viewBox="0 0 60 62" style={{ display: "block" }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: fluidArt(theme, hv, sfx) }} />;
+}
+
 // three volume tiers standing on the Fair Skies rolling ground — Large / Mid / Small,
-// each a health tree (color + fullness) with its stats, split by a soft divider.
-function TierTrees({ tiers }) {
+// each a fluid health tree (color + fullness) with its stats, split by a soft divider.
+function TierTrees({ tiers, scope }) {
+  const router = useRouter();
+  const secRef = useRef(null);
+  const [play, setPlay] = useState(false);
+  // tap a tier → the account list, filtered to that size band within the current scope
+  const go = t => router.push("/book?size=" + t.label.toLowerCase() + (scope && scope !== "ALL" ? "&state=" + encodeURIComponent(scope) : ""));
+  useEffect(() => {
+    const el = secRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") { setPlay(true); return; }
+    const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { setPlay(true); io.disconnect(); } }, { threshold: 0.3 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
   return (
-    <div style={{ marginTop: 8 }}>
+    <div ref={secRef} style={{ position: "relative", marginTop: 8 }}>
       {/* the rolling hill with the trees planted ON it (trunks tucked into the grass) */}
       <div style={{ position: "relative", height: 132, overflow: "hidden", borderRadius: "16px 16px 0 0" }}>
         <svg viewBox="0 0 380 120" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
@@ -426,14 +463,14 @@ function TierTrees({ tiers }) {
           <path d="M0 90 C 70 74, 150 86, 220 80 C 290 74, 340 86, 380 78" fill="none" stroke="#eaf3df" strokeWidth="1.5" opacity="0.8" />
         </svg>
         <div style={{ position: "relative", zIndex: 1, height: "100%", display: "flex", alignItems: "flex-end", justifyContent: "space-around", padding: "0 2px" }}>
-          {tiers.map(t => (
-            <div key={t.label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center" }}>
+          {tiers.map((t, i) => (
+            <div key={t.label} onClick={() => go(t)} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", cursor: "pointer" }}>
               <div style={{ textAlign: "center", marginBottom: 3, lineHeight: 1.05 }}>
                 <div style={{ fontSize: 8, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.4 }}>ROS</div>
                 <div style={{ fontSize: 14.5, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{t.ros != null ? t.ros.toFixed(1) : "—"}</div>
                 <div style={{ fontSize: 9, marginTop: 1 }}>{deltaTiny(t.rosPct)}</div>
               </div>
-              <TierTree t={t.vit} color={t.color} h={88} />
+              <FluidTree h={t.vit} size={88} play={play} delay={i * 90} />
             </div>
           ))}
         </div>
@@ -441,17 +478,17 @@ function TierTrees({ tiers }) {
       {/* the soil strip + stats, flush under the hill so it reads as one continuous ground */}
       <div style={{ display: "flex", alignItems: "flex-start", background: "linear-gradient(180deg, rgba(111,158,90,.17), rgba(111,158,90,0))", borderRadius: "0 0 16px 16px", padding: "5px 2px 9px" }}>
         {tiers.map((t, i) => (
-          <Fragment key={t.label}>
-            {i > 0 && <div style={{ alignSelf: "stretch", width: 1, background: "var(--border-strong)", opacity: 0.4, margin: "3px 0" }} />}
-            <div style={{ flex: 1, minWidth: 0, textAlign: "center" }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{t.label}</div>
-              <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{t.n.toLocaleString()} accts</div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{t.cases.toLocaleString()}<span style={{ fontWeight: 500, color: "var(--text-3)", fontSize: 9 }}> cs</span></div>
-              <div style={{ fontSize: 10, marginTop: 1 }}>{deltaTiny(t.pct)}</div>
-            </div>
-          </Fragment>
+          <div key={t.label} onClick={() => go(t)} style={{ flex: 1, minWidth: 0, textAlign: "center", cursor: "pointer" }}>
+            <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{t.label}</div>
+            <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{t.n.toLocaleString()} accts</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{t.cases.toLocaleString()}<span style={{ fontWeight: 500, color: "var(--text-3)", fontSize: 9 }}> cs</span></div>
+            <div style={{ fontSize: 10, marginTop: 1 }}>{deltaTiny(t.pct)}</div>
+          </div>
         ))}
       </div>
+      {/* full-height dividers between the 3 tiers — from the ROS area down through the stats */}
+      <div aria-hidden="true" style={{ position: "absolute", top: 8, bottom: 6, left: "33.33%", transform: "translateX(-50%)", width: 1, background: "var(--border-strong)", opacity: 0.4, zIndex: 3, pointerEvents: "none" }} />
+      <div aria-hidden="true" style={{ position: "absolute", top: 8, bottom: 6, left: "66.67%", transform: "translateX(-50%)", width: 1, background: "var(--border-strong)", opacity: 0.4, zIndex: 3, pointerEvents: "none" }} />
     </div>
   );
 }
@@ -741,10 +778,10 @@ export default function Home() {
         {err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
 
         {/* primary nav — Fair Skies stepping-stones (exact style) */}
-        <div className="riseIn" style={{ display: "flex", gap: 9, marginTop: 18 }}>
+        <div className="riseIn" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 18 }}>
           {NAV.map((c, i) => (
-            <div key={c.href} onClick={() => router.push(c.href)} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "12px 4px 11px", borderRadius: ["22px", "24px 22px 26px 22px", "22px 26px 22px 24px", "22px"][i] || "22px", cursor: "pointer", background: "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
-              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#3f6e4a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{FS_ICONS[i]}</svg>
+            <div key={c.href} onClick={() => router.push(c.href)} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "13px 4px 12px", borderRadius: ["22px", "24px 22px 26px 22px", "22px 26px 22px 24px", "22px"][i] || "22px", cursor: "pointer", background: "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
+              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#3f6e4a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{c.icon}</svg>
               <span style={{ fontSize: 11, color: "#41533a", letterSpacing: "0.2px", whiteSpace: "nowrap" }}>{c.tab}</span>
             </div>
           ))}
@@ -753,8 +790,11 @@ export default function Home() {
         {/* your book by size — Large / Mid / Small tiers standing on the hills */}
         {cur && cur.tiers3 && (
           <div style={{ marginTop: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: 0.3, marginBottom: 2 }}>YOUR BOOK BY SIZE <span style={{ fontWeight: 600, opacity: 0.75 }}>· health of large, mid & small accounts</span></div>
-            <TierTrees tiers={cur.tiers3} />
+            <div style={{ textAlign: "center", marginBottom: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>Health by Account Tier</div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", opacity: 0.85, marginTop: 1 }}>tap a tier for its accounts →</div>
+            </div>
+            <TierTrees tiers={cur.tiers3} scope={cur.key} />
           </div>
         )}
 
