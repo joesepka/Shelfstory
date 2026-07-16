@@ -999,7 +999,7 @@ function HealthCircles({ health, scope, router }) {
     { key: "new", lab: "New", bg: "var(--pop-cool-soft)", ink: "var(--pop-cool-deep)" },
     { key: "healthy", lab: "Healthy", bg: "var(--accent-soft)", ink: "var(--accent-deep)" },
     { key: "atrisk", lab: "At risk", bg: "var(--watch-bg)", ink: "var(--watch-ink)" },
-    { key: "lapsed", lab: "Lapsed", bg: "var(--atrisk-bg)", ink: "var(--pop-warm-deep)" },
+    { key: "lapsed", lab: "Lapsed", bg: "var(--lapsed-card-bg)", ink: "var(--pop-warm-deep)" },
   ];
   const maxPct = Math.max(...order.map(o => health[o.key].pct), 1);
   const MIN = 54, MAX = 104;

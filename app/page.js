@@ -308,7 +308,7 @@ function Snappy({ cur }) {
   // tie the story to the trees below — name ONLY the tiers whose pill actually fires, so the
   // brief above and the pills below are a clean 1-to-1 (same tierSignal drives both).
   const tiers = cur.tiers3 || [];
-  const losing = tiers.filter(t => tierSignal(t).kind === "losing").sort((a, x) => (x.lostN - x.newN) - (a.lostN - a.newN));
+  const losing = tiers.filter(t => tierSignal(t).kind === "losing" && t.lostN > t.newN).sort((a, x) => (x.lostN - x.newN) - (a.lostN - a.newN));
   const gaining = tiers.filter(t => tierSignal(t).kind === "gaining").sort((a, x) => (x.newN - x.lostN) - (a.newN - a.lostN));
   const nameTiers = arr => arr.length === 0 ? null : arr.map(t => t.label.toLowerCase()).reduce((s, x, i, a) => i === 0 ? x : i === a.length - 1 ? `${s} and ${x}` : `${s}, ${x}`, "");
   const lossWhere = nameTiers(losing), gainWhere = nameTiers(gaining);
@@ -506,10 +506,13 @@ function FluidTree({ h, size = 78, play = true, delay = 0 }) {
 // brief's wording, `text`/`tone` draw the pill. Change a threshold here and both move.
 function tierSignal(t) {
   const n = t.n || 1, net = (t.newN - t.lostN) / n, fortifying = t.distPerPct != null && t.distPerPct >= 4;
-  // losing accounts — unless each remaining account carries MORE shelf (healthy concentration)
-  if (t.lostN >= 3 && net <= -0.03) return fortifying
+  const big = t.label === "Large" || t.label === "Mid";
+  // lapsed accounts (darker-red pill) — Large/Mid surface even a SINGLE lapse (losing a big
+  // account is the priority); Small waits for a real rate of loss so the pill isn't noisy.
+  // Fortifying (each remaining account carries more shelf) can reframe Small, never big/mid.
+  if (big ? t.lostN >= 1 : (t.lostN >= 3 && net <= -0.03)) return (fortifying && !big)
     ? { kind: "fortifying", tone: "good", text: "fortifying" }
-    : { kind: "losing", tone: "warn", text: `▾ ${t.lostN.toLocaleString()} lapsed` };
+    : { kind: "losing", tone: "bad", text: `▾ ${t.lostN.toLocaleString()} lapsed` };
   // shelf eroding — placements slipping while the accounts mostly hold (the early warning)
   if (t.distPct != null && t.distPct <= -5 && net > -0.03) return { kind: "shelf", tone: "warn", text: `shelf ▾${Math.abs(t.distPct)}%` };
   // new accounts landing
@@ -565,7 +568,7 @@ function TierTrees({ tiers, scope }) {
             <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{t.n.toLocaleString()} accts</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{t.cases.toLocaleString()}<span style={{ fontWeight: 500, color: "var(--text-3)", fontSize: 9 }}> cs</span></div>
             <div style={{ fontSize: 10, marginTop: 1 }}>{deltaTiny(t.pct)}</div>
-            {(() => { const tg = tierTag(t); return tg ? <div style={{ display: "inline-block", marginTop: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.2, padding: "2px 7px", borderRadius: 9, background: tg.tone === "good" ? "var(--growing-bg)" : "var(--watch-bg)", color: tg.tone === "good" ? "var(--accent-deep)" : "var(--gold)" }}>{tg.text}</div> : null; })()}
+            {(() => { const tg = tierTag(t); return tg ? <div style={{ display: "inline-block", marginTop: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.2, padding: "2px 7px", borderRadius: 9, background: tg.tone === "good" ? "var(--growing-bg)" : tg.tone === "bad" ? "var(--lapsed-bg)" : "var(--watch-bg)", color: tg.tone === "good" ? "var(--accent-deep)" : tg.tone === "bad" ? "#fff" : "var(--gold)" }}>{tg.text}</div> : null; })()}
           </div>
         ))}
       </div>
@@ -755,8 +758,19 @@ export default function Home() {
         { label: "This 90 days", vit: stSc.vit, color: stSc.color, pct: curPct, dist: distNow },
       ];
       // three volume tiers for the ground trees — Large (top 20% of accounts by size),
-      // Mid (20–60%), Small (60–80%); ranked by L52W volume (fallback 90-day)
-      const bySize = list.filter(r => (r.account_weight || r.cur90 || 0) > 0).sort((a, b) => (b.account_weight || b.cur90 || 0) - (a.account_weight || a.cur90 || 0));
+      // Mid (20–60%), Small (60–80%); ranked by L52W volume. A young account (<12 months
+      // of history, inferred from when sales first appear in its 12-point spark) has its
+      // volume annualized, so a fast-ramping newcomer isn't under-bucketed by a partial year.
+      const effWeight = r => {
+        const w = r.account_weight || r.cur90 || 0;
+        const s = r.spark;
+        if (Array.isArray(s) && s.length === 12) {
+          const firstIdx = s.findIndex(v => (v || 0) > 0);        // months since first order ≈ 12 - firstIdx
+          if (firstIdx > 0) return w * (12 / Math.max(3, 12 - firstIdx)); // annualize; floor tenure at 3 mo
+        }
+        return w;
+      };
+      const bySize = list.filter(r => effWeight(r) > 0).sort((a, b) => effWeight(b) - effWeight(a));
       const NB = bySize.length, c1 = Math.round(NB * 0.2), c2 = Math.round(NB * 0.6), c3 = Math.round(NB * 0.8);
       const tstat = (lbl, rws) => { let c = 0, p = 0, an = 0, ap = 0, newN = 0, lostN = 0, dN = 0, dP = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { const cc = r.cur90 || 0, pp = r.prev90 || 0; c += cc; p += pp; if (cc > 0) an++; if (pp > 0) ap++; dN += r.live_placements || 0; dP += r.live_prev || 0; const hl = String(r.headline || "").toLowerCase().trim(); if (hl === "new") newN++; else if (hl === "lapsed") lostN++; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length), ros = an ? c / an : 0, rosPrev = ap ? p / ap : 0, perNow = an ? dN / an : 0, perPrev = ap ? dP / ap : 0; return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color, ros, rosPct: rosPrev > 0 ? Math.round((100 * (ros - rosPrev)) / rosPrev) : null, newN, lostN, distPct: dP > 0 ? Math.round((100 * (dN - dP)) / dP) : null, distPerPct: perPrev > 0 ? Math.round((100 * (perNow - perPrev)) / perPrev) : null }; };
       const tiers3 = [tstat("Large", bySize.slice(0, c1)), tstat("Mid", bySize.slice(c1, c2)), tstat("Small", bySize.slice(c2, c3))];

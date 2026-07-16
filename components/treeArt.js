@@ -26,8 +26,8 @@ export const RAMP = {
   growing:      "#5fb84e",   // green
   steady:       "#86c96f",   // light green (flat = healthy, never yellow)
   softening:    "#e8b62b",   // amber-yellow — yellow starts at actual decline
-  slipping:     "#e2901f",   // amber-orange
-  atrisk:       "#db7a26",   // orange
+  slipping:     "#e0a524",   // yellow
+  atrisk:       "#d9a520",   // yellow — risk reads yellow, not orange
   declining:    "#9e978d",   // GREY — almost dead
 };
 export const NEW_COLOR = "#4fbf86", LAPSED_COLOR = "#9a958c";
@@ -42,7 +42,7 @@ function mix(a, b, t) {
   const B = [parseInt(b.slice(1, 3), 16), parseInt(b.slice(3, 5), 16), parseInt(b.slice(5, 7), 16)];
   return "#" + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, "0")).join("");
 }
-const FSTOPS = [[0, "#9e978d"], [0.13, "#b07d4a"], [0.27, "#db7a26"], [0.41, "#e8b62b"], [0.55, "#86c96f"], [0.70, "#5fb84e"], [0.85, "#34a94e"], [1, "#0f9d54"]];
+const FSTOPS = [[0, "#9e978d"], [0.13, "#b07d4a"], [0.27, "#d9a520"], [0.41, "#e8b62b"], [0.55, "#86c96f"], [0.70, "#5fb84e"], [0.85, "#34a94e"], [1, "#0f9d54"]];
 export function fluidRamp(h) { h = clamp(h, 0, 1); for (let i = 0; i < FSTOPS.length - 1; i++) { if (h <= FSTOPS[i + 1][0]) { const lo = FSTOPS[i], hi = FSTOPS[i + 1], t = (h - lo[0]) / ((hi[0] - lo[0]) || 1); return mix(lo[1], hi[1], t); } } return FSTOPS[FSTOPS.length - 1][1]; }
 const FCL = [[0, 2], [-8, 3], [8, 3], [0, -6], [-6, -3], [6, -3], [-11, 1], [11, 1], [0, 9], [-7, 7], [7, 7], [-4, -9], [4, -9], [0, -1], [-10, 6], [10, 6]];
 export function fluidTree(h) {
