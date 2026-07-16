@@ -135,8 +135,8 @@ function graphColor(hd) {
     case "accelerating": return "#4a9068";
     case "new": return "#5bb47e";
     case "decelerating": return "#c2922e";
-    case "at-risk": case "atrisk": case "at risk": return "#cf7a3a";
-    case "lapsed": return "#b0573a";
+    case "at-risk": case "atrisk": case "at risk": return "#c2922e";
+    case "lapsed": return "#8B3A2B";
     default: return "#6aa06a";
   }
 }
@@ -155,8 +155,8 @@ function healthColor(hd) {
     case "accelerating": return "#2f8f5e";
     case "new": return "#7bc49a";
     case "decelerating": return "#e0b32e";
-    case "at-risk": case "atrisk": case "at risk": return "#d9662a";
-    case "lapsed": return "#c0392b";
+    case "at-risk": case "atrisk": case "at risk": return "#e0b32e";
+    case "lapsed": return "#8B3A2B";
     default: return "#b8bcc2"; // steady / stable → grey (maintain)
   }
 }
@@ -327,7 +327,12 @@ export default function AccountOverview() {
           peerTopGrowth = peers.reduce((m, a) => Math.max(m, a.prior90_pct || 0), 0);
           peerAvgGrowth = peers.length ? peers.reduce((s, a) => s + (a.prior90_pct || 0), 0) / peers.length : null;
         } catch { /* leave empty aggregates */ }
-        setD({ acc, bench: benRes.data, items, white, cohort, onP, areaAvgMoReal, wsReal, penetration, peerTopGrowth, peerAvgGrowth });
+        // scale whitespace estimates to THIS account's size vs nearby peers — a small
+        // account shouldn't inherit a big account's velocity. Any positive est floors at 1 cs/mo.
+        const accountMoEff = items.reduce((s, i) => s + ((i.l90 || 0) / 3) * profitPerCase(i.item_name, 0.30), 0);
+        const sizeRatio = (areaAvgMoReal > 0 && accountMoEff > 0) ? Math.max(0.1, Math.min(3, accountMoEff / areaAvgMoReal)) : 1;
+        const wsScaled = wsReal.map(w => { const vel = Math.max(1, Math.round(w.vel * sizeRatio * 10) / 10); return { ...w, vel, dollars: vel * profitPerCase(w.name, 0.30) }; });
+        setD({ acc, bench: benRes.data, items, white, cohort, onP, areaAvgMoReal, wsReal: wsScaled, penetration, peerTopGrowth, peerAvgGrowth });
       } catch (e) {
         setErr(e.message || "load failed");
       }
@@ -510,6 +515,12 @@ export default function AccountOverview() {
 
         <div style={{ fontSize: 15, fontWeight: 600, lineHeight: 1.35, color: "var(--text)", letterSpacing: "-0.2px" }}>{headline}</div>
         <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 5 }}>
+          {positive && (
+            <a href={positive.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, alignItems: "flex-start", textDecoration: "none" }}>
+              <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: "var(--text-3)", opacity: 0.6 }} />
+              <span style={{ fontSize: 12.5, lineHeight: 1.45, color: "var(--text-3)", fontStyle: "italic" }}>{positive.angle}<span style={{ fontStyle: "normal", opacity: 0.85 }}> — {positive.source} ↗</span></span>
+            </a>
+          )}
           {bullets.map((t, i) => (
             <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
               <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: head.bc, opacity: 0.7 }} />
@@ -537,17 +548,6 @@ export default function AccountOverview() {
               ); })}
             </div>
           </div>
-        )}
-
-        {positive && (
-          <a href={positive.url} target="_blank" rel="noopener noreferrer"
-            style={{ display: "flex", gap: 8, alignItems: "center", textDecoration: "none", marginTop: 12, padding: "9px 11px", borderRadius: 9, background: "var(--growing-bg)" }}>
-            <span aria-hidden="true" style={{ flexShrink: 0, fontSize: 11, color: "var(--growing-ink)" }}>▲</span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.4, color: "var(--growing-ink)" }}>
-              {positive.angle}
-              <span style={{ marginLeft: 5, fontWeight: 700, fontSize: 9.5, letterSpacing: "0.04em", textTransform: "uppercase", whiteSpace: "nowrap", opacity: 0.85 }}>{positive.source} ↗</span>
-            </span>
-          </a>
         )}
       </div>
 
