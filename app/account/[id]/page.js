@@ -8,6 +8,7 @@ import ItemEstimator from "../../../components/ItemEstimator";
 import AccountTag from "../../../components/AccountTag";
 import { greenBar } from "../../../lib/utils";
 import { profitPerCase } from "../../../lib/pricing";
+import { getBullets, FOCUS } from "../../../lib/news";
 
 const SNAPSHOT = new Date("2026-06-15T00:00:00");
 
@@ -246,17 +247,6 @@ function ItemBoxes({ name, months, total, lastOrdered, lost, onClose }) {
   );
 }
 
-// relative-size bucket — walk down: top 5% overall → top 5% of channel → 15% → 50% → smaller
-function sizeBucket(bench, channel) {
-  if (!bench) return "Relative size not yet ranked";
-  const o = bench.pct_overall, c = bench.pct_channel;
-  if (o != null && o <= 5) return "Top 5% of all accounts";
-  if (c != null && c <= 5) return `Top 5% of ${channel} accounts`;
-  if (o != null && o <= 15) return "Top 15% of all accounts";
-  if (c != null && c <= 15) return `Top 15% of ${channel} accounts`;
-  if (o != null && o <= 50) return "Top 50% of all accounts";
-  return "A relatively smaller account";
-}
 // color a suggestion by its verb — win back (rust) · ride (green) · sell in (blue)
 function moveColor(m) {
   const s = String(m || "").toLowerCase();
@@ -410,7 +400,6 @@ export default function AccountOverview() {
     return b.l90 - a.l90;
   });
   const brief = buildBriefing(acc, bench, items, white);
-  const chTitle = titleCase(acc.channel);
   const headline = acc.headline === "Accelerating" ? `Heating up — L90 up ${Math.abs(pct || 0)}% vs the prior quarter`
     : acc.headline === "At-Risk" ? `At risk — L90 down ${Math.abs(pct || 0)}% and shedding placements`
     : acc.headline === "Decelerating" ? `Cooling — L90 down ${Math.abs(pct || 0)}% from the prior quarter`
@@ -428,17 +417,32 @@ export default function AccountOverview() {
   // the trailing year of pre-lapse depletions).
   const lapsed = acc.headline === "Lapsed";
   const lostSkus = [...items].filter((i) => i.cell_state === "lost_recent").sort((a, b) => (a.last_sale_w ?? 99) - (b.last_sale_w ?? 99));
-  const wgt = acc.account_weight || 0;
-  const peersW = cohort.filter((a) => a.account_id !== acc.account_id && a.account_weight != null);
-  const topPct = peersW.length >= 12 && wgt > 0 ? Math.max(1, Math.round((100 * (peersW.filter((a) => a.account_weight > wgt).length + 1)) / (peersW.length + 1))) : null;
+
+  // area standing — rank this account by annualized volume among same-premise peers
+  // in its area (city first, then state). Rule: only ever call it out when it lands in
+  // the TOP 10% of its area; if the account has since gone dark it reads "used to be a
+  // top N%". Anything below top-10% is left unsaid (no more "top 15%/50%" labels).
+  const areaStanding = (() => {
+    const wgt = acc.account_weight || 0;
+    if (wgt <= 0) return null;
+    const ch = acc.channel_type;
+    const inArea = (match) => cohort.filter((a) => a.account_id !== acc.account_id && a.account_weight > 0 && (!ch || a.channel_type === ch) && match(a));
+    let peers = inArea((a) => acc.city && a.city === acc.city), where = acc.city ? titleCase(acc.city) : null;
+    if (peers.length < 12) { peers = inArea((a) => a.state === acc.state); where = STNAME[acc.state] || acc.state; }
+    if (peers.length < 12 || !where) return null;
+    const rank = Math.max(1, Math.round((100 * (peers.filter((a) => a.account_weight > wgt).length + 1)) / (peers.length + 1)));
+    if (rank > 10) return null;   // only ever surface genuine top-10%-in-area accounts
+    return lapsed
+      ? `Used to be a top ${rank}% account in ${where} — worth winning back.`
+      : `Top ${rank}% account in ${where}.`;
+  })();
 
   const bullets = lapsed
     ? [
-        topPct ? `Was a top ${topPct}% account by annualized volume — now dark${acc.last_order_w != null ? ` ${acc.last_order_w} weeks` : ""}.`
-               : `Gone dark${acc.last_order_w != null ? ` ${acc.last_order_w} weeks ago` : ""} — no orders in the last 90 days.`,
+        areaStanding || `Gone dark${acc.last_order_w != null ? ` ${acc.last_order_w} weeks ago` : ""} — no orders in the last 90 days.`,
         `${acc.account_weight ? acc.account_weight.toLocaleString() + " cs/yr" : "Real volume"} across ${lostSkus.length} SKU${lostSkus.length === 1 ? "" : "s"} before it went quiet.`,
       ]
-    : [brief.signals[0] ? brief.signals[0].t : "Holding its pace quarter over quarter.", sizeBucket(bench, chTitle)];
+    : [brief.signals[0] ? brief.signals[0].t : "Holding its pace quarter over quarter.", areaStanding].filter(Boolean);
 
   // profit/mo (real, item-level) + rounded display + ± vs nearby peers
   const accountMo = items.reduce((s, i) => s + ((i.l90 || 0) / 3) * profitPerCase(i.item_name, 0.30), 0);
@@ -454,6 +458,11 @@ export default function AccountOverview() {
   const wsList = wsReal.length
     ? wsReal.slice(0, 5).map((w) => ({ name: w.name, vel: w.vel, dollars: w.dollars }))
     : white.slice(0, 5).map((w) => ({ name: w.item_name, rank: w.market_rank }));
+
+  // news talking points — state-tuned (down to state level for now), IPA-focused;
+  // falls back to national when the state has no fresh signal. Each opens its source.
+  const news = getBullets(acc.state, 3);
+  const newsScope = news.some((s) => s.scope === acc.state) ? (STNAME[acc.state] || acc.state) : "National";
 
   return (
     <div className="wrap pagefade">
@@ -527,6 +536,31 @@ export default function AccountOverview() {
           </div>
         )}
       </div>
+
+      {/* IPA news — up to 3 state-tuned talking points, each opens its source headline */}
+      {news.length > 0 && (
+        <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", padding: "12px 14px", marginBottom: 12, boxShadow: "var(--shadow-sm)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--accent-deep)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h13v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /><path d="M17 8h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2" /><path d="M7 8h7M7 11h7M7 14h4" /></svg>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-3)", letterSpacing: "0.3px", textTransform: "uppercase" }}>{FOCUS.label} news · {newsScope}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {news.map((s, i) => (
+              <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer"
+                style={{ display: "flex", gap: 9, alignItems: "flex-start", textDecoration: "none", padding: "8px 2px", borderBottom: i < news.length - 1 ? "0.5px solid var(--border)" : "none" }}>
+                <span aria-hidden="true" style={{ flexShrink: 0, width: 5, height: 5, borderRadius: 3, marginTop: 6, background: "var(--pop-cool)" }} />
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: "block", fontSize: 12.5, lineHeight: 1.45, color: "var(--text-2)" }}>{s.angle}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 3, fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", color: "var(--accent-deep)" }}>
+                    {s.source}
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg>
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div ref={chartRef} style={{ scrollMarginTop: 12, minHeight: 96 }}>
         {sel ? (

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { useExplode } from "../lib/useExplode";
 import TreeGlyph, { tierBucket, TierTree } from "../components/TreeGlyph";
+import GreyLoader from "../components/Splash";
 import { fluidArt } from "../components/treeArt";
 import { useTheme } from "../lib/theme";
 import { getScope, setScope } from "../lib/scope";
@@ -180,6 +181,7 @@ function SplashClouds() {
 
 // simple loader: the ShelfStory mark + wordmark on the sky, a gentle fade in/out
 function Splash({ onDone, ready }) {
+  const { night } = useTheme();
   const [out, setOut] = useState(false);
   const [minDone, setMinDone] = useState(false);
   const onDoneRef = useRef(onDone);
@@ -197,7 +199,7 @@ function Splash({ onDone, ready }) {
   }, [minDone, ready]);
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "linear-gradient(180deg,#b6dcf1 0%,#cce4f4 24%,#d7e6df 62%,var(--bg) 100%)", zIndex: 50,
+      position: "fixed", inset: 0, background: night ? "linear-gradient(180deg,#0c1830 0%,#0f1c22 40%,var(--bg) 100%)" : "linear-gradient(180deg,#b6dcf1 0%,#cce4f4 24%,#d7e6df 62%,var(--bg) 100%)", zIndex: 50,
       display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
       transition: "opacity .34s ease", opacity: out ? 0 : 1, pointerEvents: out ? "none" : "auto",
     }}>
@@ -240,9 +242,29 @@ function A({ children }) { return <strong style={{ fontWeight: 700, color: "var(
 // whatever slide is showing (whole book, or one state).
 function buildBrief(rows) {
   if (!rows || !rows.length) return null;
-  let cur = 0, prev = 0;
-  for (const r of rows) { cur += r.cur90 || 0; prev += r.prev90 || 0; }
+  let cur = 0, prev = 0, actNow = 0, actPrev = 0, newC = 0, lostC = 0, distNow = 0, distPrev = 0;
+  for (const r of rows) {
+    const c = r.cur90 || 0, p = r.prev90 || 0;
+    cur += c; prev += p;
+    if (c > 0) actNow++;
+    if (p > 0) actPrev++;
+    const hl = String(r.headline || "").toLowerCase().trim();
+    if (hl === "new") newC++; else if (hl === "lapsed") lostC++;
+    distNow += r.live_placements || 0; distPrev += r.live_prev || 0;
+  }
   const g = gpct(cur, prev);
+  // structural signals worth headlining
+  const acctNet = actNow ? Math.round((100 * (newC - lostC)) / actNow) : null;               // net account base change %
+  const distPct = distPrev > 0 ? Math.round((100 * (distNow - distPrev)) / distPrev) : null;  // distribution (placements) change %
+  const rosNow = actNow ? cur / actNow : 0, rosPrev = actPrev ? prev / actPrev : 0;
+  const rosPct = rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null;        // rate-of-sale change %
+
+  // weakest / strongest channel that actually carries weight
+  const chAgg = {};
+  for (const r of rows) { const ch = r.channel; if (!ch) continue; const e = chAgg[ch] ||= { cur: 0, prev: 0, n: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.n++; }
+  const chArr = Object.entries(chAgg).map(([k, e]) => ({ name: titleCase(k), g: gpct(e.cur, e.prev), d: Math.round(e.cur - e.prev), n: e.n, share: prev > 0 ? e.prev / prev : 0 })).filter(x => x.g != null);
+  const chDown = chArr.filter(x => x.n >= 3 && x.share >= 0.06 && x.g <= -5).sort((a, b) => a.d - b.d)[0] || null;
+  const chUp = chArr.filter(x => x.n >= 3 && x.share >= 0.06 && x.g >= 6).sort((a, b) => b.d - a.d)[0] || null;
 
   const stAgg = {};
   for (const r of rows) { if (!r.state) continue; const e = stAgg[r.state] ||= { cur: 0, prev: 0, n: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.n++; }
@@ -253,19 +275,26 @@ function buildBrief(rows) {
   const cityAgg = {};
   for (const r of rows) { if (!r.city) continue; const key = `${r.city}|${r.state}`; const e = cityAgg[key] ||= { city: r.city, st: r.state, cur: 0, prev: 0, n: 0 }; e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.n++; }
   const cityArr = Object.values(cityAgg).map(c => ({ ...c, g: gpct(c.cur, c.prev), d: Math.round(c.cur - c.prev) }));
-  const cityUp = cityArr.filter(c => c.n >= 2 && c.g != null && c.g >= 8).sort((a, b) => b.d - a.d)[0] || null;
   const cityDown = cityArr.filter(c => c.n >= 2 && c.g != null && c.g <= -8).sort((a, b) => a.d - b.d)[0] || null;
-
-  const newCount = rows.filter(r => isNew(r.headline)).length;
 
   const chainAtRisk = {};
   for (const r of rows) { if (isDeclining(r.headline) && r.chain) (chainAtRisk[r.chain] ||= []).push(r); }
   let cluster = null;
   for (const ch in chainAtRisk) { const l = chainAtRisk[ch]; if (l.length >= 4 && (!cluster || l.length > cluster.n)) cluster = { chain: ch, n: l.length }; }
 
-  const quiet = rows.filter(r => (r.cur90 || 0) > 0 && r.last_order_w != null && r.last_order_w >= 2 && (r.account_weight || 0) > 0);
+  const quietN = rows.filter(r => (r.cur90 || 0) > 0 && r.last_order_w != null && r.last_order_w >= 2 && (r.account_weight || 0) > 0).length;
 
-  return { g, stUp, stDown, cityUp, cityDown, newCount, cluster, quietN: quiet.length };
+  // growth of the strongest 20% by size — explains "up but losing accounts" (concentration)
+  const sized = rows.filter(r => (r.account_weight || 0) > 0).sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0));
+  const topN = Math.max(1, Math.round(sized.length * 0.2));
+  let topCur = 0, topPrev = 0;
+  for (let i = 0; i < topN; i++) { topCur += sized[i].cur90 || 0; topPrev += sized[i].prev90 || 0; }
+  const topG = gpct(topCur, topPrev);
+  // crude brand-stage read: lots of fresh doors / expanding shelf = growing; flat & few new = mature
+  const newShare = actNow ? newC / actNow : 0;
+  const stage = (newShare >= 0.08 || (distPct != null && distPct >= 6)) ? "growing" : (newShare <= 0.03 && (distPct == null || distPct <= 1)) ? "mature" : "balanced";
+
+  return { g, acctNet, newCount: newC, lostCount: lostC, distPct, rosNow: Math.round(rosNow * 10) / 10, rosPct, chDown, chUp, stUp, stDown, cityDown, cluster, quietN, topG, stage };
 }
 
 // the snappy 2–3 sentence "need to know" about the card below — trend, one thing to
@@ -273,23 +302,55 @@ function buildBrief(rows) {
 function Snappy({ cur }) {
   const b = cur.brief, scope = cur.key === "ALL" ? "Your book" : cur.label, g = cur.curPct;
   const trend = g == null ? "holding steady" : g >= 6 ? `up ${g}%` : g >= -2 ? "holding steady" : g > -8 ? `softening ${Math.abs(g)}%` : `sliding ${Math.abs(g)}%`;
-  const trendColor = g == null ? "#6b7d5e" : g >= 6 ? "#2f8f5c" : g >= -2 ? "#3f6e4a" : "#b5824a";
-  let concern = null, pos = null;
-  if (b) {
-    if (b.stDown) concern = `keep an eye on ${STNAME[b.stDown.k] || b.stDown.k} (down ${Math.abs(b.stDown.g)}%)`;
-    else if (b.cityDown) concern = `keep an eye on ${titleCase(b.cityDown.city)} (down ${Math.abs(b.cityDown.g)}%)`;
-    else if (b.cluster) concern = `the ${b.cluster.n} ${titleCase(b.cluster.chain)} stores softening together are worth a look`;
-    else if (b.quietN >= 3) concern = `${b.quietN} steady accounts have gone quiet 60+ days`;
-    if (b.stUp) pos = `${STNAME[b.stUp.k] || b.stUp.k} is carrying you, up ${b.stUp.g}%`;
-    else if (b.cityUp) pos = `a strong run in ${titleCase(b.cityUp.city)}, +${b.cityUp.g}%`;
-    else if (b.newCount > 0) pos = `${b.newCount} new account${b.newCount === 1 ? "" : "s"} opened this quarter`;
+  const trendColor = g == null ? "var(--text-3)" : g >= 6 ? "var(--up)" : g >= -2 ? "var(--accent-deep)" : "var(--gold)";
+  const amber = { color: "var(--gold)", fontWeight: 600 }, green = { color: "var(--up)", fontWeight: 600 };
+
+  // tie the story to the trees below — which size tier is shedding vs. gaining doors, and the brand's stage
+  const tiers = cur.tiers3 || [];
+  const worstLoss = tiers.filter(t => t.lostN > t.newN).sort((a, x) => (x.lostN - x.newN) - (a.lostN - a.newN))[0];
+  const bestGain = tiers.filter(t => t.newN > t.lostN).sort((a, x) => (x.newN - x.lostN) - (a.newN - a.lostN))[0];
+  const lossWhere = worstLoss ? worstLoss.label.toLowerCase() : null, gainWhere = bestGain ? bestGain.label.toLowerCase() : null;
+  const stage = b && b.stage;
+
+  // divergence read — volume and account-count moving opposite ways, with the WHY (rate of sale)
+  let diverge = null;
+  if (b && g != null) {
+    if (g >= 3 && b.acctNet != null && b.acctNet <= -3) {
+      const strong = b.topG != null && b.topG > 0;
+      diverge = <>But it&rsquo;s on a <b style={amber}>shrinking base</b> — you&rsquo;ve net-lost accounts ({b.acctNet}%){lossWhere ? <>, mostly your <b style={amber}>{lossWhere}</b> doors</> : null} while <b style={green}>rate of sale is up {b.rosPct != null && b.rosPct > 0 ? `${b.rosPct}%` : "sharply"}</b>{strong ? <>, so your strongest are getting stronger (top accounts +{b.topG}%)</> : null}. Fewer, bigger accounts carrying the book — mind the concentration.</>;
+    } else if (g <= -3 && b.acctNet != null && b.acctNet >= 3) {
+      diverge = <>But you&rsquo;re <b style={amber}>spreading thin</b> — adding accounts (+{b.acctNet}%) faster than they sell{b.rosPct != null && b.rosPct < 0 ? <>, so <b style={amber}>rate of sale slipped {Math.abs(b.rosPct)}%</b></> : null}. The new points of distribution need a velocity push.</>;
+    }
+  }
+
+  // rank the real problems — structural (base / distribution / rate-of-sale / channel) beats geographic.
+  // (skip the plain account-loss line when the divergence read already explains it)
+  const concerns = [];
+  if (b && !diverge) {
+    if (b.acctNet != null && b.acctNet <= -3) concerns.push({ sev: Math.abs(b.acctNet) * 1.5 + 12, node: <>You&rsquo;re <b style={amber}>losing accounts — net {b.acctNet}%</b>{lossWhere ? <>, mostly your <b style={amber}>{lossWhere}</b> doors</> : null} ({b.lostCount} lapsed vs {b.newCount} new); {stage === "mature" ? "expected as the book rationalizes — mind the shelf" : "shore up the base"}.</> });
+    if (b.distPct != null && b.distPct <= -2) concerns.push({ sev: Math.abs(b.distPct) * 1.6 + 9, node: <><b style={amber}>Watch your distribution</b> — placements down {Math.abs(b.distPct)}%.</> });
+    if (b.rosPct != null && b.rosPct <= -3) concerns.push({ sev: Math.abs(b.rosPct) + 6, node: <>Rate of sale is <b style={amber}>softening — {b.rosNow} cs/acct, off {Math.abs(b.rosPct)}%</b>.</> });
+    if (b.chDown) concerns.push({ sev: Math.abs(b.chDown.g) + 4, node: <><b style={amber}>{b.chDown.name}</b> is your soft spot, down {Math.abs(b.chDown.g)}% ({b.chDown.n} accounts).</> });
+    if (b.stDown) concerns.push({ sev: Math.abs(b.stDown.g) + 1, node: <>Keep an eye on <b style={amber}>{STNAME[b.stDown.k] || b.stDown.k}</b>, down {Math.abs(b.stDown.g)}%.</> });
+    else if (b.cityDown) concerns.push({ sev: Math.abs(b.cityDown.g), node: <>Keep an eye on <b style={amber}>{titleCase(b.cityDown.city)}</b>, down {Math.abs(b.cityDown.g)}%.</> });
+    if (b.cluster) concerns.push({ sev: b.cluster.n + 2, node: <>The <b style={amber}>{b.cluster.n} {titleCase(b.cluster.chain)}</b> stores softening together are worth a look.</> });
+    else if (b.quietN >= 3) concerns.push({ sev: 3, node: <><b style={amber}>{b.quietN} steady accounts</b> have gone quiet 60+ days.</> });
+  }
+  concerns.sort((x, y) => y.sev - x.sev);
+  const showSecond = concerns[1] && concerns[1].sev >= 9; // only stack a 2nd if it's also structural
+  let pos = null;
+  if (b && !diverge) {
+    if (b.chUp) pos = <><b style={green}>{b.chUp.name}</b> is pulling hard, +{b.chUp.g}%</>;
+    else if (b.stUp) pos = <><b style={green}>{STNAME[b.stUp.k] || b.stUp.k}</b> is carrying you, up {b.stUp.g}%</>;
+    else if (b.distPct != null && b.distPct >= 3) pos = <>distribution grew <b style={green}>+{b.distPct}%</b></>;
+    else if (b.newCount > 0) pos = <><b style={green}>{b.newCount} new account{b.newCount === 1 ? "" : "s"}</b>{gainWhere ? <> in your {gainWhere} tier</> : null} just opened</>;
   }
   return (
-    <p style={{ position: "relative", margin: 0, paddingLeft: 13, fontFamily: "var(--font-serif)", fontSize: 14.5, lineHeight: 1.52, color: "#3a4a30", letterSpacing: "0.1px" }}>
-      <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 3, bottom: 3, width: 3, borderRadius: 3, background: "linear-gradient(#84b268, rgba(132,178,104,.2))" }} />
+    <p style={{ position: "relative", margin: 0, paddingLeft: 13, fontFamily: "var(--font-serif)", fontSize: 14.5, lineHeight: 1.52, color: "var(--text-2)", letterSpacing: "0.1px" }}>
+      <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 3, bottom: 3, width: 3, borderRadius: 3, background: "linear-gradient(var(--accent), rgba(132,178,104,.15))" }} />
       {scope} is <b style={{ color: trendColor, fontWeight: 600 }}>{trend}</b> over 90 days.{" "}
-      {concern ? <>Take a look — <b style={{ color: "#b5824a", fontWeight: 600 }}>{concern}</b>.</> : <>Nothing urgent on the watch list right now.</>}{" "}
-      {pos && <>Bright spot — <b style={{ color: "#2f8f5c", fontWeight: 600 }}>{pos}</b>.</>}
+      {diverge ? diverge
+        : <>{concerns.length ? <>{concerns[0].node}{showSecond ? <> {concerns[1].node}</> : null}{" "}</> : <>Nothing urgent on the watch list right now.{" "}</>}{pos && <>Bright spot — {pos}.</>}</>}
     </p>
   );
 }
@@ -437,10 +498,24 @@ function FluidTree({ h, size = 78, play = true, delay = 0 }) {
   return <svg width={W} height={size} viewBox="0 0 60 62" style={{ display: "block" }} aria-hidden="true" dangerouslySetInnerHTML={{ __html: fluidArt(theme, hv, sfx) }} />;
 }
 
+// a tasteful per-tier callout that localizes the brief's story to the tree below:
+// which tier is shedding doors (lapsing) vs. where the new doors are landing.
+function tierTag(t) {
+  const n = t.n || 1, net = (t.newN - t.lostN) / n, fortifying = t.distPerPct != null && t.distPerPct >= 4;
+  // losing doors — but if each remaining door carries MORE shelf, that's healthy concentration
+  if (net <= -0.03 && t.lostN >= 3) return fortifying ? { text: "fortifying", tone: "good" } : { text: `▾ ${t.lostN.toLocaleString()} lapsed`, tone: "warn" };
+  // shelf eroding — placements slipping while the doors mostly hold (the early warning)
+  if (t.distPct != null && t.distPct <= -5 && net > -0.03) return { text: `shelf ▾${Math.abs(t.distPct)}%`, tone: "warn" };
+  // new doors landing
+  if (net >= 0.05 && t.newN >= 3) return { text: `+${t.newN.toLocaleString()} new`, tone: "good" };
+  return null;
+}
+
 // three volume tiers standing on the Fair Skies rolling ground — Large / Mid / Small,
 // each a fluid health tree (color + fullness) with its stats, split by a soft divider.
 function TierTrees({ tiers, scope }) {
   const router = useRouter();
+  const { night } = useTheme();
   const secRef = useRef(null);
   const [play, setPlay] = useState(false);
   // tap a tier → the account list, filtered to that size band within the current scope
@@ -456,11 +531,11 @@ function TierTrees({ tiers, scope }) {
   return (
     <div ref={secRef} style={{ position: "relative", marginTop: 8 }}>
       {/* the rolling hill with the trees planted ON it (trunks tucked into the grass) */}
-      <div style={{ position: "relative", height: 132, overflow: "hidden", borderRadius: "16px 16px 0 0" }}>
+      <div style={{ position: "relative", height: 110, overflow: "hidden", borderRadius: "16px 16px 0 0" }}>
         <svg viewBox="0 0 380 120" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
-          <defs><linearGradient id="ttHill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8fbd72" stopOpacity="0.55" /><stop offset="1" stopColor="#6f9e5a" stopOpacity="0.16" /></linearGradient></defs>
+          <defs><linearGradient id="ttHill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor={night ? "#34502f" : "#8fbd72"} stopOpacity={night ? "0.7" : "0.55"} /><stop offset="1" stopColor={night ? "#16241a" : "#6f9e5a"} stopOpacity={night ? "0.25" : "0.16"} /></linearGradient></defs>
           <path d="M0 90 C 70 74, 150 86, 220 80 C 290 74, 340 86, 380 78 L380 120 L0 120 Z" fill="url(#ttHill)" />
-          <path d="M0 90 C 70 74, 150 86, 220 80 C 290 74, 340 86, 380 78" fill="none" stroke="#eaf3df" strokeWidth="1.5" opacity="0.8" />
+          <path d="M0 90 C 70 74, 150 86, 220 80 C 290 74, 340 86, 380 78" fill="none" stroke={night ? "rgba(150,200,140,.4)" : "#eaf3df"} strokeWidth="1.5" opacity="0.8" />
         </svg>
         <div style={{ position: "relative", zIndex: 1, height: "100%", display: "flex", alignItems: "flex-end", justifyContent: "space-around", padding: "0 2px" }}>
           {tiers.map((t, i) => (
@@ -470,19 +545,20 @@ function TierTrees({ tiers, scope }) {
                 <div style={{ fontSize: 14.5, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{t.ros != null ? t.ros.toFixed(1) : "—"}</div>
                 <div style={{ fontSize: 9, marginTop: 1 }}>{deltaTiny(t.rosPct)}</div>
               </div>
-              <FluidTree h={t.vit} size={88} play={play} delay={i * 90} />
+              <FluidTree h={t.vit} size={74} play={play} delay={i * 90} />
             </div>
           ))}
         </div>
       </div>
       {/* the soil strip + stats, flush under the hill so it reads as one continuous ground */}
-      <div style={{ display: "flex", alignItems: "flex-start", background: "linear-gradient(180deg, rgba(111,158,90,.17), rgba(111,158,90,0))", borderRadius: "0 0 16px 16px", padding: "5px 2px 9px" }}>
+      <div style={{ display: "flex", alignItems: "flex-start", background: night ? "linear-gradient(180deg, rgba(52,80,47,.35), rgba(52,80,47,0))" : "linear-gradient(180deg, rgba(111,158,90,.17), rgba(111,158,90,0))", borderRadius: "0 0 16px 16px", padding: "5px 2px 9px" }}>
         {tiers.map((t, i) => (
           <div key={t.label} onClick={() => go(t)} style={{ flex: 1, minWidth: 0, textAlign: "center", cursor: "pointer" }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{t.label}</div>
             <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{t.n.toLocaleString()} accts</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{t.cases.toLocaleString()}<span style={{ fontWeight: 500, color: "var(--text-3)", fontSize: 9 }}> cs</span></div>
             <div style={{ fontSize: 10, marginTop: 1 }}>{deltaTiny(t.pct)}</div>
+            {(() => { const tg = tierTag(t); return tg ? <div style={{ display: "inline-block", marginTop: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.2, padding: "2px 7px", borderRadius: 9, background: tg.tone === "good" ? "var(--growing-bg)" : "var(--watch-bg)", color: tg.tone === "good" ? "var(--accent-deep)" : "var(--gold)" }}>{tg.text}</div> : null; })()}
           </div>
         ))}
       </div>
@@ -612,6 +688,7 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const [noTrans, setNoTrans] = useState(false);
   const { burst, styleFor } = useExplode();
+  const { night, setNight } = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -620,7 +697,7 @@ export default function Home() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,account_name,cur90,prev90,state,city,chain,headline,account_weight,prior90_pct,last_order_w,spark,live_placements,live_prev")
+            .select("account_id,account_name,cur90,prev90,state,city,chain,channel,headline,account_weight,prior90_pct,last_order_w,spark,live_placements,live_prev")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
@@ -674,7 +751,7 @@ export default function Home() {
       // Mid (20–60%), Small (60–80%); ranked by L52W volume (fallback 90-day)
       const bySize = list.filter(r => (r.account_weight || r.cur90 || 0) > 0).sort((a, b) => (b.account_weight || b.cur90 || 0) - (a.account_weight || a.cur90 || 0));
       const NB = bySize.length, c1 = Math.round(NB * 0.2), c2 = Math.round(NB * 0.6), c3 = Math.round(NB * 0.8);
-      const tstat = (lbl, rws) => { let c = 0, p = 0, an = 0, ap = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { const cc = r.cur90 || 0, pp = r.prev90 || 0; c += cc; p += pp; if (cc > 0) an++; if (pp > 0) ap++; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length), ros = an ? c / an : 0, rosPrev = ap ? p / ap : 0; return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color, ros, rosPct: rosPrev > 0 ? Math.round((100 * (ros - rosPrev)) / rosPrev) : null }; };
+      const tstat = (lbl, rws) => { let c = 0, p = 0, an = 0, ap = 0, newN = 0, lostN = 0, dN = 0, dP = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { const cc = r.cur90 || 0, pp = r.prev90 || 0; c += cc; p += pp; if (cc > 0) an++; if (pp > 0) ap++; dN += r.live_placements || 0; dP += r.live_prev || 0; const hl = String(r.headline || "").toLowerCase().trim(); if (hl === "new") newN++; else if (hl === "lapsed") lostN++; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length), ros = an ? c / an : 0, rosPrev = ap ? p / ap : 0, perNow = an ? dN / an : 0, perPrev = ap ? dP / ap : 0; return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color, ros, rosPct: rosPrev > 0 ? Math.round((100 * (ros - rosPrev)) / rosPrev) : null, newN, lostN, distPct: dP > 0 ? Math.round((100 * (dN - dP)) / dP) : null, distPerPct: perPrev > 0 ? Math.round((100 * (perNow - perPrev)) / perPrev) : null }; };
       const tiers3 = [tstat("Large", bySize.slice(0, c1)), tstat("Mid", bySize.slice(c1, c2)), tstat("Small", bySize.slice(c2, c3))];
       return { label, key, cur, curPct, acctNow, acctPct: acctNow ? Math.round((100 * (newA - lostA)) / acctNow) : null, rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers, treeVit: stSc.vit, treeColor: stSc.color, quarters, windows, tiers3 };
     };
@@ -712,39 +789,53 @@ export default function Home() {
   return (
     <>
       {phase === "splash" && <Splash ready={!!slides || !!err} onDone={() => { booted = true; setPhase("ready"); }} />}
+      {/* returning to home in-session skips the sky splash — show the grey loading logo
+          until the book is ready so the page reveals fully-formed, not piecemeal */}
+      {phase === "ready" && !slides && !err && <GreyLoader />}
       {pickerOpen && <ThemeChooser onChoose={() => setPickerOpen(false)} onClose={() => setPickerOpen(false)} />}
 
-      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,var(--bg) 500px)", padding: "14px 20px 12px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
-        {/* sky clouds, drifting behind everything */}
-        {/* soft sun, upper right — a warm glow, not a cartoon (clouds drift in front) */}
-        <div aria-hidden="true" style={{ position: "absolute", top: -20, right: -16, width: 138, height: 138, zIndex: 0, pointerEvents: "none" }}>
-          <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at 62% 40%, rgba(242,201,120,.55), rgba(242,201,120,.16) 44%, transparent 70%)" }} />
-          <div style={{ position: "absolute", top: 40, right: 44, width: 44, height: 44, borderRadius: "50%", background: "radial-gradient(circle at 38% 34%, #f5d68f, #ecbb61 66%, #e3a842)", boxShadow: "0 0 22px 5px rgba(236,187,97,.3)" }} />
+      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", background: "linear-gradient(180deg,#b6dcf1 0px,#cce4f4 120px,#d7e6df 360px,#f6f7f4 520px)", padding: "14px 20px 12px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
+        {/* night sky — fades in over the day sky as the sun sets */}
+        <div aria-hidden="true" style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none", background: "linear-gradient(180deg,#0c1830 0px,#0f1c22 200px,#0d140e 470px)", opacity: night ? 1 : 0, transition: "opacity .8s ease" }} />
+        {/* the sun sets & the moon rises when you toggle night — a little time-of-day transition */}
+        <div aria-hidden="true" style={{ position: "absolute", top: 40, right: 12, width: 54, height: 68, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: 8, right: 11, width: 34, height: 34, transition: "transform .8s cubic-bezier(.5,.03,.25,1), opacity .5s ease", transform: night ? "translateY(60px)" : "translateY(0)", opacity: night ? 0 : 1 }}>
+            <div style={{ position: "absolute", inset: -7, background: "radial-gradient(circle at 55% 44%, rgba(242,201,120,.5), rgba(242,201,120,.12) 50%, transparent 74%)" }} />
+            <div style={{ position: "absolute", inset: 3, borderRadius: "50%", background: "radial-gradient(circle at 38% 34%, #f5d68f, #ecbb61 66%, #e3a842)", boxShadow: "0 0 18px 4px rgba(236,187,97,.32)" }} />
+          </div>
+          <div style={{ position: "absolute", top: 6, right: 7, width: 40, height: 40, transition: "transform .8s cubic-bezier(.5,.03,.25,1), opacity .5s ease", transform: night ? "translateY(0)" : "translateY(60px)", opacity: night ? 1 : 0 }}>
+            <svg viewBox="0 0 44 44" width="40" height="40" style={{ filter: "drop-shadow(0 0 7px rgba(200,208,196,.4))" }}><path d="M29 6 A 16 16 0 1 0 29 38 A 13 16 0 1 1 29 6 Z" fill="#b7bfb2" /></svg>
+          </div>
         </div>
-        <svg className="cl cl1" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 58, left: -24, width: 124, opacity: 0.8, zIndex: 0 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
-        <svg className="cl cl2" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 104, right: -12, width: 90, opacity: 0.6, zIndex: 0 }}><path d={CLOUD_PATH} fill="#ffffff" /></svg>
+        <svg className="cl cl1" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 58, left: -24, width: 124, opacity: night ? 0.1 : 0.8, zIndex: 0, transition: "opacity .8s ease" }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
+        <svg className="cl cl2" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 104, right: -12, width: 90, opacity: night ? 0.08 : 0.6, zIndex: 0, transition: "opacity .8s ease" }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
 
         <div style={{ position: "relative", zIndex: 1 }}>
         {/* top row: greeting (kept low-key) + logo */}
         <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginTop: 2 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, color: "var(--text-2)", fontWeight: 600, letterSpacing: "-0.1px" }}>{greet}, Joe</div>
-            <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 1 }}>Updated {DATA_UPDATED}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+            <a href={cur && cur.key && cur.key !== "ALL" ? `/news?scope=${encodeURIComponent(cur.key)}` : "/news"} aria-label="IPA news" style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 11, border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-sm)", color: "var(--accent-deep)", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h13v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /><path d="M17 8h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2" /><path d="M7 8h7M7 11h7M7 14h4" /></svg>
+            </a>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, color: "var(--text-2)", fontWeight: 600, letterSpacing: "-0.1px" }}>{greet}, Joe</div>
+              <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 1 }}>Updated {DATA_UPDATED}</div>
+            </div>
           </div>
           <div style={{ flexShrink: 0 }}><HeaderLogo /></div>
         </div>
 
         {/* the scope you're viewing — centered + prominent */}
         {cur && (
-          <div className="riseIn" style={{ marginTop: 14, textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: 27, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.05 }}>{cur.key === "ALL" ? "All states" : cur.label}</div>
+          <div className="riseIn" style={{ marginTop: 9, textAlign: "center" }}>
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 25, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.05 }}>{cur.key === "ALL" ? "All states" : cur.label}</div>
             <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the stats to change" : ""}</div>
           </div>
         )}
 
         {/* info box (swipeable) — 90D cases / accts / ROS — ABOVE the brief */}
         {cur && (
-          <div style={{ marginTop: 14 }}>
+          <div style={{ marginTop: 8 }}>
             <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
               style={{ transform: `translateX(${dragDx}px)`, transition: (dragging || noTrans) ? "none" : "transform .3s cubic-bezier(.2,.7,.2,1)", touchAction: "pan-y", cursor: slides && slides.length > 1 ? "grab" : "default" }}>
             <div className="riseIn" style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "11px 10px" }}>
@@ -769,7 +860,7 @@ export default function Home() {
 
 
         {/* snappy need-to-know — BELOW the 90D card, trails the swipe with a sticky lag */}
-        <div className="riseIn" style={{ marginTop: 12, marginBottom: 2, transform: `translateX(${Math.max(-44, Math.min(44, dragDx * 0.5))}px)`, transition: dragging ? "transform .22s ease" : noTrans ? "none" : "transform .5s cubic-bezier(.2,.7,.2,1) .05s" }}>
+        <div className="riseIn" style={{ marginTop: 8, marginBottom: 2, transform: `translateX(${Math.max(-44, Math.min(44, dragDx * 0.5))}px)`, transition: dragging ? "transform .22s ease" : noTrans ? "none" : "transform .5s cubic-bezier(.2,.7,.2,1) .05s" }}>
           {cur ? <Snappy cur={cur} /> : <div style={{ fontSize: 12.5, color: "var(--text-3)" }}>Reading your book…</div>}
         </div>
 
@@ -777,19 +868,9 @@ export default function Home() {
         {!slides && !err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
         {err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
 
-        {/* primary nav — Fair Skies stepping-stones (exact style) */}
-        <div className="riseIn" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 18 }}>
-          {NAV.map((c, i) => (
-            <div key={c.href} onClick={() => router.push(c.href)} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "13px 4px 12px", borderRadius: ["22px", "24px 22px 26px 22px", "22px 26px 22px 24px", "22px"][i] || "22px", cursor: "pointer", background: "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
-              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#3f6e4a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{c.icon}</svg>
-              <span style={{ fontSize: 11, color: "#41533a", letterSpacing: "0.2px", whiteSpace: "nowrap" }}>{c.tab}</span>
-            </div>
-          ))}
-        </div>
-
         {/* your book by size — Large / Mid / Small tiers standing on the hills */}
         {cur && cur.tiers3 && (
-          <div style={{ marginTop: 20 }}>
+          <div style={{ marginTop: 11 }}>
             <div style={{ textAlign: "center", marginBottom: 4 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>Health by Account Tier</div>
               <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", opacity: 0.85, marginTop: 1 }}>tap a tier for its accounts →</div>
@@ -798,16 +879,31 @@ export default function Home() {
           </div>
         )}
 
-        {/* (state & chain orchards removed — the rooted tree is the only bottom section now) */}
+        {/* primary nav — moved to the bottom, under the trees, so the section flows */}
+        <div className="riseIn" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 9, marginTop: 12 }}>
+          {NAV.map((c, i) => (
+            <div key={c.href} onClick={() => router.push(c.href)} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 7, padding: "13px 4px 12px", borderRadius: ["22px", "24px 22px 26px 22px", "22px 26px 22px 24px", "22px"][i] || "22px", cursor: "pointer", border: night ? "1px solid var(--border)" : "none", background: night ? "linear-gradient(180deg,#212c22,#18211a)" : "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: night ? "0 8px 20px -14px rgba(0,0,0,.55)" : "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
+              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{c.icon}</svg>
+              <span style={{ fontSize: 11, color: "var(--text-2)", letterSpacing: "0.2px", whiteSpace: "nowrap" }}>{c.tab}</span>
+            </div>
+          ))}
+        </div>
 
         <div style={{ height: 8 }} />
-        <div style={{ display: "flex", justifyContent: "center" }}>
-          <button onClick={() => setPickerOpen(true)} aria-label="Change tree style" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.65, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10 }}>
+          <button onClick={() => setPickerOpen(true)} aria-label="Change tree style" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 22 11 10 10 0 0 0 12 2Z" /><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" /><circle cx="15.5" cy="7" r="1.4" fill="currentColor" stroke="none" /><circle cx="17.5" cy="12" r="1.4" fill="currentColor" stroke="none" /></svg>
             Change style
           </button>
+          <span aria-hidden="true" style={{ width: 1, height: 13, background: "var(--border-strong)", opacity: 0.55 }} />
+          <button onClick={() => setNight(!night)} aria-label={night ? "Turn off nighttime mode" : "Turn on nighttime mode"} style={{ border: "none", background: "transparent", color: night ? "#e6c86a" : "var(--text-3)", fontSize: 11.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", opacity: night ? 1 : 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px" }}>
+            {night
+              ? <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" /></svg>
+              : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4.4" /><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" /></svg>}
+            {night ? "Night on" : "Nighttime"}
+          </button>
         </div>
-        <div style={{ height: 20 }} />
+        <div style={{ height: 8 }} />
         </div>
       </main>
 
