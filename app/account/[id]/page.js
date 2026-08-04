@@ -10,7 +10,7 @@ import { greenBar } from "../../../lib/utils";
 import { profitPerCase } from "../../../lib/pricing";
 import { getBullets, getPositive, FOCUS } from "../../../lib/news";
 
-const SNAPSHOT = new Date("2026-06-15T00:00:00");
+const SNAPSHOT = new Date("2026-06-30T00:00:00");
 
 const HEAD = {
   "Accelerating": { bg: "var(--growing-bg)", fg: "var(--growing-ink)", bc: "var(--accent)" },
@@ -33,7 +33,7 @@ function titleCase(s) {
 function sigColor(k) {
   return k === "warn" ? "var(--pop-warm)" : k === "up" ? "var(--accent)" : k === "opp" ? "var(--pop-cool)" : "var(--pop-cool-deep)";
 }
-const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
+const STNAME = { AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming" };
 function median(arr) { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 const round5 = n => Math.round(n / 5) * 5;   // approximate item $ to the nearest $5
 function monthLabel(monthsAgo) {

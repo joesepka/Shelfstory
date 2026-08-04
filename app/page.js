@@ -24,7 +24,7 @@ const BOOK = "#3F6E4A";   // --accent-deep (book strokes)
 const TREND = "#5E9277";  // --accent (climbing line / arrow / dots / progress)
 
 // data-as-of label — bump this when you reload the book
-const DATA_UPDATED = "June 15th, 2026";
+const DATA_UPDATED = "June 30th, 2026";
 // four rolling-90 quarter labels ending at the data date (spark is 12 months long)
 const QLABELS = (() => { const b = new Date(DATA_UPDATED.replace(/(\d+)(st|nd|rd|th)/, "$1")); if (isNaN(b)) return ["Q1", "Q2", "Q3", "Q4"]; return [9, 6, 3, 0].map(back => { const d = new Date(b.getFullYear(), b.getMonth() - back, 1); return `Q${Math.floor(d.getMonth() / 3) + 1} '${String(d.getFullYear()).slice(2)}`; }); })();
 
@@ -39,7 +39,7 @@ const QUOTES = [
   { t: "Success is measured not by the position reached, but by the obstacles overcome.", a: "Booker T. Washington" },
 ];
 
-const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA: "Iowa", MN: "Minnesota", WI: "Wisconsin", IN: "Indiana" };
+const STNAME = { AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland", MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming" };
 const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
 const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";

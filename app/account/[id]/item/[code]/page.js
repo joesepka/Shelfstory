@@ -5,7 +5,7 @@ import { supabase } from "../../../../../lib/supabase";
 import Splash from "../../../../../components/Splash";
 import { greenBar } from "../../../../../lib/utils";
 
-const SNAPSHOT = new Date("2026-06-15T00:00:00"); // window 0 "data thru" date
+const SNAPSHOT = new Date("2026-06-30T00:00:00"); // window 0 "data thru" date
 
 function monthLabel(i, withYear) {
   const d = new Date(SNAPSHOT);
