@@ -13,7 +13,7 @@ const PURPLE_DEEP = "var(--purple-benchmark)";  // dashed benchmark + accents (m
 export function BarCard({ title, sub, data, labels, hi, unit }) {
   const mx = Math.max(...data, 1), n = data.length;
   const gap = n > 8 ? 2 : 3;                                   // shared with AcctRosCard so columns line up
-  const showLab = i => n <= 6 || i % 3 === 0 || i === n - 1;   // only a few x labels
+  const showLab = i => true;   // label EVERY month (no thinning)
   const lo = Math.min(...data.filter(x => x > 0), mx); // case bars: green, shaded by value (softer=lighter, better=darker)
   return (
     <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow)", padding: "12px 14px", marginTop: 12 }}>
@@ -34,7 +34,7 @@ export function BarCard({ title, sub, data, labels, hi, unit }) {
         })}
       </div>
       <div style={{ display: "flex", gap, marginTop: 4 }}>
-        {labels.map((l, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden" }}>{showLab(i) ? l : ""}</div>)}
+        {labels.map((l, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 6.5, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden" }}>{showLab(i) ? l : ""}</div>)}
       </div>
     </div>
   );
@@ -89,25 +89,25 @@ export function AcctRosCard({ title, sub, accts, ros, labels, hi }) {
               <rect x="0" y="0" width="0" height="100"><animate attributeName="width" from="0" to="100" dur="0.7s" begin="0.25s" fill="freeze" /></rect>
             </clipPath>
           </defs>
-          <polyline points={pts} fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" clipPath={`url(#${clipId})`} />
+          <polyline points={pts} fill="none" stroke="var(--text)" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" clipPath={`url(#${clipId})`} />
         </svg>
         {/* ROS value at start / middle / end of the line */}
         {[0, Math.floor((n - 1) / 2), n - 1].filter((p, i, a) => a.indexOf(p) === i).map((p) => (
-          <div key={p} style={{ position: "absolute", left: p === 0 ? "1%" : p === n - 1 ? undefined : `${xOf(p)}%`, right: p === n - 1 ? "1%" : undefined, top: `${yOf(ros[p])}%`, transform: `translate(${p === 0 || p === n - 1 ? "0" : "-50%"}, -160%)`, fontSize: 9.5, fontWeight: 800, color: "var(--gold)", whiteSpace: "nowrap", fontFeatureSettings: '"tnum" 1', opacity: 0, animation: "dotIn .25s ease-out .95s forwards" }}>{ros[p].toFixed(1)}</div>
+          <div key={p} style={{ position: "absolute", left: p === 0 ? "1%" : p === n - 1 ? undefined : `${xOf(p)}%`, right: p === n - 1 ? "1%" : undefined, top: `${yOf(ros[p])}%`, transform: `translate(${p === 0 || p === n - 1 ? "0" : "-50%"}, -160%)`, fontSize: 9.5, fontWeight: 800, color: "var(--text)", whiteSpace: "nowrap", fontFeatureSettings: '"tnum" 1', opacity: 0, animation: "dotIn .25s ease-out .95s forwards" }}>{ros[p].toFixed(1)}</div>
         ))}
         {/* arrow on the latest ROS point, tilted along the line */}
         <div style={{ position: "absolute", right: 0, top: `${ye}%`, transform: "translate(50%,-50%)", opacity: 0, animation: "dotIn .25s ease-out .95s forwards" }}>
           <svg width="13" height="13" viewBox="0 0 12 12" style={{ display: "block", overflow: "visible", transform: `rotate(${arrowAng}deg)` }}>
-            <path d="M3 2 L9 6 L3 10" fill="none" stroke="var(--gold)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M3 2 L9 6 L3 10" fill="none" stroke="var(--text)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
       </div>
       <div style={{ display: "flex", gap: dense ? 2 : 3, marginTop: 4 }}>
-        {labels.map((l, i) => { const show = !dense || i % 3 === 0 || i === n - 1; return <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 7.5, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden" }}>{show ? l : ""}</div>; })}
+        {labels.map((l, i) => <div key={i} style={{ flex: 1, textAlign: "center", fontSize: 6.5, color: "var(--text-3)", whiteSpace: "nowrap", overflow: "hidden" }}>{l}</div>)}
       </div>
       <div style={{ display: "flex", gap: 12, marginTop: 7, fontSize: 9, color: "var(--text-3)" }}>
         <span><span style={{ display: "inline-block", width: 9, height: 9, background: "var(--pop-cool)", borderRadius: 2, marginRight: 3, verticalAlign: "middle" }} />accounts</span>
-        <span><span style={{ display: "inline-block", width: 12, height: 3, background: "var(--gold)", marginRight: 3, verticalAlign: "middle", borderRadius: 1 }} />ROS / mo</span>
+        <span><span style={{ display: "inline-block", width: 12, height: 3, background: "var(--text)", marginRight: 3, verticalAlign: "middle", borderRadius: 1 }} />ROS / mo</span>
       </div>
     </div>
   );

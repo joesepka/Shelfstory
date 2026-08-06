@@ -2,6 +2,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
+import { run, fsum } from "../lib/forecast";
 import { useExplode } from "../lib/useExplode";
 import TreeGlyph, { tierBucket, TierTree } from "../components/TreeGlyph";
 import GreyLoader from "../components/Splash";
@@ -17,6 +18,8 @@ const T = {
   serif: "var(--font-serif)",
 };
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
+// case-volume formatter: <1K -> whole number (134); >=1K -> abbreviated (5.1k / 51k)
+const kf = v => { const a = Math.abs(v || 0); if (a < 1000) return String(Math.round(v || 0)); return ((v || 0) / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "k"; };   // <1k -> whole (439); >=1k -> one decimal (1.2k) — matches desktop
 const UP = "#5C9A7B", DOWN = "#C07A72", FLAT = "#A5A092";
 
 // logo + splash palette (green)
@@ -236,6 +239,16 @@ function Stat({ label, value, unit, pct, divider, delay = 0 }) {
   );
 }
 
+// smaller stat for the annual row beneath the top bar (current · projected · growth) — centered
+function SmallStat({ label, value, color }) {
+  return (
+    <div style={{ textAlign: "center", minWidth: 76 }}>
+      <div style={{ fontSize: 8, letterSpacing: 0.3, color: "var(--text-3)", textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: color || "var(--text)", marginTop: 2, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.2px" }}>{value}</div>
+    </div>
+  );
+}
+
 function A({ children }) { return <strong style={{ fontWeight: 700, color: "var(--text)" }}>{children}</strong>; }
 
 // facts for the snappy top-of-page summary — the few things worth knowing about
@@ -392,7 +405,7 @@ function SeasonBars({ quarters }) {
           <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end" }}>
             <div style={{ height: 14, fontSize: 10.5, fontWeight: 700, color: g == null ? "var(--text-3)" : g > 0 ? "var(--up)" : g < 0 ? "var(--down)" : "var(--text-3)" }}>{g == null ? "" : `${g > 0 ? "▲" : g < 0 ? "▼" : "▬"}${Math.abs(g)}%`}</div>
             <div style={{ width: "72%", maxWidth: 42, height: h, borderRadius: "6px 6px 3px 3px", background: c, opacity: on ? 1 : 0.82, boxShadow: on ? "inset 0 0 0 1.7px rgba(47,61,40,.8)" : "none", transition: "height .3s" }} />
-            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginTop: 5, fontVariantNumeric: "tabular-nums" }}>{(q.cases || 0).toLocaleString()}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text)", marginTop: 5, fontVariantNumeric: "tabular-nums" }}>{kf(q.cases || 0)}</div>
             <div style={{ fontSize: 9, color: "var(--text-3)", marginTop: 1 }}>{q.label}</div>
           </div>
         );
@@ -510,7 +523,9 @@ function tierSignal(t) {
   // lapsed accounts (darker-red pill) — Large/Mid surface even a SINGLE lapse (losing a big
   // account is the priority); Small waits for a real rate of loss so the pill isn't noisy.
   // Fortifying (each remaining account carries more shelf) can reframe Small, never big/mid.
-  if (big ? t.lostN >= 1 : (t.lostN >= 3 && net <= -0.03)) return (fortifying && !big)
+  // Joe: ONLY call out lapsed when the tier is actually declining in VOLUME — a growing tier
+  // that happens to have shed a few accounts shouldn't wave a red flag.
+  if ((t.pct != null && t.pct < 0) && (big ? t.lostN >= 1 : (t.lostN >= 3 && net <= -0.03))) return (fortifying && !big)
     ? { kind: "fortifying", tone: "good", text: "fortifying" }
     : { kind: "losing", tone: "bad", text: `▾ ${t.lostN.toLocaleString()} lapsed` };
   // shelf eroding — placements slipping while the accounts mostly hold (the early warning)
@@ -566,7 +581,7 @@ function TierTrees({ tiers, scope }) {
           <div key={t.label} onClick={() => go(t)} style={{ flex: 1, minWidth: 0, textAlign: "center", cursor: "pointer" }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>{t.label}</div>
             <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{t.n.toLocaleString()} accts</div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{t.cases.toLocaleString()}<span style={{ fontWeight: 500, color: "var(--text-3)", fontSize: 9 }}> cs</span></div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", marginTop: 1 }}>{kf(t.cases)}<span style={{ fontWeight: 500, color: "var(--text-3)", fontSize: 9 }}> cs</span></div>
             <div style={{ fontSize: 10, marginTop: 1 }}>{deltaTiny(t.pct)}</div>
             {(() => { const tg = tierTag(t); return tg ? <div style={{ display: "inline-block", marginTop: 4, fontSize: 8.5, fontWeight: 700, letterSpacing: 0.2, padding: "2px 7px", borderRadius: 9, background: tg.tone === "good" ? "var(--growing-bg)" : tg.tone === "bad" ? "var(--lapsed-bg)" : "var(--watch-bg)", color: tg.tone === "good" ? "var(--accent-deep)" : tg.tone === "bad" ? "#fff" : "var(--gold)" }}>{tg.text}</div> : null; })()}
           </div>
@@ -651,8 +666,8 @@ function WedgeView({ wedge, onOpen }) {
     <div>
       <div className="wedgeRo" style={{ marginTop: 12 }}>
         {it ? (it.kind === "acct"
-          ? <span><span className="rdot" style={{ background: COLW[it.state] }} /><b>{it.name}</b> · {it.cur.toLocaleString()} cs · 90D · {Math.round(it.cur / 3).toLocaleString()} cs/acct·mo · <span style={{ color: COLW[it.state], fontWeight: 700 }}>{WWORD[it.state]}</span></span>
-          : <span><span className="rdot" style={{ background: "var(--soil-dk)" }} /><b>Long tail</b> · {wedge.pool.n.toLocaleString()} accounts · {wedge.pool.cur.toLocaleString()} cs · 90D · release to open</span>)
+          ? <span><span className="rdot" style={{ background: COLW[it.state] }} /><b>{it.name}</b> · {kf(it.cur)} cs · 90D · {Math.round(it.cur / 3).toLocaleString()} cs/acct·mo · <span style={{ color: COLW[it.state], fontWeight: 700 }}>{WWORD[it.state]}</span></span>
+          : <span><span className="rdot" style={{ background: "var(--soil-dk)" }} /><b>Long tail</b> · {wedge.pool.n.toLocaleString()} accounts · {kf(wedge.pool.cur)} cs · 90D · release to open</span>)
           : <span className="wedgeHint">Drag across to scan · release to open an account</span>}
       </div>
       <svg ref={ref} viewBox="0 0 360 150" width="100%" style={{ display: "block", touchAction: "none", cursor: "crosshair", marginTop: 6 }}
@@ -689,6 +704,7 @@ export default function Home() {
   const [phase, setPhase] = useState(booted ? "ready" : "splash"); // splash → ready
   const [pickerOpen, setPickerOpen] = useState(false);
   const [rows, setRows] = useState(null);
+  const [fcRows, setFcRows] = useState(null);   // fc_base — desktop's forecast source, so annual numbers tie out
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
   const [slide, setSlide] = useState(0);
@@ -720,18 +736,30 @@ export default function Home() {
     })();
   }, []);
 
+  // fc_base — the SAME source + engine the desktop forecast uses, so Current/Projected Annual match it exactly
+  useEffect(() => { (async () => { try { const { data, error } = await supabase.rpc("fc_base"); if (!error && data) setFcRows(data); } catch {} })(); }, []);
+
   useEffect(() => { setGreet(greeting()); }, []);
 
   // swipeable header: the whole book, then each state high→low by 90-day volume.
   // each slide carries its 3 stats, a state-specific brief, and four volume tiers
   // (each ~25% of L52W volume) — top / mid / small / long tail — as health trees.
   const TIER_DEFS = [{ key: "top", label: "Top tier" }, { key: "mid", label: "Mid tier" }, { key: "small", label: "Small tier" }, { key: "tail", label: "Long tail" }];
+  // Per-state trailing-52w (Current Annual) + 12-mo forecast (Projected Annual), computed by the
+  // DESKTOP's own engine (run) on the SAME fc_base rows — so the mobile ties out to desktop exactly.
+  const fcByState = useMemo(() => {
+    if (!fcRows || !fcRows.length) return null;
+    const { root } = run(fcRows);
+    const o = { ALL: { L52: fsum(root.history.slice(12)), fc52: fsum(root.forecast || []) } };
+    for (const s of root.children.values()) o[s.state] = { L52: fsum(s.history.slice(12)), fc52: fsum(s.forecast || []) };
+    return o;
+  }, [fcRows]);
   const slides = useMemo(() => {
     if (!rows || !rows.length) return null;
     const mk = (label, key, list) => {
       let cur = 0, prev = 0, acctNow = 0, acctPrev = 0, newA = 0, lostA = 0;
       for (const r of list) { const c = r.cur90 || 0, p = r.prev90 || 0; cur += c; prev += p; if (c > 0) acctNow++; if (p > 0) acctPrev++; const hl = String(r.headline || "").toLowerCase().trim(); if (hl === "new") newA++; else if (hl === "lapsed") lostA++; }
-      const rosNow = acctNow ? cur / acctNow : 0, rosPrev = acctPrev ? prev / acctPrev : 0;
+      const rosNow = acctNow ? cur / acctNow / 3 : 0, rosPrev = acctPrev ? prev / acctPrev / 3 : 0;   // per-account per-MONTH (÷3) — matches desktop's rate-of-sale
       // split by cumulative L52W volume into quarters
       const sorted = [...list].sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0));
       const totW = sorted.reduce((s, r) => s + (r.account_weight || 0), 0) || 1;
@@ -774,13 +802,15 @@ export default function Home() {
       const NB = bySize.length, c1 = Math.round(NB * 0.2), c2 = Math.round(NB * 0.6), c3 = Math.round(NB * 0.8);
       const tstat = (lbl, rws) => { let c = 0, p = 0, an = 0, ap = 0, newN = 0, lostN = 0, dN = 0, dP = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { const cc = r.cur90 || 0, pp = r.prev90 || 0; c += cc; p += pp; if (cc > 0) an++; if (pp > 0) ap++; dN += r.live_placements || 0; dP += r.live_prev || 0; const hl = String(r.headline || "").toLowerCase().trim(); if (hl === "new") newN++; else if (hl === "lapsed") lostN++; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length), ros = an ? c / an : 0, rosPrev = ap ? p / ap : 0, perNow = an ? dN / an : 0, perPrev = ap ? dP / ap : 0; return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color, ros, rosPct: rosPrev > 0 ? Math.round((100 * (ros - rosPrev)) / rosPrev) : null, newN, lostN, distPct: dP > 0 ? Math.round((100 * (dN - dP)) / dP) : null, distPerPct: perPrev > 0 ? Math.round((100 * (perNow - perPrev)) / perPrev) : null }; };
       const tiers3 = [tstat("Large", bySize.slice(0, c1)), tstat("Mid", bySize.slice(c1, c2)), tstat("Small", bySize.slice(c2, c3))];
-      return { label, key, cur, curPct, acctNow, acctPct: acctNow ? Math.round((100 * (newA - lostA)) / acctNow) : null, rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers, treeVit: stSc.vit, treeColor: stSc.color, quarters, windows, tiers3 };
+      const fc = fcByState ? fcByState[key] : null;
+      const l52w = fc ? Math.round(fc.L52) : null, proj52w = fc ? Math.round(fc.fc52) : null, projPct = (fc && l52w > 0) ? Math.round((proj52w - l52w) / l52w * 100) : null;   // Current/Projected Annual straight from the desktop engine (ties out exactly)
+      return { label, key, cur, curPct, acctNow, acctPct: acctNow ? Math.round((100 * (newA - lostA)) / acctNow) : null, rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers, treeVit: stSc.vit, treeColor: stSc.color, quarters, windows, tiers3, distNow, distPrev, distPct: gpct(distNow, distPrev), l52w, proj52w, projPct };
     };
     const byState = {};
     for (const r of rows) { if (!r.state) continue; (byState[r.state] || (byState[r.state] = [])).push(r); }
     const states = Object.keys(byState).map(st => mk(STNAME[st] || st, st, byState[st])).sort((a, b) => b.cur - a.cur);
     return [mk("All accounts", "ALL", rows), ...states];
-  }, [rows]);
+  }, [rows, fcByState]);
   // top chains across the whole book — for the chain orchard (tap → that chain's report)
   const chains = useMemo(() => {
     if (!rows) return null;
@@ -862,10 +892,20 @@ export default function Home() {
             <div className="riseIn" style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "11px 10px" }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
-              <div key={cur.key} className="sceneFade" style={{ display: "flex" }}>
-                <Stat label="90D Cases" value={cur.cur.toLocaleString()} pct={cur.curPct} delay={0} />
-                <Stat label="Active Accts" value={cur.acctNow.toLocaleString()} pct={cur.acctPct} divider delay={0.9} />
-                <Stat label="ROS / Acct" value={cur.rosNow.toFixed(1)} unit="cs" pct={cur.rosPct} divider delay={1.8} />
+              <div key={cur.key} className="sceneFade">
+                {/* top bar — 90D · Accounts · Placements · ROS */}
+                <div style={{ display: "flex" }}>
+                  <Stat label="90D Cases" value={kf(cur.cur)} pct={cur.curPct} delay={0} />
+                  <Stat label="Accounts" value={cur.acctNow.toLocaleString()} pct={cur.acctPct} divider delay={0.5} />
+                  <Stat label="Placements" value={kf(cur.distNow)} pct={cur.distPct} divider delay={1.0} />
+                  <Stat label="ROS / Acct" value={cur.rosNow.toFixed(1)} unit="cs" pct={cur.rosPct} divider delay={1.5} />
+                </div>
+                {/* annual line — current · projected · growth (centered; projected in forecast blue) */}
+                <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 9, paddingTop: 8, borderTop: "0.5px solid var(--border)" }}>
+                  <SmallStat label="Current Annual" value={cur.l52w == null ? "—" : kf(cur.l52w)} />
+                  <SmallStat label="Projected Annual" value={cur.proj52w == null ? "—" : kf(cur.proj52w)} color="#5b6bd0" />
+                  <SmallStat label="Growth" value={cur.projPct == null ? "—" : `${cur.projPct > 0 ? "+" : ""}${cur.projPct}%`} color={cur.projPct > 0 ? "var(--up)" : cur.projPct < 0 ? "var(--down)" : "var(--text-3)"} />
+                </div>
               </div>
             </div>
             </div>
