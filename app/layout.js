@@ -1,19 +1,20 @@
 import "./globals.css";
-import { Plus_Jakarta_Sans, Fraunces, Spline_Sans_Mono } from "next/font/google";
+import { Inter_Tight, Inter, Plus_Jakarta_Sans } from "next/font/google";
 import TopChrome from "../components/TopChrome";
 import { ThemeProvider } from "../lib/theme";
 
-// Typography: Plus Jakarta (sans), Fraunces (serif headings), Spline Mono (figures).
-const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-jakarta", display: "swap" });
-const fraunces = Fraunces({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-fraunces", display: "swap" });
-const spline = Spline_Sans_Mono({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-spline", display: "swap" });
+// Typography (Joe's call, Aug 12 2026): Inter Tight for headlines + figures, Inter for
+// body text, and the ShelfStory logo keeps its original Plus Jakarta wordmark.
+const interTight = Inter_Tight({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"], variable: "--font-intertight", display: "swap" });
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter", display: "swap" });
+const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["700", "800"], variable: "--font-jakarta", display: "swap" });
 
 export const metadata = { title: "ShelfStory", description: "Account intelligence for field sales" };
 export const viewport = { width: "device-width", initialScale: 1, maximumScale: 1 };
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${jakarta.variable} ${fraunces.variable} ${spline.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${interTight.variable} ${inter.variable} ${jakarta.variable}`}>
       <body>
         <script dangerouslySetInnerHTML={{ __html: "try{var t=localStorage.getItem('ssTheme');if(['cupertino','pixel','watercolor','lowpoly','bonsai'].indexOf(t)>=0)document.documentElement.dataset.theme=t;if(localStorage.getItem('ssMode')==='night')document.documentElement.dataset.mode='night';}catch(e){}" }} />
         <ThemeProvider>

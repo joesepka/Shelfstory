@@ -120,7 +120,7 @@ function HeaderLogo() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
       <LogoMark size={30} />
-      <span style={{ fontFamily: "var(--font-sans)", fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px" }}>ShelfStory</span>
+      <span style={{ fontFamily: "var(--font-logo)", fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px" }}>ShelfStory</span>
       {profile.name === "brewery" && (
         <button onClick={() => router.push("/bc")} style={{ marginLeft: 6, border: "0.5px solid var(--border-strong)", background: "var(--surface)", color: "var(--accent-deep)", borderRadius: 14, fontSize: 11, fontWeight: 700, padding: "4px 10px", fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>Overview ›</button>
       )}

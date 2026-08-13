@@ -8,9 +8,10 @@
 :root {
   /* ===== ShelfStory skin — warm cream-green, leaf accent ===== */
   /* ---- Fonts (wired from next/font in layout.js) ---- */
-  --font-sans:  var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-serif: var(--font-fraunces), Georgia, serif;
-  --font-mono:  var(--font-spline), "SF Mono", ui-monospace, monospace;
+  --font-sans:  var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: var(--font-intertight), Georgia, "Times New Roman", serif;
+  --font-mono:  var(--font-intertight), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-logo:  var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;   /* the ShelfStory wordmark keeps its original face */
   --lapsed-card-bg: #f1ddd2;
   --lapsed-bg: #8B3A2B;         /* lapsed headline background (was hardcoded) */
   --surface-3: #e7e9e3;         /* third inset tone: grid headers/totals, ~3% under --surface-2 */
@@ -238,3 +239,5 @@
   --up:#5E8A4E; --down:#C0533A;
 }
    ===================================================================== */
+/* Inter Tight is proportional; keep every figure tabular so number columns stay aligned */
+html { font-variant-numeric: tabular-nums; }
