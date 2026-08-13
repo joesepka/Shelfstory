@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
 import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
-import { getScope } from "../../lib/scope";
+import { parseScope, getScope } from "../../lib/scope";
 
 // each play bucket gets a small tree that reads its situation at a glance
 const TONE_TREE = { red: "atrisk", amber: "slipping", green: "thriving", blue: "new", ink: "steady" };
@@ -90,7 +90,7 @@ function ActionsInner() {
   const [chainF, setChainF] = useState("All");
   const go = href => router.push(href);
 
-  useEffect(() => { const sc = getScope(); if (sc) setStF(sc); }, []);   // remembered scope from home
+  useEffect(() => { const sc = parseScope(); if (sc.kind === "state") setStF(sc.value); }, []);   // remembered scope from home (no city filter here, so a city scope is left alone)
 
   useEffect(() => {
     (async () => {

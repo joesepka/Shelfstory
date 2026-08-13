@@ -6,7 +6,7 @@ import Splash from "../../components/Splash";
 import { useExplode } from "../../lib/useExplode";
 import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
-import { getScope } from "../../lib/scope";
+import { parseScope, getScope } from "../../lib/scope";
 import { tierIdSet, TIER_LABEL, sizeIdSet, SIZE_LABEL } from "../../lib/tiers";
 
 
@@ -444,7 +444,7 @@ function BookInner() {
 
   useEffect(() => {
     if (linkState && linkState !== "All") setStF(linkState);
-    else { const sc = getScope(); if (sc) setStF(sc); }   // remembered scope from home
+    else { const sc = parseScope(); if (sc.kind === "city") setCityF(sc.value); else if (sc.kind === "state") setStF(sc.value); }   // remembered scope from home (a city key must not land in the state filter)
     if (linkCity) setCityF(linkCity);
     if (linkChain) setChainF(linkChain);
     if (linkDist) setDistF(linkDist);

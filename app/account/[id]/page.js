@@ -8,8 +8,9 @@ import ItemEstimator from "../../../components/ItemEstimator";
 import AccountTag from "../../../components/AccountTag";
 import { greenBar } from "../../../lib/utils";
 import { profitPerCase, wholesaleOf } from "../../../lib/pricing";
+import { SNAPSHOT } from "../../../lib/snapshot";
 
-const SNAPSHOT = new Date("2026-06-30T00:00:00");
+
 
 const HEAD = {
   "Accelerating": { bg: "var(--growing-bg)", fg: "var(--growing-ink)", bc: "var(--accent)" },
@@ -39,7 +40,7 @@ const round5 = n => Math.round(n / 5) * 5;   // approximate item $ to the neares
 const kf = v => { const a = Math.abs(v || 0); if (a < 1000) return String(Math.round(v || 0)); return ((v || 0) / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "k"; };
 function monthLabel(monthsAgo) {
   // build off day 1 so subtracting months never overflows a short month
-  // (June 30 → "Feb 30" would roll into March, doubling Mar and dropping Feb)
+  // (July 31 → "Feb 31" would roll into March, doubling Mar and dropping Feb)
   const d = new Date(SNAPSHOT.getFullYear(), SNAPSHOT.getMonth() - monthsAgo, 1);
   return d.toLocaleString("en-US", { month: "short" });
 }

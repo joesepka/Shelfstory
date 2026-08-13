@@ -4,8 +4,10 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import Splash from "../../../../../components/Splash";
 import { greenBar } from "../../../../../lib/utils";
+import { profile } from "../../../../../lib/profile";
+import { SNAPSHOT } from "../../../../../lib/snapshot";   // window 0 "data thru" date
 
-const SNAPSHOT = new Date("2026-06-30T00:00:00"); // window 0 "data thru" date
+
 
 function monthLabel(i, withYear) {
   const d = new Date(SNAPSHOT);
@@ -25,8 +27,11 @@ export default function ItemHistory() {
         const [winRes, prodRes, acctRes] = await Promise.all([
           supabase.from("depletions_window").select("window_index, cases")
             .eq("account_id", id).eq("product_key", code).lte("window_index", 11),
-          supabase.from("products").select("product, package").eq("product_key", code).maybeSingle(),
-          supabase.from("accounts").select("account_name").eq("account_id", id).maybeSingle(),
+          // the brewery world names these item_market / account_list; the demo world uses products / accounts
+          profile.name === "brewery"
+            ? supabase.from("item_market").select("item_name, package").eq("product_key", code).maybeSingle()
+            : supabase.from("products").select("product, package").eq("product_key", code).maybeSingle(),
+          supabase.from(profile.name === "brewery" ? "account_list" : "accounts").select("account_name").eq("account_id", id).maybeSingle(),
         ]);
         if (winRes.error) throw winRes.error;
 
@@ -43,7 +48,7 @@ export default function ItemHistory() {
         const lost = (byIdx[0] || 0) === 0;
 
         setData({
-          item: prodRes.data?.product || "Item",
+          item: prodRes.data?.item_name || prodRes.data?.product || "Item",
           package: prodRes.data?.package || "",
           account: acctRes.data?.account_name || "",
           months, total, peak, avg, lastOrdered, lost,

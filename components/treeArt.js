@@ -50,9 +50,8 @@ export function fluidTree(h) {
   const f = h, col = fluidRamp(h), dk = darken(col, 0.76), wood = mix("#9a958c", "#87684a", h);
   const cy = 33 - h * 5, spread = 0.6 + 0.4 * h, blobR = f * 6.6;
   let o = `<ellipse cx="30" cy="59" rx="${(6 + f * 6).toFixed(1)}" ry="2.2" fill="#2f3d28" opacity="0.07"/>`;
-  o += `<rect x="28.4" y="${(37 - h * 3).toFixed(1)}" width="3.2" height="${(21 + h * 3).toFixed(1)}" rx="1.6" fill="${wood}"/>`;
   const bo = (0.9 - 0.7 * h).toFixed(2);
-  [[30, 18, 2], [19, 25, 2], [41, 24, 2.2], [23, 31, 1.6], [38, 30, 1.6]].forEach(b => { o += `<line x1="30" y1="41" x2="${b[0]}" y2="${b[1]}" stroke="${wood}" stroke-width="${b[2]}" stroke-linecap="round" opacity="${bo}"/>`; });
+  o += bareBranches(wood, bo, true);   // trunk + forked limbs, same shape as the desktop
   FCL.forEach((p, i) => { const r = blobR * (0.78 + ((i * 53) % 9) / 22); if (r < 0.7) return; const x = 30 + p[0] * spread, y = cy + p[1] * spread; o += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${i % 3 === 0 ? dk : col}"/>`; });
   o += `<ellipse cx="${(30 - 4 * spread).toFixed(1)}" cy="${(cy - 5).toFixed(1)}" rx="${(4 * f).toFixed(1)}" ry="${(3 * f).toFixed(1)}" fill="#fff" opacity="${(0.2 * f).toFixed(2)}"/>`;
   const fr = clamp((h - 0.82) * 6, 0, 1);
@@ -63,15 +62,33 @@ export function fluidTree(h) {
 }
 
 // ---- shared primitives ----
+// Bare branch structure — IDENTICAL to shelfcast/components/treeArt.js E_BARE. The two apps
+// are the same product; a dead tree must look the same in both. `o` fades the limbs in/out
+// (fluidTree shows them through a thinning canopy); `t` includes the trunk.
+export function bareBranches(col, o = 1, t = true) {
+  const P = (d, sw) => `<path d="${d}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" opacity="${o}"/>`;
+  return (
+    (t ? P("M29.5 58 Q30.3 49 30 41", 3.0) + P("M30 41 Q29.7 34 30.6 27.5", 2.0) : "") +
+    P("M30 41.5 Q24.5 38 20.5 30.5", 1.9) +
+    P("M20.5 30.5 Q17.5 26 16 21", 1.2) +
+    P("M20.5 30.5 Q20 25.5 21.5 22", 0.95) +
+    P("M30.2 37 Q35.5 34 39.5 27.5", 1.9) +
+    P("M39.5 27.5 Q43 23.5 44.5 19", 1.2) +
+    P("M39.5 27.5 Q38.8 23.5 39.3 19.5", 0.95) +
+    P("M30.6 27.5 Q29 22.5 27.6 18", 1.3) +
+    P("M30.6 27.5 Q33 22.5 34 18.5", 1.15) +
+    P("M30.6 27.5 Q30.9 23.5 30.7 20", 0.9)
+  );
+}
 const TR = `<rect x="28" y="38" width="4" height="20" rx="1.6" fill="#bfa988"/>`;
 const shadow = rx => `<ellipse cx="30" cy="59" rx="${(rx * 0.85).toFixed(1)}" ry="2.1" fill="#000" opacity="0.05"/>`;
 const sheen = (cx, cy, rx, ry) => `<ellipse cx="${(cx - rx * 0.3).toFixed(1)}" cy="${(cy - ry * 0.34).toFixed(1)}" rx="${(rx * 0.4).toFixed(1)}" ry="${(ry * 0.3).toFixed(1)}" fill="#fff" opacity="0.2"/>`;
 function smoothDead() {
-  return `<ellipse cx="30" cy="59" rx="9" ry="2.1" fill="#000" opacity="0.04"/><rect x="28" y="36" width="4" height="22" rx="2" fill="#b09a7c"/><line x1="30" y1="38" x2="20" y2="22" stroke="#a99e8e" stroke-width="2.6" stroke-linecap="round"/><line x1="30" y1="38" x2="40" y2="22" stroke="#a99e8e" stroke-width="2.6" stroke-linecap="round"/><line x1="30" y1="42" x2="23" y2="31" stroke="#a99e8e" stroke-width="2" stroke-linecap="round"/><line x1="30" y1="42" x2="37" y2="31" stroke="#a99e8e" stroke-width="2" stroke-linecap="round"/><line x1="30" y1="36" x2="30" y2="20" stroke="#a99e8e" stroke-width="2" stroke-linecap="round"/>`;
+  return `<ellipse cx="30" cy="59" rx="7.2" ry="2.1" fill="#000" opacity="0.05"/>` + bareBranches("#a99e8e", 1, true);
 }
 function classicBare() {
-  return `<ellipse cx="30" cy="59" rx="9" ry="2.1" fill="#000" opacity="0.04"/><rect x="28" y="34" width="4" height="24" rx="1.4" fill="#9a6a52"/>`
-    + [[30, 18, 2.2], [18, 24, 2.2], [42, 24, 2.2], [22, 30, 1.8], [38, 30, 1.8]].map(([x, y, w]) => `<line x1="30" y1="36" x2="${x}" y2="${y}" stroke="#9a958c" stroke-width="${w}" stroke-linecap="round"/>`).join("")
+  return `<ellipse cx="30" cy="59" rx="7.2" ry="2.1" fill="#000" opacity="0.05"/>`
+    + bareBranches("#8f7c67", 1, true)
     + [[22, 55], [34, 55]].map(([x, y]) => `<ellipse cx="${x}" cy="${y}" rx="2.3" ry="1.2" fill="#8d877d" opacity="0.85"/>`).join("");
 }
 // DECLINING ("super at risk") = a dying tree: dead grey-brown branches, only a few
@@ -117,12 +134,14 @@ const FBs = [[21, 55], [30, 56], [39, 55], [25, 54]];
 // NEW (tree skins) = a young budding sapling.
 function saplingArt(theme) {
   const stem = "#7aa757", lc = theme === "cupertino" ? "#5cc591" : "#6abf86";
-  let o = `<ellipse cx="30" cy="59" rx="7" ry="1.8" fill="#000" opacity="0.05"/>`;
-  o += `<path d="M30 58 Q 27.5 47 30 39 Q 31.5 34 30 30" fill="none" stroke="${stem}" stroke-width="2" stroke-linecap="round"/>`;
-  o += leaf(30, 47, -52, 10, 3.2, lc) + leaf(30, 50, 58, 9, 3, lighten(lc, 0.12));
-  if (theme === "cupertino") o += `<ellipse cx="30" cy="29" rx="5" ry="5.4" fill="${lc}"/>` + sheen(30, 29, 5, 5.4);
-  else o += `<circle cx="30" cy="29" r="3.4" fill="#5bb47e"/><circle cx="27" cy="32" r="3" fill="#7bc49a"/><circle cx="33" cy="32" r="3" fill="#7bc49a"/>`;
-  o += `<path d="M30 25 q 2 -1.3 0 -4.6 q -2 1.3 0 4.6 Z" fill="#9ed08a"/>`;
+  // stem/leaf/crown geometry matches the desktop's E_SAPLING at grow = 1
+  let o = `<ellipse cx="30" cy="59" rx="9" ry="1.8" fill="#000" opacity="0.05"/>`;
+  o += `<path d="M30 58 Q 27.5 39 30 30 Q 31.5 25 30 21" fill="none" stroke="${stem}" stroke-width="2" stroke-linecap="round"/>`;
+  o += `<ellipse cx="25" cy="39" rx="6.2" ry="3.2" transform="rotate(-28 25 39)" fill="${lc}"/>`;
+  o += `<ellipse cx="34.6" cy="47" rx="5.7" ry="3" transform="rotate(30 34.6 47)" fill="${lighten(lc, 0.12)}"/>`;
+  if (theme === "cupertino") o += `<ellipse cx="30" cy="22.2" rx="5.6" ry="6" fill="${lc}"/>` + sheen(30, 22.2, 5.6, 6);
+  else o += `<circle cx="30" cy="22.2" r="4.3" fill="#5bb47e"/><circle cx="26.3" cy="25.6" r="3.8" fill="#7bc49a"/><circle cx="33.7" cy="25.6" r="3.8" fill="#7bc49a"/>`;
+  o += `<path d="M30 16.8 q 2 -1.3 0 -4.6 q -2 1.3 0 4.6 Z" fill="#9ed08a"/>`;
   return o;
 }
 
