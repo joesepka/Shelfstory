@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../lib/supabase";
 import { run, fsum, autoForecast } from "../lib/forecast";
@@ -231,12 +231,12 @@ function Stat({ label, value, unit, pct, divider, delay = 0 }) {
   const arrow = pct == null ? "" : pct > 0 ? "▲" : pct < 0 ? "▼" : "▬";
   return (
     <div style={{ flex: 1, minWidth: 0, textAlign: "center", borderLeft: divider ? "1px solid var(--border-strong)" : "none" }}>
-      <div style={{ fontSize: 10, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, height: 22, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
+      <div style={{ fontSize: 10, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
       <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 2, marginTop: 3 }}>
         <span className="statfloat" style={{ fontSize: 24, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1', animationDelay: `${delay}s` }}>{value}</span>
         {unit && <span style={{ fontSize: 9.5, color: "var(--text-3)" }}>{unit}</span>}
       </div>
-      <div style={{ fontSize: 9.5, fontWeight: 700, color: c, marginTop: 5 }}>
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: c, marginTop: 3 }}>
         {arrow} {pct == null ? "—" : `${Math.abs(pct)}%`}
       </div>
     </div>
@@ -543,57 +543,76 @@ function tierSignal(t) {
 }
 function tierTag(t) { const s = tierSignal(t); return s.kind ? { text: s.text, tone: s.tone } : null; }
 
-// three volume tiers standing on the Fair Skies rolling ground — Large / Mid / Small,
-// each a fluid health tree (color + fullness) with its stats, split by a soft divider.
-// ONE tree for whatever slide you're on. Health is the rolled-up read for that scope;
-// the tree is drawn larger for more volume, so Illinois towers over a small city and the
-// cities size against each other honestly. Replaces the Large/Mid/Small tier hill.
-// The stage is a FIXED height and the ground bleeds edge to edge, so the sky runs straight
-// into it with no card seam and nothing shifts as you swipe between scopes. Only the tree
-// itself changes size (by volume); it is bottom-anchored so the trunk stays in the soil.
-const STAGE_H = 268;      // never changes — this is what stops the page jumping on swipe
+// The landscape stage — fills whatever screen height is left so the whole home is exactly
+// one phone screen, no scrolling. Territory trees ride a horizontal CAROUSEL: the active
+// tree stands centered on the grass, its neighbors peek in from the edges, and a swipe
+// drags the whole row finger-follow, snapping one tree left or right. The sun/moon live
+// inside the scene, the health word is a chip up top, and the territory read floats as a
+// card on the field. Grass starts halfway up so the card sits on green, not sky.
 const BLEED = 20;         // main's horizontal padding, cancelled so the ground is full width
-function ScopeTree({ cur, maxCur, onOpen }) {
+function ScopeTree({ slides, idx, cur, dragDx, dragging, onOpen }) {
   const { night } = useTheme();
-  // one steady tree — same size on every slide, regardless of volume (Joe's rule)
-  const size = 218;
+  const stRef = useRef(null);
+  const [stW, setStW] = useState(392);   // measured stage size drives the carousel geometry
+  const [stH, setStH] = useState(430);
+  useLayoutEffect(() => {
+    const m = () => { if (stRef.current) { setStW(stRef.current.clientWidth || 392); setStH(stRef.current.clientHeight || 430); } };
+    m(); window.addEventListener("resize", m);
+    return () => window.removeEventListener("resize", m);
+  }, []);
+  const CELL = Math.round(stW * 0.55);               // one tree per cell; neighbors peek in ~40px at the edges
+  const baseX = Math.round((stW - CELL) / 2) - idx * CELL;
+  const size = Math.min(292, Math.round(Math.min(stW * 0.72, stH * 0.58)));
   // the scope's health word — same bands + colors as the desktop status scale
   const vitStatus = v => v >= 0.80 ? ["Surging", "#2f9d63"] : v >= 0.62 ? ["Healthy", "#3f8a5a"] : v >= 0.48 ? ["Steady", "#8a8f98"] : v >= 0.37 ? ["Softening", "#cf8a54"] : v >= 0.26 ? ["Slipping", "#c0783c"] : v >= 0.15 ? ["At Risk", "#c0564e"] : ["Critical", "#a5342b"];
   const [stWord, stColor] = vitStatus(cur.treeVit || 0.5);
   return (
-    <div style={{ marginTop: 2 }}>
-      <div onClick={onOpen} style={{ position: "relative", cursor: "pointer", height: STAGE_H, overflow: "hidden",
-        marginLeft: -BLEED, marginRight: -BLEED }}>
-        {/* ground: sits on the page's own sky, no panel behind it */}
-        <svg viewBox="0 0 380 268" preserveAspectRatio="none" aria-hidden="true"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
-          <defs><linearGradient id="stHill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={night ? "#34502f" : "#8fbd72"} stopOpacity={night ? "0.7" : "0.55"} />
-            <stop offset="1" stopColor={night ? "#16241a" : "#6f9e5a"} stopOpacity={night ? "0.25" : "0.16"} /></linearGradient></defs>
-          <path d="M0 228 C 70 210, 150 224, 220 217 C 290 210, 340 224, 380 214 L380 268 L0 268 Z" fill="url(#stHill)" />
-          <path d="M0 228 C 70 210, 150 224, 220 217 C 290 210, 340 224, 380 214" fill="none"
-            stroke={night ? "rgba(150,200,140,.4)" : "#eaf3df"} strokeWidth="1.5" opacity="0.8" />
-        </svg>
-        {/* the tree stands to the LEFT, planted past the grass line; the blurb rides the sky beside it */}
-        <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", paddingLeft: 16, paddingBottom: 13 }}>
-          <FluidTree key={cur.key} h={cur.treeVit} size={size} play={true} delay={60} />
+    <div ref={stRef} onClick={onOpen} style={{ position: "relative", cursor: "pointer", flex: 1, minHeight: 240, overflow: "hidden", marginLeft: -BLEED, marginRight: -BLEED, marginTop: 6 }}>
+      {/* ground — the grass line sits halfway up so the read card floats on the field */}
+      <svg viewBox="0 0 380 268" preserveAspectRatio="none" aria-hidden="true"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
+        <defs><linearGradient id="stHill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={night ? "#34502f" : "#8fbd72"} stopOpacity={night ? "0.7" : "0.55"} />
+          <stop offset="1" stopColor={night ? "#16241a" : "#6f9e5a"} stopOpacity={night ? "0.25" : "0.16"} /></linearGradient></defs>
+        <path d="M0 166 Q 190 102 380 166 L380 268 L0 268 Z" fill="url(#stHill)" />
+        <path d="M0 166 Q 190 102 380 166" fill="none"
+          stroke={night ? "rgba(150,200,140,.4)" : "#eaf3df"} strokeWidth="1.5" opacity="0.8" />
+      </svg>
+      {/* sun & moon live in the scene */}
+      <div aria-hidden="true" style={{ position: "absolute", top: 12, right: 22, width: 54, height: 68, zIndex: 0, pointerEvents: "none" }}>
+        <div style={{ position: "absolute", top: 8, right: 11, width: 34, height: 34, transition: "transform .8s cubic-bezier(.5,.03,.25,1), opacity .5s ease", transform: night ? "translateY(60px)" : "translateY(0)", opacity: night ? 0 : 1 }}>
+          <div style={{ position: "absolute", inset: -7, background: "radial-gradient(circle at 55% 44%, rgba(242,201,120,.5), rgba(242,201,120,.12) 50%, transparent 74%)" }} />
+          <div style={{ position: "absolute", inset: 3, borderRadius: "50%", background: "radial-gradient(circle at 38% 34%, #f5d68f, #ecbb61 66%, #e3a842)", boxShadow: "0 0 18px 4px rgba(236,187,97,.32)" }} />
         </div>
-        <div key={"st" + cur.key} className="sceneFade" style={{ position: "absolute", top: 8, left: 16, width: Math.round(size * 60 / 62), textAlign: "center", zIndex: 2 }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: stColor }}>{stWord}</span>
-        </div>
-        <div style={{ position: "absolute", top: "48%", transform: "translateY(-50%)", left: 236, right: 12, zIndex: 2 }}>
-          <TerrBlurb cur={cur} />
+        <div style={{ position: "absolute", top: 6, right: 7, width: 40, height: 40, transition: "transform .8s cubic-bezier(.5,.03,.25,1), opacity .5s ease", transform: night ? "translateY(0)" : "translateY(60px)", opacity: night ? 1 : 0 }}>
+          <svg viewBox="0 0 44 44" width="40" height="40" style={{ filter: "drop-shadow(0 0 7px rgba(200,208,196,.4))" }}><path d="M29 6 A 16 16 0 1 0 29 38 A 13 16 0 1 1 29 6 Z" fill="#b7bfb2" /></svg>
         </div>
       </div>
-      {/* the ground fades out beneath — the numbers already live in the bars up top */}
-      <div style={{ marginLeft: -BLEED, marginRight: -BLEED, height: 10,
-        background: night ? "linear-gradient(180deg, rgba(52,80,47,.30), rgba(52,80,47,0))" : "linear-gradient(180deg, rgba(111,158,90,.16), rgba(111,158,90,0))" }} />
+      {/* the tree carousel — every territory's tree in a row; a swipe slides the row */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", transform: `translateX(${baseX + dragDx}px)`, transition: dragging ? "none" : "transform .5s cubic-bezier(.22,.61,.36,1)", willChange: "transform" }}>
+        {slides.map((s, i) => (
+          <div key={s.key} style={{ flex: `0 0 ${CELL}px`, position: "relative" }}>
+            <div style={{ position: "absolute", left: "50%", bottom: `calc(50% - ${10 + Math.round(size * 0.14)}px)`, transform: `translateX(-50%) translateY(${i === idx ? 0 : 40}px) scale(${i === idx ? 1 : 0.72})`, transformOrigin: "50% 100%", opacity: i === idx ? 1 : 0.55, filter: i === idx ? "none" : "saturate(.85)", transition: "transform .5s cubic-bezier(.22,.61,.36,1), opacity .5s ease" }}>
+              <FluidTree h={s.treeVit} size={size} play={true} delay={90} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* health word chip — top left of the scene */}
+      <div key={"st" + cur.key} className="sceneFade" style={{ position: "absolute", top: 12, left: 30, zIndex: 3 }}>
+        <span style={{ display: "inline-flex", padding: "4px 11px", borderRadius: 999, background: `${stColor}1f`, fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: 1.3, textTransform: "uppercase", color: stColor }}>{stWord}</span>
+      </div>
+      {/* the territory read — a frosted card floating on the grass */}
+      <div key={"tb" + cur.key} className="sceneFade" style={{ position: "absolute", left: 30, right: 30, bottom: 12, zIndex: 3, background: night ? "rgba(16,24,17,.72)" : "rgba(255,255,255,.78)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", border: "0.5px solid var(--border)", borderRadius: 18, boxShadow: "var(--shadow-pop)", padding: "10px 14px 11px" }}>
+        <div style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, fontWeight: 700, letterSpacing: 1.6, textTransform: "uppercase", color: "var(--text-3)", marginBottom: 5 }}>Territory read</div>
+        <TerrBlurb cur={cur} />
+      </div>
     </div>
   );
 }
 
-// the little sky blurb beside the tree — overall trend + the one or two need-to-knows,
-// scoped to whatever slide is showing (reads the same brief the pills read)
+// the territory read lines — overall trend + the one or two need-to-knows + the bright
+// spot, scoped to whatever slide is showing (reads the same brief the pills read)
 function TerrBlurb({ cur }) {
   const b = cur.brief || {};
   const g = cur.curPct;
@@ -611,13 +630,12 @@ function TerrBlurb({ cur }) {
     : (b.distPct != null && b.distPct >= 3) ? <span>distribution grew <b style={green}>+{b.distPct}%</b></span>
     : b.newCount > 0 ? <span><b style={green}>{b.newCount} new account{b.newCount === 1 ? "" : "s"}</b> opened</span> : null;
   return (
-    <div key={cur.key} className="sceneFade" style={{ position: "relative", paddingLeft: 11, fontFamily: "var(--font-serif)", fontSize: 11.5, lineHeight: 1.4, color: "var(--text-2)", letterSpacing: "0.1px" }}>
-      <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 3, bottom: 3, width: 3, borderRadius: 3, background: "linear-gradient(var(--accent), rgba(132,178,104,.15))" }} />
+    <div style={{ fontFamily: "var(--font-serif)", fontSize: 12, lineHeight: 1.45, color: "var(--text-2)", letterSpacing: "0.1px" }}>
       <div><b style={{ color: "var(--text)", fontWeight: 700 }}>{scope}</b> is <b style={{ color: trendColor, fontWeight: 700 }}>{trend}</b> over 90 days.</div>
       {lines.slice(0, 2).map((l, i) => <div key={i} style={{ marginTop: 3 }}>{l}</div>)}
       {pos && <div style={{ marginTop: 3 }}>Bright spot — {pos}.</div>}
       {!lines.length && !pos && <div style={{ marginTop: 3 }}>Nothing urgent on the watch list.</div>}
-      <div style={{ marginTop: 6, fontFamily: "var(--font-sans)", fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", opacity: 0.9 }}>tap the tree for accounts →</div>
+      <div style={{ marginTop: 7, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, color: "var(--accent-deep)", opacity: 0.95 }}>tap the tree for accounts →</div>
     </div>
   );
 }
@@ -803,7 +821,6 @@ export default function Home() {
   const movedRef = useRef(false);   // a real swipe suppresses the tree's tap-through
   const [dragDx, setDragDx] = useState(0);
   const [dragging, setDragging] = useState(false);
-  const [noTrans, setNoTrans] = useState(false);
   const { burst, styleFor } = useExplode();
   const { night, setNight } = useTheme();
 
@@ -974,15 +991,11 @@ export default function Home() {
     burst(href, () => router.push(href)); // explode the cards, then navigate
   }
   function pick(i) { if (!slides) return; setSlide(i); setScope(slides[i].key === "ALL" ? "" : slides[i].key); }
-  function go(d) { if (!slides) return; const n = slides.length; pick((slide + d + n) % n); }
-  // Gmail-style drag: the bar follows the finger with a little rubber-band, then
-  // snaps back and commits to the next/prev slide if dragged past the threshold.
+  // Finger-follow drag: the tree carousel tracks the finger with a little rubber-band,
+  // then snaps one tree left/right if dragged past the threshold (no wrap at the ends).
   function onDown(e) { if (!slides || slides.length < 2) return; drag.current = { x: e.clientX, on: true }; movedRef.current = false; setDragging(true); }
   function onMove(e) { if (!drag.current.on) return; let d = e.clientX - drag.current.x; if (Math.abs(d) > 8) movedRef.current = true; if (Math.abs(d) > 90) d = (d > 0 ? 1 : -1) * (90 + (Math.abs(d) - 90) * 0.35); setDragDx(d); }
-  function onUp() { if (!drag.current.on) return; drag.current.on = false; setDragging(false); const d = dragDx; if (d < -48) commit(1); else if (d > 48) commit(-1); else setDragDx(0); }
-  // carousel commit: slide the card out the way it was swiped, swap, then slide the
-  // new card in from the other side — a full rotate rather than a snap-back.
-  function commit(dir) { const W = 440; setDragDx(dir === 1 ? -W : W); setTimeout(() => { go(dir); setNoTrans(true); setDragDx(dir === 1 ? W : -W); requestAnimationFrame(() => requestAnimationFrame(() => { setNoTrans(false); setDragDx(0); })); }, 300); }
+  function onUp() { if (!drag.current.on) return; drag.current.on = false; setDragging(false); const d = dragDx; if (slides) { if (d < -48 && slide < slides.length - 1) pick(slide + 1); else if (d > 48 && slide > 0) pick(slide - 1); } setDragDx(0); }
 
   return (
     <>
@@ -998,23 +1011,11 @@ export default function Home() {
       <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "linear-gradient(180deg,#b6dcf1 0%,#cce4f4 16%,#d7e6df 46%,#f6f7f4 66%)" }} />
       <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "linear-gradient(180deg,#0c1830 0%,#0f1c22 24%,#0d140e 56%)", opacity: night ? 1 : 0, transition: "opacity .8s ease" }} />
 
-      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", padding: "10px 20px 6px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
-        {/* the sun sets & the moon rises when you toggle night — a little time-of-day transition */}
-        {/* no overflow clip here — it sliced the sun's glow into a visible rectangle against the
-            sky. The parked body is hidden by its own opacity, so nothing leaks without it. */}
-        <div aria-hidden="true" style={{ position: "absolute", top: 40, right: 12, width: 54, height: 68, zIndex: 0, pointerEvents: "none" }}>
-          <div style={{ position: "absolute", top: 8, right: 11, width: 34, height: 34, transition: "transform .8s cubic-bezier(.5,.03,.25,1), opacity .5s ease", transform: night ? "translateY(60px)" : "translateY(0)", opacity: night ? 0 : 1 }}>
-            <div style={{ position: "absolute", inset: -7, background: "radial-gradient(circle at 55% 44%, rgba(242,201,120,.5), rgba(242,201,120,.12) 50%, transparent 74%)" }} />
-            <div style={{ position: "absolute", inset: 3, borderRadius: "50%", background: "radial-gradient(circle at 38% 34%, #f5d68f, #ecbb61 66%, #e3a842)", boxShadow: "0 0 18px 4px rgba(236,187,97,.32)" }} />
-          </div>
-          <div style={{ position: "absolute", top: 6, right: 7, width: 40, height: 40, transition: "transform .8s cubic-bezier(.5,.03,.25,1), opacity .5s ease", transform: night ? "translateY(0)" : "translateY(60px)", opacity: night ? 1 : 0 }}>
-            <svg viewBox="0 0 44 44" width="40" height="40" style={{ filter: "drop-shadow(0 0 7px rgba(200,208,196,.4))" }}><path d="M29 6 A 16 16 0 1 0 29 38 A 13 16 0 1 1 29 6 Z" fill="#b7bfb2" /></svg>
-          </div>
-        </div>
+      <main className="pagefade" style={{ position: "relative", height: "100dvh", display: "flex", flexDirection: "column", padding: "10px 20px 6px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
         <svg className="cl cl1" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 58, left: -24, width: 124, opacity: night ? 0.1 : 0.8, zIndex: 0, transition: "opacity .8s ease" }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
         <svg className="cl cl2" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 104, right: -12, width: 90, opacity: night ? 0.08 : 0.6, zIndex: 0, transition: "opacity .8s ease" }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
 
-        <div style={{ position: "relative", zIndex: 1 }}>
+        <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
         {/* top row: greeting (kept low-key) + logo */}
         <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, height: 34 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
@@ -1027,17 +1028,16 @@ export default function Home() {
 
         {/* the scope you're viewing — centered + prominent */}
         {cur && (
-          <div className="riseIn" style={{ marginTop: 4, textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: 21, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.02 }}>{cur.key === "ALL" ? (brewery ? cur.label : "All states") : cur.label}</div>
-            <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 1 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the stats to change" : ""}</div>
+          <div className="riseIn" style={{ marginTop: 8, textAlign: "center" }}>
+            <div key={cur.key} className="sceneFade" style={{ fontFamily: "var(--font-serif)", fontSize: 34, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.6px", lineHeight: 1.04 }}>{cur.key === "ALL" ? (brewery ? cur.label : "All states") : cur.label}</div>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the landscape to change" : ""}</div>
           </div>
         )}
 
         {/* info box (swipeable) — 90D cases / accts / ROS — ABOVE the brief */}
         {cur && (
-          <div style={{ marginTop: 14, touchAction: "pan-y", cursor: slides && slides.length > 1 ? "grab" : "default" }}
+          <div style={{ marginTop: 10, touchAction: "pan-y", cursor: slides && slides.length > 1 ? "grab" : "default", ...(brewery ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } : {}) }}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
-            <div style={{ transform: `translateX(${dragDx}px)`, transition: (dragging || noTrans) ? "none" : "transform .3s cubic-bezier(.2,.7,.2,1)" }}>
             <div className="riseIn" style={{ position: "relative", background: night ? "rgba(18,28,20,.48)" : "rgba(255,255,255,.48)", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "8px 10px" }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
@@ -1051,7 +1051,6 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            </div>
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 4 }}>
               {slides.slice(0, 9).map((sl, i) => (
                 <span key={i} onClick={() => pick(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
@@ -1060,7 +1059,7 @@ export default function Home() {
             </div>
             <div style={{ textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 1 }}>vs prior 90 days</div>
             <div style={{ height: 4 }} />
-            {brewery && <ScopeTree cur={cur} maxCur={maxSlideCur} onOpen={() => { if (movedRef.current) return; setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />}
+            {brewery && <ScopeTree slides={slides} idx={slide} cur={cur} dragDx={dragDx} dragging={dragging} onOpen={() => { if (movedRef.current) return; setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />}
           </div>
         )}
 
@@ -1082,9 +1081,9 @@ export default function Home() {
           ))}
 
         {/* primary nav — moved to the bottom, under the trees, so the section flows */}
-        <div className="riseIn" style={{ display: "grid", gridTemplateColumns: brewery ? "repeat(5, 1fr)" : "1fr 1fr", gap: 6, marginTop: 12 }}>
+        <div className="riseIn" style={{ display: "grid", gridTemplateColumns: brewery ? "repeat(5, 1fr)" : "1fr 1fr", gap: 6, marginTop: 12, flexShrink: 0 }}>
           {(brewery ? [NAV[0], NAV[1], NAV_OVERVIEW, NAV[2], NAV[3]] : NAV).map((c) => (
-            <div key={c.href} onClick={() => router.push(c.href)} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "9px 2px 8px", borderRadius: 16, cursor: "pointer", border: night ? "1px solid var(--border)" : "none", background: night ? "linear-gradient(180deg,#212c22,#18211a)" : "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: night ? "0 8px 20px -14px rgba(0,0,0,.55)" : "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
+            <div key={c.href} onClick={() => router.push(c.href)} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "9px 2px 8px", borderRadius: 22, cursor: "pointer", border: night ? "1px solid var(--border)" : "none", background: night ? "linear-gradient(180deg,#212c22,#18211a)" : "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: night ? "0 8px 20px -14px rgba(0,0,0,.55)" : "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{c.icon}</svg>
               <span style={{ fontSize: 9.5, color: "var(--text-2)", letterSpacing: "0.1px", whiteSpace: "nowrap" }}>{c.tab === "Drill Down" ? "Drill" : c.tab}</span>
             </div>
@@ -1092,7 +1091,7 @@ export default function Home() {
         </div>
 
         <div style={{ height: 2 }} />
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4 }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4, flexShrink: 0 }}>
           <button onClick={() => setPickerOpen(true)} aria-label="Change tree style" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 8px", whiteSpace: "nowrap" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 22 11 10 10 0 0 0 12 2Z" /><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" /><circle cx="15.5" cy="7" r="1.4" fill="currentColor" stroke="none" /><circle cx="17.5" cy="12" r="1.4" fill="currentColor" stroke="none" /></svg>
             Change style
