@@ -849,10 +849,7 @@ const RAMP_A = ["#d3e7ea", "#c2dce1", "#afd0d6", "#9bc3ca", "#87b6be", "#71a8b2"
 const rampAt = (R, i, n) => R[Math.min(R.length - 1, Math.round(i / Math.max(1, n - 1) * (R.length - 1)))];
 function TrendGraph({ cases, accts, ros, pct, skey }) {
   const [mode, setMode] = useState(0);        // 0 cases · 1 accounts
-  const [dx, setDx] = useState(0);
-  const [anim, setAnim] = useState(0);        // -1 sliding to next, +1 sliding to prev
-  const [dragging, setDragging] = useState(false);
-  const gd = useRef({ x: 0, on: false });
+  const [anim, setAnim] = useState(0);        // -1 = sliding to the other chart
   const other = 1 - mode;
   const mShort = k => { const t = new Date(SNAPSHOT); t.setMonth(t.getMonth() + k); return t.toLocaleString("en-US", { month: "short" }).toUpperCase(); };
   const N = (cases || []).length || 12;
@@ -861,7 +858,6 @@ function TrendGraph({ cases, accts, ros, pct, skey }) {
   const lastR = (ros || []).length ? ros[ros.length - 1] : null;
   const ramp0 = pct == null ? RAMP_N : pct >= 5 ? RAMP_G : pct <= -12 ? RAMP_R : pct <= -2 ? RAMP_Y : RAMP_N;
   const bnum = (v, m) => m === 0 ? (v >= 1000 ? kf(v) : String(Math.round(v))) : String(Math.round(v));
-  const settle = () => { if (!gd.current.on) return; gd.current.on = false; setDragging(false); if (dx < -40) { setAnim(-1); setDx(0); } else if (dx > 40) { setAnim(1); setDx(0); } else setDx(0); };
   // one chart panel: bars + a number on every bar (+ the desktop's ROS line on accounts)
   const panel = (m, pk) => {
     const vals = m === 0 ? (cases || []) : (accts || []);
@@ -897,14 +893,12 @@ function TrendGraph({ cases, accts, ros, pct, skey }) {
         <span key={"h" + mode} className="sceneFade" style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, letterSpacing: ".09em", color: "var(--text-3)", fontWeight: 600 }}>{mode === 0 ? "CASES · MONTHLY" : "ACTIVE ACCOUNTS · ROLLING 90"}</span>
         <span key={"v" + mode} className="sceneFade" style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{mode === 0 ? `${kf(total)} · 12 mo` : <>{lastA.toLocaleString()} now{lastR != null ? <span style={{ color: "#1f6272" }}> · ros {lastR.toFixed(1)}</span> : null}</>}</span>
       </div>
-      {/* the sliding window: [other | current | other] so either direction always has a
-          neighbor to walk in — finger-follow, snap, then recenter on the new chart */}
-      <div style={{ overflow: "hidden", marginTop: 8, touchAction: "pan-y", cursor: "grab" }}
-        onPointerDown={e => { gd.current = { x: e.clientX, on: true }; setDragging(true); }}
-        onPointerMove={e => { if (!gd.current.on) return; let d = e.clientX - gd.current.x; if (Math.abs(d) > 120) d = (d > 0 ? 1 : -1) * (120 + (Math.abs(d) - 120) * 0.3); setDx(d); }}
-        onPointerUp={settle} onPointerLeave={settle}>
-        <div key={skey + "-" + mode} style={{ display: "flex", width: "300%", transform: `translateX(calc(-33.3333% + ${anim * 33.3333}% + ${dx}px))`, transition: dragging ? "none" : "transform .32s cubic-bezier(.25,.7,.3,1)" }}
-          onTransitionEnd={() => { if (anim !== 0) { setMode(other); setAnim(0); setDx(0); } }}>
+      {/* the sliding window: [other | current | other] — a TAP slides the neighbor in
+          (Joe's call: tap beats an awkward swipe for this one section) */}
+      <div className="tap" style={{ overflow: "hidden", marginTop: 8, cursor: "pointer" }}
+        onClick={() => { if (anim === 0) setAnim(-1); }}>
+        <div key={skey + "-" + mode} style={{ display: "flex", width: "300%", transform: `translateX(calc(-33.3333% + ${anim * 33.3333}%))`, transition: "transform .32s cubic-bezier(.25,.7,.3,1)" }}
+          onTransitionEnd={() => { if (anim !== 0) { setMode(other); setAnim(0); } }}>
           {panel(other, "l")}{panel(mode, "c")}{panel(other, "r")}
         </div>
       </div>
@@ -913,7 +907,7 @@ function TrendGraph({ cases, accts, ros, pct, skey }) {
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 6 }}>
         {[0, 1].map(d2 => <span key={d2} style={{ width: d2 === mode ? 14 : 5, height: 5, borderRadius: 3, background: d2 === mode ? "var(--border-strong)" : "var(--border)", transition: "width .2s" }} />)}
-        <span style={{ fontSize: 8.5, fontWeight: 600, color: "var(--text-3)", marginLeft: 4 }}>swipe for {mode === 0 ? "accounts" : "cases"} ↔</span>
+        <span style={{ fontSize: 8.5, fontWeight: 600, color: "var(--text-3)", marginLeft: 4 }}>tap for {mode === 0 ? "accounts" : "cases"}</span>
       </div>
     </div>
   );
@@ -931,6 +925,9 @@ export default function Home() {
   const [plcMap, setPlcMap] = useState(null);   // account_id -> {now,prev} label-scoped placement counts; null = use whole-account columns
   const plcCache = useRef({});                  // per-label cache so flipping labels doesn't refetch
   const brewery = profile.name === "brewery";
+  // while home is mounted, the page's overscroll zone is sky — pulling down past the
+  // top shows blue (night: night sky), not a white bar breaking the header illusion
+  useEffect(() => { document.documentElement.classList.add("skyTop"); return () => document.documentElement.classList.remove("skyTop"); }, []);
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
   const [slide, setSlide] = useState(0);
