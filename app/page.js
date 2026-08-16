@@ -10,7 +10,7 @@ import { fluidArt } from "../components/treeArt";
 import { useTheme } from "../lib/theme";
 import { getScope, setScope, getLabel, setLabel, LABELS } from "../lib/scope";
 import { withHealth } from "../lib/health";
-import { SNAP_LABEL } from "../lib/snapshot";
+import { SNAPSHOT, SNAP_LABEL } from "../lib/snapshot";
 import ThemeChooser from "../components/ThemeChooser";
 import LogoMark from "../components/LogoMark";
 import { profile } from "../lib/profile";
@@ -801,6 +801,59 @@ function WedgeView({ wedge, onOpen }) {
 // shown once per fresh page load (not on in-app navigation back home)
 let booted = false;
 
+// ---- ledger home (Joe's overview-first front door) ----------------------------------
+// formatting + style helpers ported from the Overview page so the two screens can't drift
+const ACRH = new Set(["IPA", "DIPA", "TIPA", "XPA", "IPL", "NEIPA", "DDH"]);
+const styleLabelH = s => String(s || "").split(/\s+/).map(w => (ACRH.has(w.toUpperCase()) || /^\d+MG$/i.test(w)) ? w.toUpperCase() : (w.toLowerCase().charAt(0).toUpperCase() + w.toLowerCase().slice(1))).join(" ");
+const pctSH = v => v == null ? "" : `${v > 0 ? "▲" : v < 0 ? "▼" : ""}${Math.abs(Math.round(v * 100))}%`;
+const pctCH = v => v == null ? "var(--text-3)" : v > 0.02 ? "var(--up)" : v < -0.02 ? "var(--down)" : "var(--text-3)";
+const g90OfH = (c, p) => p > 0 ? (c - p) / p : null;
+const treePropsH = (cur, g90) => cur > 0 ? { pct: Math.round((g90 || 0) * 100) } : { headline: "lapsed" };
+
+function HDlt({ p }) {
+  if (p == null) return null;
+  const c = p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)";
+  return <span style={{ fontSize: 9.5, fontWeight: 700, marginLeft: 4, color: c }}>{p > 0 ? "▲" : p < 0 ? "▼" : "▬"} {Math.abs(p)}%</span>;
+}
+function HTile({ lb, v, pct, sub, tone, onClick }) {
+  return (
+    <div onClick={onClick} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "8px 9px", cursor: onClick ? "pointer" : "default", minWidth: 0 }}>
+      <div style={{ fontSize: 8.5, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--text-3)", fontWeight: 700, whiteSpace: "nowrap" }}>{lb}</div>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 17, fontWeight: 600, color: tone || "var(--text)", marginTop: 2, whiteSpace: "nowrap" }}>{v}<HDlt p={pct} /></div>
+      {sub && <div style={{ fontSize: 8.5, color: "var(--text-3)", marginTop: 1, whiteSpace: "nowrap" }}>{sub}</div>}
+    </div>
+  );
+}
+function SectHead({ t }) {
+  return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--text-3)", margin: "16px 0 7px" }}>{t}</div>;
+}
+// The desktop cases+forecast graph, pocket-size: 12 trailing months (grey bars) then the
+// 12-month forecast (indigo — grey-blue when it's a directional sub-scope projection, same
+// rule the desktop uses below book level), split by a dashed "now" line.
+function FcGraph({ d, skey }) {
+  const vals = [...d.hist, ...d.fc];
+  const mx = Math.max(1, ...vals);
+  const fcC = d.sim ? "#9aa0b8" : "#5b6bd0";
+  const mLbl = k => { const t = new Date(SNAPSHOT); t.setMonth(t.getMonth() + k); return t.toLocaleString("en-US", { month: "short" }).toUpperCase() + " '" + String(t.getFullYear()).slice(2); };
+  return (
+    <div style={{ marginTop: 10, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "11px 13px 9px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, letterSpacing: ".09em", color: "var(--text-3)", fontWeight: 600 }}>CASES · MONTHLY + FORECAST</span>
+        <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--text-2)" }}>{kf(d.L52)} <span style={{ color: "var(--text-3)" }}>→</span> <span style={{ color: fcC }}>{kf(d.fc52)}{d.sim ? " est" : ""}</span></span>
+      </div>
+      <div key={skey} className="sceneFade" style={{ position: "relative", display: "flex", alignItems: "flex-end", gap: 2, height: 84, marginTop: 8 }}>
+        {vals.map((v, i) => (
+          <div key={i} style={{ flex: 1, height: `${Math.max(3, (v / mx) * 100)}%`, borderRadius: "2px 2px 0 0", background: i < 12 ? "#aab0bd" : fcC, opacity: i < 12 ? 0.8 : 0.95 }} />
+        ))}
+        <div style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 0, borderLeft: "1.5px dashed #b9bdd8" }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".08em", color: "var(--text-3)" }}>
+        <span>{mLbl(-11)}</span><span>now</span><span style={{ color: fcC }}>{mLbl(12)}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const [phase, setPhase] = useState(booted ? "ready" : "splash"); // splash → ready
@@ -821,6 +874,9 @@ export default function Home() {
   const movedRef = useRef(false);   // a real swipe suppresses the tree's tap-through
   const [dragDx, setDragDx] = useState(0);
   const [dragging, setDragging] = useState(false);
+  const [homeItems, setHomeItems] = useState(null);   // item_grid slice for styles + top SKUs
+  const [toast, setToast] = useState(null);           // "drill coming soon" note
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 1900); return () => clearTimeout(t); }, [toast]);
   const { burst, styleFor } = useExplode();
   const { night, setNight } = useTheme();
 
@@ -879,6 +935,26 @@ export default function Home() {
     })();
     return () => { dead = true; };
   }, [labelParam, brewery]);
+
+  // item_grid slice for the ledger home's styles + top SKUs (same select the Overview uses)
+  useEffect(() => {
+    if (!brewery) return;
+    (async () => {
+      try {
+        let all = [], from = 0;
+        while (true) {
+          const { data, error } = await supabase.from("item_grid")
+            .select("account_id,parent,brand,package,l90,l90_prev,l52,fc_group")
+            .range(from, from + 4999);
+          if (error) throw error;
+          all = all.concat(data || []);
+          if (!data || data.length < 5000) break;
+          from += 5000;
+        }
+        setHomeItems(all);
+      } catch { /* styles + SKU sections just stay hidden */ }
+    })();
+  }, [brewery]);
 
   // fc_base — the SAME source + engine the desktop forecast uses, so Current/Projected Annual match it exactly
   useEffect(() => { (async () => { try { const { data, error } = await supabase.rpc("fc_base"); if (!error && data) setFcRows(data); } catch {} })(); }, []);
@@ -984,6 +1060,59 @@ export default function Home() {
   // biggest slide's volume — the scale every scope tree is sized against
   const maxSlideCur = useMemo(() => (slides ? Math.max(...slides.map(s => s.cur || 0), 1) : 1), [slides]);
 
+  // fc_group -> style group, carried on fc_base rows (the Overview's own trick)
+  const styleOf = useMemo(() => { const m = {}; if (fcRows) for (const r of fcRows) if (r.product_key && m[r.product_key] == null) m[r.product_key] = r.style_group || "—"; return m; }, [fcRows]);
+  // ---- ledger-home scoped reads: everything below re-slices to the selected chip ----
+  const scopeIds = useMemo(() => {
+    if (!rows || !cur || cur.key === "ALL") return null;             // null = whole book
+    const rep = cur.key.slice(4);
+    const ids = new Set();
+    for (const r of rows) if ((r.sales_rep || "Unassigned") === rep) ids.add(r.account_id);
+    return ids;
+  }, [rows, cur]);
+  // cases + forecast for the chip — real engine numbers for the whole book (ties out to the
+  // Overview tab), and the desktop's deterministic DIRECTIONAL projection below book level
+  // (fc_base carries no account_id, so territories can't run the real engine)
+  const fcScope = useMemo(() => {
+    if (!brewery || !cur) return null;
+    if (cur.key === "ALL") {
+      if (!fcRows || !fcRows.length) return null;
+      try {
+        const rf = labelParam ? fcRows.filter(r => r.parent === labelParam) : fcRows;
+        if (!rf.length) return null;
+        const { root } = run(rf);
+        const hist = (root.history || []).slice(12), fc = (root.forecast || []).slice(0, 12);
+        return { hist, fc, L52: Math.round(fsum(hist)), fc52: Math.round(fsum(fc)), sim: false };
+      } catch { return null; }
+    }
+    if (!monthly || !scopeIds) return null;
+    const h = new Array(24).fill(0);
+    for (const id of scopeIds) { const m = monthly[id]; if (!m) continue; for (let i = 0; i < 24; i++) h[i] += m[i] || 0; }
+    if (!h.some(v => v > 0)) return null;
+    const fc = autoForecast(h);
+    return { hist: h.slice(12), fc, L52: Math.round(fsum(h.slice(12))), fc52: Math.round(fsum(fc)), sim: true };
+  }, [brewery, cur, fcRows, labelParam, monthly, scopeIds]);
+  const inHome = it => (!scopeIds || scopeIds.has(it.account_id)) && (!labelParam || it.parent === labelParam);
+  const homeStyles = useMemo(() => {
+    if (!homeItems) return null;
+    const g = {};
+    for (const it of homeItems) { if (!inHome(it)) continue; const sg = styleOf[it.fc_group] || "—"; const e = g[sg] || (g[sg] = { sg, cur: 0, prev: 0, wt: 0 }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; }
+    return Object.values(g).map(e => ({ ...e, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6);
+  }, [homeItems, scopeIds, labelParam, styleOf]);   // eslint-disable-line
+  const homeSkus = useMemo(() => {
+    if (!homeItems) return null;
+    const g = {};
+    for (const it of homeItems) { if (!inHome(it)) continue; const k = (it.brand || "—") + "||" + (it.package || ""); const e = g[k] || (g[k] = { brand: it.brand || "—", pack: it.package || "", cur: 0, prev: 0, wt: 0 }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; }
+    return Object.values(g).map(e => ({ ...e, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6);
+  }, [homeItems, scopeIds, labelParam]);   // eslint-disable-line
+  const homeCities = useMemo(() => {
+    if (!rows || !cur) return null;
+    const list = cur.key === "ALL" ? rows : rows.filter(r => (r.sales_rep || "Unassigned") === cur.key.slice(4));
+    const g = {};
+    for (const r of list) { const c = r.city || "—"; const e = g[c] || (g[c] = { city: c, cur: 0, prev: 0, wt: 0, n: 0 }); e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.wt += r.account_weight || 0; if ((r.cur90 || 0) > 0) e.n++; }
+    return Object.values(g).filter(e => e.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6).map(e => ({ ...e, pct: gpct(e.cur, e.prev) }));
+  }, [rows, cur]);
+
   // always open on "All states" — clears any remembered scope on entry
   useEffect(() => { setScope(""); }, []);
 
@@ -1005,22 +1134,17 @@ export default function Home() {
       {phase === "ready" && !slides && !err && <GreyLoader />}
       {pickerOpen && <ThemeChooser onChoose={() => setPickerOpen(false)} onClose={() => setPickerOpen(false)} />}
 
-      {/* The sky is a FIXED, full-viewport layer, not a background on <main>. Painted on main it
-          was clipped to the 480px column and to the page's own height, so it broke into bands at
-          the sides and cut off partway down. Fixed + percentage stops = one continuous sky. */}
-      <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "linear-gradient(180deg,#b6dcf1 0%,#cce4f4 16%,#d7e6df 46%,#f6f7f4 66%)" }} />
-      <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "linear-gradient(180deg,#0c1830 0%,#0f1c22 24%,#0d140e 56%)", opacity: night ? 1 : 0, transition: "opacity .8s ease" }} />
+      {/* Flat ledger ground — a happier white by day, the theme's dark by night */}
+      <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "#fdfdfb" }} />
+      <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "#0f1713", opacity: night ? 1 : 0, transition: "opacity .8s ease" }} />
 
-      <main className="pagefade" style={{ position: "relative", height: "100dvh", display: "flex", flexDirection: "column", padding: "10px 20px 6px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
-        <svg className="cl cl1" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 58, left: -24, width: 124, opacity: night ? 0.1 : 0.8, zIndex: 0, transition: "opacity .8s ease" }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
-        <svg className="cl cl2" viewBox="0 0 320 110" aria-hidden="true" style={{ position: "absolute", top: 104, right: -12, width: 90, opacity: night ? 0.08 : 0.6, zIndex: 0, transition: "opacity .8s ease" }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
-
-        <div style={{ position: "relative", zIndex: 1, flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", padding: "10px 20px 26px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto" }}>
+        <div style={{ position: "relative", zIndex: 1 }}>
         {/* top row: greeting (kept low-key) + logo */}
         <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, height: 34 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <div style={{ minWidth: 0, lineHeight: 1.18 }}>
-              <div style={{ fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>Updated {DATA_UPDATED}</div>
+              <div style={{ fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>Updated {DATA_UPDATED}{brewery ? ` · ${labelParam === "" ? "All labels" : labelParam === "TORCH" ? "Torch" : "Blind Corner"}` : ""}</div>
             </div>
           </div>
           <div style={{ flexShrink: 0 }}><HeaderLogo /></div>
@@ -1028,39 +1152,85 @@ export default function Home() {
 
         {/* the scope you're viewing — centered + prominent */}
         {cur && (
-          <div className="riseIn" style={{ marginTop: 8, textAlign: "center" }}>
-            <div key={cur.key} className="sceneFade" style={{ fontFamily: "var(--font-serif)", fontSize: 34, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.6px", lineHeight: 1.04 }}>{cur.key === "ALL" ? (brewery ? cur.label : "All states") : cur.label}</div>
-            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 3 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the landscape to change" : ""}</div>
+          <div className="riseIn" style={{ marginTop: 6 }}>
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 27, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.05 }}>Your book</div>
+            {brewery && slides.length > 1 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 9 }}>
+                {slides.map((sl, i) => { const on = sl.key === cur.key; return (
+                  <button key={sl.key} onClick={() => pick(i)} style={{ border: "0.5px solid " + (on ? "var(--border-strong)" : "var(--border)"), background: on ? "var(--surface-2)" : "var(--surface)", color: on ? "var(--text)" : "var(--text-3)", fontFamily: "inherit", fontSize: 11.5, fontWeight: on ? 700 : 600, padding: "6px 12px", borderRadius: 999, cursor: "pointer" }}>{sl.key === "ALL" ? "All" : sl.label}</button>
+                ); })}
+              </div>
+            )}
           </div>
         )}
 
-        {/* info box (swipeable) — 90D cases / accts / ROS — ABOVE the brief */}
+        {/* stat tiles — Annual · Projected · 90D Cases · Accounts (accounts taps into the book) */}
         {cur && (
-          <div style={{ marginTop: 10, touchAction: "pan-y", cursor: slides && slides.length > 1 ? "grab" : "default", ...(brewery ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" } : {}) }}
-            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
-            <div className="riseIn" style={{ position: "relative", background: night ? "rgba(18,28,20,.48)" : "rgba(255,255,255,.48)", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "8px 10px" }}>
-              <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
-              <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
-              <div key={cur.key} className="sceneFade">
-                {/* top bar — 90D · Accounts · Placements · ROS */}
-                <div style={{ display: "flex" }}>
-                  <Stat label="90D Cases" value={kf(cur.cur)} pct={cur.curPct} delay={0} />
-                  <Stat label="Accounts" value={cur.acctNow.toLocaleString()} pct={cur.acctPct} divider delay={0.5} />
-                  <Stat label="Placements" value={kf(cur.distNow)} pct={cur.distPct} divider delay={1.0} />
-                  <Stat label="ROS / Acct" value={cur.rosNow.toFixed(1)} unit="cs" pct={cur.rosPct} divider delay={1.5} />
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 4 }}>
-              {slides.slice(0, 9).map((sl, i) => (
-                <span key={i} onClick={() => pick(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
-              ))}
-              {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
-            </div>
-            <div style={{ textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 1 }}>vs prior 90 days</div>
-            <div style={{ height: 4 }} />
-            {brewery && <ScopeTree slides={slides} idx={slide} cur={cur} dragDx={dragDx} dragging={dragging} onOpen={() => { if (movedRef.current) return; setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />}
+          <div key={"tl" + cur.key} className="sceneFade" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 11 }}>
+            <HTile lb="Annual" v={fcScope ? kf(fcScope.L52) : "—"} sub="52 wks" />
+            <HTile lb="Proj 52w" v={fcScope ? kf(fcScope.fc52) : "—"} tone={fcScope && fcScope.sim ? "#9aa0b8" : "#5b6bd0"} sub={fcScope && fcScope.L52 > 0 ? `${fcScope.fc52 >= fcScope.L52 ? "▲" : "▼"} ${Math.abs(Math.round((fcScope.fc52 - fcScope.L52) / fcScope.L52 * 100))}%${fcScope.sim ? " est" : " vs 52w"}` : "next 12 mo"} />
+            <HTile lb="90D Cases" v={kf(cur.cur)} pct={cur.curPct} sub="vs prev 90D" />
+            <HTile lb="Accounts" v={cur.acctNow.toLocaleString()} pct={cur.acctPct} sub="vs prev 90D" onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />
           </div>
+        )}
+
+        {/* find an account — the fastest door into the book */}
+        {cur && (
+          <div onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} style={{ marginTop: 10, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, padding: "10px 13px", display: "flex", alignItems: "center", gap: 8, color: "var(--text-3)", fontSize: 12.5, cursor: "pointer" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></svg>
+            Find an account — name, city, chain…
+          </div>
+        )}
+
+        {/* the desktop's cases + forecast graph, scoped to the chip */}
+        {fcScope && <FcGraph d={fcScope} skey={cur ? cur.key : "ALL"} />}
+
+        {/* styles — tap = drill teaser for now */}
+        {brewery && cur && homeStyles && homeStyles.length > 0 && (
+          <>
+            <SectHead t={`${cur.key === "ALL" ? "Book" : cur.label} · Styles`} />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
+              {homeStyles.map(st2 => (
+                <button key={st2.sg} onClick={() => setToast("Style drill coming soon")} style={{ border: "0.5px solid var(--border)", background: "var(--surface)", borderRadius: 12, padding: "8px 6px", cursor: "pointer", fontFamily: "inherit", textAlign: "center" }}>
+                  <div style={{ display: "flex", justifyContent: "center" }}><TreeGlyph {...treePropsH(st2.cur, st2.g90)} h={40} /></div>
+                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 3, lineHeight: 1.15, minHeight: 26, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)" }}>{styleLabelH(st2.sg)}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 600, color: "var(--text)" }}>{kf(st2.wt)} <span style={{ fontSize: 10, color: pctCH(st2.g90) }}>{pctSH(st2.g90)}</span></div>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* top SKUs — brand + pack, biggest annual first */}
+        {brewery && cur && homeSkus && homeSkus.length > 0 && (
+          <>
+            <SectHead t="Top SKUs" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {homeSkus.map(it2 => (
+                <div key={it2.brand + "|" + it2.pack} onClick={() => setToast("Item drill coming soon")} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(it2.brand)}</span>{it2.pack ? <span style={{ fontSize: 10.5, color: "var(--text-3)" }}> · {it2.pack}</span> : null}</div>
+                  <span style={{ marginLeft: "auto", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(it2.wt)}<span style={{ fontSize: 10, color: pctCH(it2.g90), marginLeft: 5 }}>{pctSH(it2.g90)}</span></span>
+                  <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* cities — it says accounts, so a tap opens the account list */}
+        {brewery && cur && homeCities && homeCities.length > 0 && (
+          <>
+            <SectHead t="Cities" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {homeCities.map(c2 => (
+                <div key={c2.city} onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                  <div><div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(c2.city)}</div><div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{c2.n.toLocaleString()} account{c2.n === 1 ? "" : "s"}</div></div>
+                  <span style={{ marginLeft: "auto", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(c2.cur)}<HDlt p={c2.pct} /></span>
+                  <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {/* loading / error */}
@@ -1079,6 +1249,10 @@ export default function Home() {
               <TierTrees tiers={cur.tiers3} scope={cur.key} />
             </div>
           ))}
+
+        {toast && (
+          <div style={{ position: "fixed", left: "50%", bottom: 86, transform: "translateX(-50%)", zIndex: 80, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 999, boxShadow: "var(--shadow-pop)", padding: "9px 16px", fontSize: 12, fontWeight: 700, color: "var(--text-2)", whiteSpace: "nowrap" }}>{toast}</div>
+        )}
 
         {/* primary nav — moved to the bottom, under the trees, so the section flows */}
         <div className="riseIn" style={{ display: "grid", gridTemplateColumns: brewery ? "repeat(5, 1fr)" : "1fr 1fr", gap: 6, marginTop: 12, flexShrink: 0 }}>
