@@ -8,7 +8,7 @@ import TreeGlyph, { tierBucket, TierTree } from "../components/TreeGlyph";
 import GreyLoader from "../components/Splash";
 import { fluidArt } from "../components/treeArt";
 import { useTheme } from "../lib/theme";
-import { getScope, setScope, getLabel, setLabel, LABELS } from "../lib/scope";
+import { getScope, setScope, getLabel, setLabel, parseScope, LABELS } from "../lib/scope";
 import { withHealth } from "../lib/health";
 import { SNAPSHOT, SNAP_LABEL } from "../lib/snapshot";
 import ThemeChooser from "../components/ThemeChooser";
@@ -830,29 +830,84 @@ function SectHead({ t }) {
 // The desktop cases+forecast graph, pocket-size: 12 trailing months (grey bars) then the
 // 12-month forecast (indigo — grey-blue when it's a directional sub-scope projection, same
 // rule the desktop uses below book level), split by a dashed "now" line.
-function FcGraph({ d, skey }) {
-  const hist = d.hist || [], fc3 = d.fc3 || [];
-  const vals = [...hist, ...fc3];
-  const mx = Math.max(1, ...vals);
-  const split = vals.length ? (hist.length / vals.length) * 100 : 0;
-  const fc3sum = Math.round(fc3.reduce((s2, v) => s2 + (v || 0), 0));
-  const mLbl = k => { const t = new Date(SNAPSHOT); t.setMonth(t.getMonth() + k); return t.toLocaleString("en-US", { month: "short" }).toUpperCase() + " '" + String(t.getFullYear()).slice(2); };
+const pctBig = p => p == null ? "—" : `${p > 0 ? "▲" : p < 0 ? "▼" : "▬"}${Math.abs(p)}%`;
+const pctTone = p => p == null ? "var(--text-3)" : p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)";
+// bar ramps: the last 12 months shade darker toward "now", in the color of the trend —
+// green rising, gold softening, red sliding, grey steady. Accounts ride the indigo ramp
+// (the desktop rail palette) so the two charts read apart at a glance.
+const RAMP_G = ["#c2d6c6", "#b4cdb9", "#a6c4ac", "#93b89b", "#7fac8a", "#6ca078", "#579266", "#428055", "#35704a"];
+const RAMP_Y = ["#ecdcba", "#e6d2a6", "#dfc791", "#d8bc7d", "#d1b169", "#c9a556", "#c09944", "#b68c34", "#ab7f26"];
+const RAMP_R = ["#ecd2c9", "#e6c5ba", "#dfb8ab", "#d8aa9c", "#d19c8d", "#c98e7e", "#c07f6f", "#b67060", "#ab6051"];
+const RAMP_N = ["#dcdfd9", "#d3d7d0", "#cacfc7", "#c1c7bd", "#b8bfb4", "#aeb6aa", "#a4ada0", "#99a396", "#8e998b"];
+const RAMP_A = ["#dfe1f0", "#d3d6ea", "#c6cae4", "#b8bdde", "#aab0d6", "#9ba2cd", "#8b93c4", "#7d86bc", "#6b73b3"];
+const rampAt = (R, i, n) => R[Math.min(R.length - 1, Math.round(i / Math.max(1, n - 1) * (R.length - 1)))];
+function TrendGraph({ cases, accts, ros, pct, skey }) {
+  const [mode, setMode] = useState(0);        // 0 cases · 1 accounts
+  const [dx, setDx] = useState(0);
+  const [anim, setAnim] = useState(0);        // -1 sliding to next, +1 sliding to prev
+  const [dragging, setDragging] = useState(false);
+  const gd = useRef({ x: 0, on: false });
+  const other = 1 - mode;
+  const mShort = k => { const t = new Date(SNAPSHOT); t.setMonth(t.getMonth() + k); return t.toLocaleString("en-US", { month: "short" }).toUpperCase(); };
+  const N = (cases || []).length || 12;
+  const total = Math.round((cases || []).reduce((s2, v) => s2 + (v || 0), 0));
+  const lastA = (accts || []).length ? accts[accts.length - 1] : 0;
+  const lastR = (ros || []).length ? ros[ros.length - 1] : null;
+  const ramp0 = pct == null ? RAMP_N : pct >= 5 ? RAMP_G : pct <= -12 ? RAMP_R : pct <= -2 ? RAMP_Y : RAMP_N;
+  const bnum = (v, m) => m === 0 ? (v >= 1000 ? kf(v) : String(Math.round(v))) : String(Math.round(v));
+  const settle = () => { if (!gd.current.on) return; gd.current.on = false; setDragging(false); if (dx < -40) setAnim(-1); else if (dx > 40) setAnim(1); else setDx(0); };
+  // one chart panel: bars + a number on every bar (+ the desktop's ROS line on accounts)
+  const panel = (m, pk) => {
+    const vals = m === 0 ? (cases || []) : (accts || []);
+    const mx = Math.max(1, ...vals);
+    const ramp = m === 0 ? ramp0 : RAMP_A;
+    let pts = null;
+    if (m === 1 && ros && ros.length) {
+      const rmx = Math.max(...ros) * 1.15 || 1, rmn = Math.min(...ros) * 0.85;
+      pts = ros.map((x, i) => `${(i / Math.max(1, ros.length - 1) * 100).toFixed(1)},${(37 - ((x - rmn) / ((rmx - rmn) || 1)) * 30).toFixed(1)}`).join(" ");
+    }
+    return (
+      <div key={pk} style={{ width: "33.3333%", flexShrink: 0, position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "stretch", gap: 3, height: 96 }}>
+          {vals.map((v, i) => (
+            <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 6.5, fontWeight: 600, color: "var(--text-3)", textAlign: "center", lineHeight: 1, marginBottom: 2, whiteSpace: "nowrap" }}>{bnum(v, m)}</div>
+              <div style={{ height: `${Math.max(3, (v / mx) * 82)}%`, borderRadius: "2px 2px 0 0", background: rampAt(ramp, i, vals.length), transformOrigin: "bottom", animation: "barGrow .5s cubic-bezier(.2,.7,.3,1) both", animationDelay: `${i * 0.04}s` }} />
+            </div>
+          ))}
+        </div>
+        {pts && (
+          <svg viewBox="0 0 100 40" preserveAspectRatio="none" style={{ position: "absolute", left: 0, top: 10, width: "100%", height: "calc(100% - 10px)", overflow: "visible", pointerEvents: "none" }}>
+            <polyline points={pts} fill="none" stroke="#fff" strokeWidth="4" opacity="0.85" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+            <polyline points={pts} fill="none" stroke="#4a5ac4" strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+          </svg>
+        )}
+      </div>
+    );
+  };
   return (
-    <div style={{ marginTop: 10, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "11px 13px 9px" }}>
+    <div style={{ marginTop: 10, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "11px 13px 8px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, letterSpacing: ".09em", color: "var(--text-3)", fontWeight: 600 }}>CASES · MONTHLY</span>
-        <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "#5b6bd0" }}>next 3 mo · {kf(fc3sum)}{d.sim ? " est" : ""}</span>
+        <span key={"h" + mode} className="sceneFade" style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, letterSpacing: ".09em", color: "var(--text-3)", fontWeight: 600 }}>{mode === 0 ? "CASES · MONTHLY" : "ACTIVE ACCOUNTS · ROLLING 90"}</span>
+        <span key={"v" + mode} className="sceneFade" style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{mode === 0 ? `${kf(total)} · 12 mo` : <>{lastA.toLocaleString()} now{lastR != null ? <span style={{ color: "#4a5ac4" }}> · ros {lastR.toFixed(1)}</span> : null}</>}</span>
       </div>
-      <div key={skey} className="sceneFade" style={{ position: "relative", display: "flex", alignItems: "flex-end", gap: 2, height: 84, marginTop: 8 }}>
-        {vals.map((v, i) => (
-          <div key={i} style={{ flex: 1, height: `${Math.max(3, (v / mx) * 100)}%`, borderRadius: "2px 2px 0 0", background: i < hist.length ? "#aab0bd" : "#5b6bd0", opacity: i < hist.length ? 0.8 : 0.95 }} />
-        ))}
-        <div style={{ position: "absolute", left: `${split}%`, top: -2, bottom: -2, width: 0, borderLeft: "1.5px dashed #b9bdd8" }} />
+      {/* the sliding window: [other | current | other] so either direction always has a
+          neighbor to walk in — finger-follow, snap, then recenter on the new chart */}
+      <div style={{ overflow: "hidden", marginTop: 8, touchAction: "pan-y", cursor: "grab" }}
+        onPointerDown={e => { gd.current = { x: e.clientX, on: true }; setDragging(true); }}
+        onPointerMove={e => { if (!gd.current.on) return; let d = e.clientX - gd.current.x; if (Math.abs(d) > 120) d = (d > 0 ? 1 : -1) * (120 + (Math.abs(d) - 120) * 0.3); setDx(d); }}
+        onPointerUp={settle} onPointerLeave={settle}>
+        <div key={skey + "-" + mode} style={{ display: "flex", width: "300%", transform: `translateX(calc(-33.3333% + ${anim * 33.3333}% + ${dx}px))`, transition: dragging ? "none" : "transform .38s cubic-bezier(.22,.61,.36,1)" }}
+          onTransitionEnd={() => { if (anim !== 0) { setMode(other); setAnim(0); setDx(0); } }}>
+          {panel(other, "l")}{panel(mode, "c")}{panel(other, "r")}
+        </div>
       </div>
-      <div style={{ position: "relative", marginTop: 5, height: 12, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".08em", color: "var(--text-3)" }}>
-        <span style={{ position: "absolute", left: 0 }}>{mLbl(-(Math.max(1, hist.length) - 1))}</span>
-        <span style={{ position: "absolute", left: `${split}%`, transform: "translateX(-100%)", paddingRight: 5 }}>now</span>
-        <span style={{ position: "absolute", right: 0, color: "#5b6bd0" }}>{mLbl(fc3.length)}</span>
+      <div style={{ display: "flex", gap: 3, marginTop: 4, fontFamily: "var(--font-mono)", fontSize: 6.8, textAlign: "center", color: "var(--text-3)" }}>
+        {(cases || []).map((v2, i) => <span key={i} style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>{mShort(i - (N - 1))}</span>)}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 6 }}>
+        {[0, 1].map(d2 => <span key={d2} style={{ width: d2 === mode ? 14 : 5, height: 5, borderRadius: 3, background: d2 === mode ? "var(--border-strong)" : "var(--border)", transition: "width .2s" }} />)}
+        <span style={{ fontSize: 8.5, fontWeight: 600, color: "var(--text-3)", marginLeft: 4 }}>swipe for {mode === 0 ? "accounts" : "cases"} ↔</span>
       </div>
     </div>
   );
@@ -881,6 +936,7 @@ export default function Home() {
   const [homeItems, setHomeItems] = useState(null);   // item_grid slice for styles + top SKUs
   const [toast, setToast] = useState(null);           // "drill coming soon" note
   const [q, setQ] = useState("");                     // find-an-account search text
+  const [view, setView] = useState(profile.name === "brewery" ? "grid" : "ledger");   // front door: territory squares, then the ledger
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 1900); return () => clearTimeout(t); }, [toast]);
   const { burst, styleFor } = useExplode();
   const { night, setNight } = useTheme();
@@ -1087,7 +1143,7 @@ export default function Home() {
         if (!rf.length) return null;
         const { root } = run(rf);
         const H = root.history || [], fc = (root.forecast || []).slice(0, 12);
-        return { hist: H.slice(3), fc3: fc.slice(0, 3), L52: Math.round(fsum(H.slice(12))), fc52: Math.round(fsum(fc)), sim: false };
+        return { hist: H.slice(12), fc3: fc.slice(0, 3), L52: Math.round(fsum(H.slice(12))), fc52: Math.round(fsum(fc)), sim: false };
       } catch { return null; }
     }
     if (!monthly || !scopeIds) return null;
@@ -1095,20 +1151,47 @@ export default function Home() {
     for (const id of scopeIds) { const m = monthly[id]; if (!m) continue; for (let i = 0; i < 24; i++) h[i] += m[i] || 0; }
     if (!h.some(v => v > 0)) return null;
     const fc = autoForecast(h);
-    return { hist: h.slice(3), fc3: fc.slice(0, 3), L52: Math.round(fsum(h.slice(12))), fc52: Math.round(fsum(fc)), sim: true };
+    return { hist: h.slice(12), fc3: fc.slice(0, 3), L52: Math.round(fsum(h.slice(12))), fc52: Math.round(fsum(fc)), sim: true };
   }, [brewery, cur, fcRows, labelParam, monthly, scopeIds]);
+  // rolling-90 ACTIVE ACCOUNTS by month (last 12) — the graph's second chart
+  const acctSeries = useMemo(() => {
+    if (!brewery || !rows || !monthly) return null;
+    const ids = scopeIds ? [...scopeIds] : rows.map(r => r.account_id);
+    const accts = [], ros = [];
+    for (let k = 12; k < 24; k++) {
+      let n = 0, c = 0;
+      for (const id of ids) { const m = monthly[id]; if (!m) continue; const r90 = (m[k] || 0) + (m[k - 1] || 0) + (m[k - 2] || 0); if (r90 > 0) { n++; c += r90; } }
+      accts.push(n); ros.push(n > 0 ? c / n / 3 : 0);
+    }
+    return { accts, ros };
+  }, [brewery, rows, monthly, scopeIds]);
+  // canon watch bucket (Softening + At Risk), biggest book first — the ledger's watch list
+  const watchRows = useMemo(() => {
+    if (!rows || !cur) return null;
+    const list = cur.key === "ALL" ? rows : rows.filter(r => (r.sales_rep || "Unassigned") === cur.key.slice(4));
+    return list.filter(r => { const h = String(r.headline || "").toLowerCase().trim(); return h === "decelerating" || h === "at-risk"; })
+      .sort((a2, b2) => (b2.account_weight || 0) - (a2.account_weight || 0));
+  }, [rows, cur]);
+  // scoped headcounts for the book buttons
+  const bookCounts = useMemo(() => {
+    if (!rows || !cur) return null;
+    const list = cur.key === "ALL" ? rows : rows.filter(r => (r.sales_rep || "Unassigned") === cur.key.slice(4));
+    let lapsed = 0, surging = 0;
+    for (const r of list) { const h = String(r.headline || "").toLowerCase().trim(); if (h === "lapsed") lapsed++; else if (h === "accelerating") surging++; }
+    return { total: list.length, lapsed, surging };
+  }, [rows, cur]);
   const inHome = it => (!scopeIds || scopeIds.has(it.account_id)) && (!labelParam || it.parent === labelParam);
   const homeStyles = useMemo(() => {
     if (!homeItems) return null;
     const g = {};
-    for (const it of homeItems) { if (!inHome(it)) continue; const sg = styleOf[it.fc_group] || "—"; const e = g[sg] || (g[sg] = { sg, cur: 0, prev: 0, wt: 0 }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; }
-    return Object.values(g).map(e => ({ ...e, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6);
+    for (const it of homeItems) { if (!inHome(it)) continue; const sg = styleOf[it.fc_group] || "—"; const e = g[sg] || (g[sg] = { sg, cur: 0, prev: 0, wt: 0, plc: 0, plcP: 0, accts: new Set() }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; if ((+it.l90 || 0) > 0) { e.plc++; e.accts.add(it.account_id); } if ((+it.l90_prev || 0) > 0) e.plcP++; }
+    return Object.values(g).map(e => ({ ...e, n: e.accts.size, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt);
   }, [homeItems, scopeIds, labelParam, styleOf]);   // eslint-disable-line
   const homeSkus = useMemo(() => {
     if (!homeItems) return null;
     const g = {};
-    for (const it of homeItems) { if (!inHome(it)) continue; const k = (it.brand || "—") + "||" + (it.package || ""); const e = g[k] || (g[k] = { brand: it.brand || "—", pack: it.package || "", cur: 0, prev: 0, wt: 0, accts: new Set() }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; if ((+it.l90 || 0) > 0) e.accts.add(it.account_id); }
-    return Object.values(g).map(e => ({ ...e, n: e.accts.size, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6);
+    for (const it of homeItems) { if (!inHome(it)) continue; const k = (it.brand || "—") + "||" + (it.package || ""); const e = g[k] || (g[k] = { brand: it.brand || "—", pack: it.package || "", cur: 0, prev: 0, wt: 0, accts: new Set(), acctsP: new Set() }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; if ((+it.l90 || 0) > 0) e.accts.add(it.account_id); if ((+it.l90_prev || 0) > 0) e.acctsP.add(it.account_id); }
+    return Object.values(g).map(e => ({ ...e, n: e.accts.size, nP: e.acctsP.size, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt);
   }, [homeItems, scopeIds, labelParam]);   // eslint-disable-line
   const homeCities = useMemo(() => {
     if (!rows || !cur) return null;
@@ -1124,8 +1207,13 @@ export default function Home() {
     return rows.filter(r => String(r.account_name || "").toLowerCase().includes(t) || String(r.city || "").toLowerCase().includes(t) || String(r.chain || "").toLowerCase().includes(t)).slice(0, 8);
   }, [rows, q]);
 
-  // always open on "All states" — clears any remembered scope on entry
-  useEffect(() => { setScope(""); }, []);
+  // coming back from a drill or account card: reopen the ledger on the remembered
+  // territory. The ‹ Territories button is what clears the slate now.
+  useEffect(() => {
+    if (!brewery || !slides) return;
+    const sc = parseScope();
+    if (sc.kind === "rep") { const i = slides.findIndex(sl => sl.key === "REP:" + sc.value); if (i >= 0) { setSlide(i); setView("ledger"); } }
+  }, [slides]);   // eslint-disable-line
 
   function navTo(href) {
     burst(href, () => router.push(href)); // explode the cards, then navigate
@@ -1136,6 +1224,32 @@ export default function Home() {
   function onDown(e) { if (!slides || slides.length < 2) return; drag.current = { x: e.clientX, on: true }; movedRef.current = false; setDragging(true); }
   function onMove(e) { if (!drag.current.on) return; let d = e.clientX - drag.current.x; if (Math.abs(d) > 8) movedRef.current = true; if (Math.abs(d) > 90) d = (d > 0 ? 1 : -1) * (90 + (Math.abs(d) - 90) * 0.35); setDragDx(d); }
   function onUp() { if (!drag.current.on) return; drag.current.on = false; setDragging(false); const d = dragDx; if (slides) { if (d < -48 && slide < slides.length - 1) pick(slide + 1); else if (d > 48 && slide > 0) pick(slide - 1); } setDragDx(0); }
+
+  // one search block, used by both screens (sticky on the front door, in-flow on the ledger)
+  const searchInner = cur ? (
+    <>
+      <div style={{ background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, padding: "9px 13px", display: "flex", alignItems: "center", gap: 8, color: "var(--text-3)" }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></svg>
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find an account — name, city, chain…" style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 12.5, color: "var(--text)", padding: 0 }} />
+        {q ? <button onClick={() => setQ("")} aria-label="Clear search" style={{ border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", fontSize: 13, padding: 0, fontFamily: "inherit", lineHeight: 1 }}>✕</button> : null}
+      </div>
+      {found && (
+        <div style={{ position: "absolute", top: "calc(100% + 5px)", left: 0, right: 0, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, boxShadow: "var(--shadow-pop)", overflow: "hidden" }}>
+          {found.length === 0 && <div style={{ padding: "11px 14px", fontSize: 12, color: "var(--text-3)" }}>No accounts match “{q.trim()}”.</div>}
+          {found.map((r, i) => (
+            <div key={r.account_id} onClick={() => { setQ(""); router.push("/account/" + encodeURIComponent(r.account_id)); }} style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderTop: i === 0 ? "none" : "0.5px solid var(--border)" }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.account_name}</div>
+                <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{titleCase(r.city)}{r.chain ? ` · ${titleCase(r.chain).replace(/'(\w)/g, (m2, x2) => "'" + x2.toLowerCase())}` : ""}</div>
+              </div>
+              <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{kf(r.cur90 || 0)}<span style={{ fontSize: 8.5, color: "var(--text-3)" }}> cs/90d</span></span>
+              <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  ) : null;
 
   return (
     <>
@@ -1161,123 +1275,143 @@ export default function Home() {
           <div style={{ flexShrink: 0 }}><HeaderLogo /></div>
         </div>
 
-        {/* the scope you're viewing — centered + prominent */}
-        {cur && (
-          <div className="riseIn" style={{ marginTop: 6 }}>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: 27, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.05 }}>Your book</div>
-            {brewery && slides.length > 1 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 9 }}>
-                {slides.map((sl, i) => { const on = sl.key === cur.key; return (
-                  <button key={sl.key} onClick={() => pick(i)} style={{ border: "0.5px solid " + (on ? "var(--border-strong)" : "var(--border)"), background: on ? "var(--surface-2)" : "var(--surface)", color: on ? "var(--text)" : "var(--text-3)", fontFamily: "inherit", fontSize: 11.5, fontWeight: on ? 700 : 600, padding: "6px 12px", borderRadius: 999, cursor: "pointer" }}>{sl.key === "ALL" ? "All" : sl.label}</button>
-                ); })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* stat tiles — Annual · Projected · 90D Cases · Accounts (accounts taps into the book) */}
-        {cur && (
-          <div key={"tl" + cur.key} className="sceneFade" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 11 }}>
-            <HTile lb="Annual" v={fcScope ? kf(fcScope.L52) : "—"} sub="52 wks" />
-            <HTile lb="Proj 52w" v={fcScope ? kf(fcScope.fc52) : "—"} tone="#5b6bd0" sub={fcScope && fcScope.L52 > 0 ? `${fcScope.fc52 >= fcScope.L52 ? "▲" : "▼"} ${Math.abs(Math.round((fcScope.fc52 - fcScope.L52) / fcScope.L52 * 100))}%${fcScope.sim ? " est" : " vs 52w"}` : "next 12 mo"} />
-            <HTile lb="90D Cases" v={kf(cur.cur)} pct={cur.curPct} sub="vs prev 90D" />
-            <HTile lb="Accounts" v={cur.acctNow.toLocaleString()} pct={cur.acctPct} sub="vs prev 90D" onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />
-          </div>
-        )}
-
-        {/* find an account — type, it pops up, tap to open the account */}
-        {cur && (
-          <div style={{ position: "relative", marginTop: 10, zIndex: 30 }}>
-            <div style={{ background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, padding: "9px 13px", display: "flex", alignItems: "center", gap: 8, color: "var(--text-3)" }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></svg>
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find an account — name, city, chain…" style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 12.5, color: "var(--text)", padding: 0 }} />
-              {q ? <button onClick={() => setQ("")} aria-label="Clear search" style={{ border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", fontSize: 13, padding: 0, fontFamily: "inherit", lineHeight: 1 }}>✕</button> : null}
-            </div>
-            {found && (
-              <div style={{ position: "absolute", top: "calc(100% + 5px)", left: 0, right: 0, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, boxShadow: "var(--shadow-pop)", overflow: "hidden" }}>
-                {found.length === 0 && <div style={{ padding: "11px 14px", fontSize: 12, color: "var(--text-3)" }}>No accounts match “{q.trim()}”.</div>}
-                {found.map((r, i) => (
-                  <div key={r.account_id} onClick={() => { setQ(""); router.push("/account/" + encodeURIComponent(r.account_id)); }} style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderTop: i === 0 ? "none" : "0.5px solid var(--border)" }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.account_name}</div>
-                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{titleCase(r.city)}{r.chain ? ` · ${titleCase(r.chain).replace(/'(\w)/g, (m2, x2) => "'" + x2.toLowerCase())}` : ""}</div>
-                    </div>
-                    <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{kf(r.cur90 || 0)}<span style={{ fontSize: 8.5, color: "var(--text-3)" }}> cs/90d</span></span>
-                    <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* the desktop's cases + forecast graph, scoped to the chip */}
-        {fcScope && <FcGraph d={fcScope} skey={cur ? cur.key : "ALL"} />}
-
-        {/* styles — tap = drill teaser for now */}
-        {brewery && cur && homeStyles && homeStyles.length > 0 && (
+        {/* FRONT DOOR — sticky account search over the territory tree squares */}
+        {brewery && cur && view === "grid" && (
           <>
-            <SectHead t={`${cur.key === "ALL" ? "Book" : cur.label} · Styles`} />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
-              {homeStyles.map(st2 => (
-                <button key={st2.sg} onClick={() => setToast("Style drill coming soon")} style={{ border: "0.5px solid var(--border)", background: "var(--surface)", borderRadius: 12, padding: "8px 6px", cursor: "pointer", fontFamily: "inherit", textAlign: "center" }}>
-                  <div style={{ display: "flex", justifyContent: "center" }}><TreeGlyph {...treePropsH(st2.cur, st2.g90)} h={40} /></div>
-                  <div style={{ fontSize: 11, fontWeight: 600, marginTop: 3, lineHeight: 1.15, minHeight: 26, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text)" }}>{styleLabelH(st2.sg)}</div>
-                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 600, color: "var(--text)" }}>{kf(st2.wt)} <span style={{ fontSize: 10, color: pctCH(st2.g90) }}>{pctSH(st2.g90)}</span></div>
+            <div style={{ position: "sticky", top: 0, zIndex: 40, margin: "0 -20px", padding: "8px 20px 9px", background: night ? "#0f1713" : "#fdfdfb" }}>
+              <div style={{ position: "relative", zIndex: 30 }}>{searchInner}</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 4 }}>
+              {slides.map((sl, i) => (
+                <button key={sl.key} onClick={() => { pick(i); setView("ledger"); }} className="riseIn" style={{ border: "0.5px solid var(--border)", background: "var(--surface)", borderRadius: 16, padding: "16px 8px 13px", cursor: "pointer", fontFamily: "inherit", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, animationDelay: `${Math.min(i, 10) * 0.05}s` }}>
+                  <TreeGlyph {...(sl.cur > 0 ? { pct: sl.curPct == null ? 0 : sl.curPct } : { headline: "lapsed" })} h={92} />
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--text)", lineHeight: 1.15, marginTop: 2 }}>{sl.key === "ALL" ? "All Territories" : sl.label}</div>
+                  <div style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(sl.cur)} <span style={{ fontSize: 10, color: sl.curPct == null ? "var(--text-3)" : sl.curPct > 0 ? "var(--up)" : sl.curPct < 0 ? "var(--down)" : "var(--text-3)" }}>{sl.curPct == null ? "" : `${sl.curPct > 0 ? "▲" : sl.curPct < 0 ? "▼" : "▬"}${Math.abs(sl.curPct)}%`}</span></div>
+                  <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: -2 }}>{sl.acctNow.toLocaleString()} account{sl.acctNow === 1 ? "" : "s"}</div>
                 </button>
               ))}
             </div>
           </>
         )}
 
-        {/* top SKUs — brand + pack, biggest annual first */}
-        {brewery && cur && homeSkus && homeSkus.length > 0 && (
+        {/* the scope you’re viewing — centered + prominent */}
+        {cur && view === "ledger" && (
+          <div className="riseIn" style={{ marginTop: 6 }}>
+            {brewery && (
+              <button onClick={() => { setScope(""); setSlide(0); setView("grid"); }} style={{ border: "none", background: "transparent", padding: "0 0 5px", fontFamily: "inherit", fontSize: 11.5, fontWeight: 700, color: "var(--text-3)", cursor: "pointer" }}>‹ Territories</button>
+            )}
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 27, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.05 }}>Your book{cur.key !== "ALL" ? <span style={{ fontSize: 20, fontWeight: 600, color: "var(--text-2)" }}> · {cur.label}</span> : null}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginTop: 10 }}>
+              <HTile lb="Annual" v={fcScope ? kf(fcScope.L52) : "—"} sub="run rate · 52 wks" />
+              <HTile lb="Proj 52w" v={fcScope ? kf(fcScope.fc52) : "—"} tone="#5b6bd0" sub={fcScope && fcScope.L52 > 0 ? `${fcScope.fc52 >= fcScope.L52 ? "▲" : "▼"} ${Math.abs(Math.round((fcScope.fc52 - fcScope.L52) / fcScope.L52 * 100))}%${fcScope.sim ? " est" : " vs 52w"}` : "next 12 mo"} />
+            </div>
+          </div>
+        )}
+
+        {/* the four trends, one row — no absolutes, just direction */}
+        {cur && view === "ledger" && (
+          <div key={"tl" + cur.key} className="sceneFade" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 10 }}>
+            <HTile lb="90D Trend" v={pctBig(cur.curPct)} tone={pctTone(cur.curPct)} sub="vs prev 90D" />
+            <HTile lb="Accounts" v={pctBig(cur.acctPct)} tone={pctTone(cur.acctPct)} sub="vs prev 90D" />
+            <HTile lb="Placements" v={pctBig(cur.distPct)} tone={pctTone(cur.distPct)} sub="vs prev 90D" />
+            <HTile lb="ROS" v={pctBig(cur.rosPct)} tone={pctTone(cur.rosPct)} sub="vs prev 90D" />
+          </div>
+        )}
+
+        {/* the trend graph — last 12 months, shaded by trend; swipe for rolling-90 accounts */}
+        {view === "ledger" && fcScope && <TrendGraph cases={fcScope.hist} accts={acctSeries ? acctSeries.accts : null} ros={acctSeries ? acctSeries.ros : null} pct={cur ? cur.curPct : null} skey={cur ? cur.key : "ALL"} />}
+
+        {/* watch accounts — top three; the button below opens the full list */}
+        {view === "ledger" && cur && watchRows && watchRows.length > 0 && (
           <>
-            <SectHead t="Top SKUs" />
+            <SectHead t={`Watch accounts · ${watchRows.length.toLocaleString()}`} />
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {homeSkus.map(it2 => (
-                <div key={it2.brand + "|" + it2.pack} onClick={() => setToast("Item drill coming soon")} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                  <div style={{ minWidth: 0 }}><div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><span style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(it2.brand)}</span>{it2.pack ? <span style={{ fontSize: 10.5, color: "var(--text-3)" }}> · {it2.pack}</span> : null}</div><div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{it2.n.toLocaleString()} account{it2.n === 1 ? "" : "s"}</div></div>
-                  <span style={{ marginLeft: "auto", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(it2.wt)}<span style={{ fontSize: 10, color: pctCH(it2.g90), marginLeft: 5 }}>{pctSH(it2.g90)}</span></span>
+              {watchRows.slice(0, 3).map(r => { const h = String(r.headline || "").toLowerCase().trim(); const cPct = (r.prev90 || 0) > 0 ? Math.round(100 * ((r.cur90 || 0) - r.prev90) / r.prev90) : null; const plcN = plcMap ? ((plcMap[r.account_id] || {}).now || 0) : (r.live_placements || 0); const plcPv = plcMap ? ((plcMap[r.account_id] || {}).prev || 0) : (r.live_prev || 0); const pd = plcN - plcPv; return (
+                <div key={r.account_id} onClick={() => router.push("/account/" + encodeURIComponent(r.account_id))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+                  <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph headline={r.headline} h={30} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.account_name}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{titleCase(r.city)} · <span style={{ color: h === "at-risk" ? "var(--down)" : "var(--gold)", fontWeight: 700 }}>{h === "at-risk" ? "At Risk" : "Softening"}</span></div>
+                  </div>
+                  <div style={{ marginLeft: "auto", flexShrink: 0, display: "grid", gridTemplateColumns: "54px 42px", columnGap: 4, rowGap: 1, alignItems: "baseline" }}>
+                    <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(r.cur90 || 0)}</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, color: pctTone(cPct) }}>{pctBig(cPct)}</span>
+                    <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-3)" }}>{plcN.toLocaleString()} sku{plcN === 1 ? "" : "s"}</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: pd > 0 ? "var(--up)" : pd < 0 ? "var(--down)" : "var(--text-3)" }}>{pd > 0 ? `▲${pd}` : pd < 0 ? `▼${Math.abs(pd)}` : "▬0"}</span>
+                  </div>
                   <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
                 </div>
-              ))}
+              ); })}
             </div>
           </>
         )}
 
-        {/* cities — it says accounts, so a tap opens the account list */}
-        {brewery && cur && homeCities && homeCities.length > 0 && (
+        {/* four doors into the book — lightly tinted, each carrying its headcount */}
+        {view === "ledger" && cur && bookCounts && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 14 }}>
+            {[
+              ["All accounts", "", bookCounts.total, "var(--text-2)", "var(--surface)", "var(--border-strong)"],
+              ["Watch", "watch", watchRows ? watchRows.length : 0, "#8a5a20", "rgba(176,127,54,.08)", "rgba(176,127,54,.3)"],
+              ["Lapsed", "lapsed", bookCounts.lapsed, "#a05242", "rgba(176,87,58,.07)", "rgba(176,87,58,.3)"],
+              ["Surging", "surging", bookCounts.surging, "var(--up)", "rgba(47,125,82,.07)", "rgba(47,125,82,.3)"],
+            ].map(([lb2, hp, n2, fg, bg2, bd]) => (
+              <button key={lb2} onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book" + (hp ? "?health=" + hp : "")); }} style={{ border: `0.5px solid ${bd}`, background: bg2, borderRadius: 13, padding: "9px 2px 8px", fontFamily: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, color: fg, whiteSpace: "nowrap" }}>{lb2}</span>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: fg }}>{Number(n2).toLocaleString()}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* styles — top three; cases + placements, numbers on a fixed grid */}
+        {view === "ledger" && brewery && cur && homeStyles && homeStyles.length > 0 && (
           <>
-            <SectHead t="Cities" />
+            <SectHead t={`${cur.key === "ALL" ? "Book" : cur.label} · Styles`} />
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {homeCities.map(c2 => (
-                <div key={c2.city} onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                  <div><div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(c2.city)}</div><div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{c2.n.toLocaleString()} account{c2.n === 1 ? "" : "s"}</div></div>
-                  <span style={{ marginLeft: "auto", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(c2.cur)}<HDlt p={c2.pct} /></span>
+              {homeStyles.slice(0, 3).map(st2 => { const pd = (st2.plc || 0) - (st2.plcP || 0); return (
+                <div key={st2.sg} onClick={() => router.push("/drill?type=style&k=" + encodeURIComponent(st2.sg))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+                  <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph {...treePropsH(st2.cur, st2.g90)} h={30} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{styleLabelH(st2.sg)}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{st2.n.toLocaleString()} account{st2.n === 1 ? "" : "s"}</div>
+                  </div>
+                  <div style={{ marginLeft: "auto", flexShrink: 0, display: "grid", gridTemplateColumns: "54px 42px", columnGap: 4, rowGap: 1, alignItems: "baseline" }}>
+                    <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(st2.cur)}</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, color: pctCH(st2.g90) }}>{pctSH(st2.g90)}</span>
+                    <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-3)" }}>{(st2.plc || 0).toLocaleString()} plc</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: pd > 0 ? "var(--up)" : pd < 0 ? "var(--down)" : "var(--text-3)" }}>{pd > 0 ? `▲${pd}` : pd < 0 ? `▼${Math.abs(pd)}` : "▬0"}</span>
+                  </div>
                   <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
                 </div>
-              ))}
+              ); })}
             </div>
           </>
         )}
 
-        {/* loading / error */}
-        {!slides && !err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
-        {err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--down)" }}>Couldn’t load your book. {err}</div>}
-
-        {/* your book by size — Large / Mid / Small tiers standing on the hills */}
-        {cur && (brewery
-          ? null
-          : cur.tiers3 && (
-            <div style={{ marginTop: 11 }}>
-              <div style={{ textAlign: "center", marginBottom: 4 }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", letterSpacing: 0.2 }}>Health by Account Tier</div>
-                <div style={{ fontSize: 10, fontWeight: 600, color: "var(--text-3)", opacity: 0.85, marginTop: 1 }}>tap a tier for its accounts →</div>
-              </div>
-              <TierTrees tiers={cur.tiers3} scope={cur.key} />
+        {/* items — top three, same fixed number grid, tap = drill */}
+        {view === "ledger" && brewery && cur && homeSkus && homeSkus.length > 0 && (
+          <>
+            <SectHead t="Items" />
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {homeSkus.slice(0, 3).map(it2 => { const pd = (it2.n || 0) - (it2.nP || 0); return (
+                <div key={it2.brand + "|" + it2.pack} onClick={() => router.push("/drill?type=item&k=" + encodeURIComponent(it2.brand + "||" + it2.pack))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+                  <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph {...treePropsH(it2.cur, it2.g90)} h={30} /></span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><span style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(it2.brand)}</span>{it2.pack ? <span style={{ fontSize: 10.5, color: "var(--text-3)" }}> · {it2.pack}</span> : null}</div>
+                    <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{it2.n.toLocaleString()} account{it2.n === 1 ? "" : "s"}</div>
+                  </div>
+                  <div style={{ marginLeft: "auto", flexShrink: 0, display: "grid", gridTemplateColumns: "54px 42px", columnGap: 4, rowGap: 1, alignItems: "baseline" }}>
+                    <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(it2.cur)}</span>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, color: pctCH(it2.g90) }}>{pctSH(it2.g90)}</span>
+                    <span style={{ textAlign: "right", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-3)" }}>{(it2.n || 0).toLocaleString()} plc</span>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: pd > 0 ? "var(--up)" : pd < 0 ? "var(--down)" : "var(--text-3)" }}>{pd > 0 ? `▲${pd}` : pd < 0 ? `▼${Math.abs(pd)}` : "▬0"}</span>
+                  </div>
+                  <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
+                </div>
+              ); })}
             </div>
-          ))}
+          </>
+        )}
 
         {toast && (
           <div style={{ position: "fixed", left: "50%", bottom: 86, transform: "translateX(-50%)", zIndex: 80, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 999, boxShadow: "var(--shadow-pop)", padding: "9px 16px", fontSize: 12, fontWeight: 700, color: "var(--text-2)", whiteSpace: "nowrap" }}>{toast}</div>

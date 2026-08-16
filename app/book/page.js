@@ -455,7 +455,7 @@ function BookInner() {
     if (linkCity) setCityF(linkCity);
     if (linkChain) setChainF(linkChain);
     if (linkDist) setDistF(linkDist);
-    if (linkHealth && ["new", "healthy", "atrisk", "lapsed"].includes(linkHealth)) setHealthFilter(linkHealth);
+    if (linkHealth && ["new", "healthy", "atrisk", "lapsed", "surging", "watch"].includes(linkHealth)) setHealthFilter(linkHealth);
     if (linkTier && TIER_LABEL[linkTier]) setTierFilter(linkTier);
     if (linkSize && SIZE_LABEL[linkSize]) setSizeFilter(linkSize);
     if (linkTier && TIER_LABEL[linkTier]) {
@@ -559,6 +559,8 @@ function BookInner() {
     if (tierSet) f = f.filter(r => tierSet.has(r.account_id));
     if (sizeSet) f = f.filter(r => sizeSet.has(r.account_id));
     if (healthFilter === "lapsed") f = f.filter(r => isLapsed(r.headline));
+    else if (healthFilter === "surging") f = f.filter(r => String(r.headline || "").toLowerCase().trim() === "accelerating");
+    else if (healthFilter === "watch") f = f.filter(r => { const h = String(r.headline || "").toLowerCase().trim(); return h === "decelerating" || h === "at-risk"; });
     else if (healthFilter) f = f.filter(r => groupOf(r.headline) === healthFilter);
     const t = q.trim().toLowerCase();
     if (t) f = f.filter(r => String(r.account_name || "").toLowerCase().includes(t));
