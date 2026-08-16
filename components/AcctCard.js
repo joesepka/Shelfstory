@@ -37,16 +37,18 @@ const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA:
 function median(arr) { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 const round5 = n => Math.round(n / 5) * 5;
 function monthLabel(monthsAgo) { const d = new Date(SNAPSHOT.getFullYear(), SNAPSHOT.getMonth() - monthsAgo, 1); return d.toLocaleString("en-US", { month: "short" }); }
-// Convert a SKU's 90-day case-equivalents into whole PACKS sold/month, round up (Joe's rule).
-// item_grid.package is "{P}PK {oz}OZ" (e.g. "4PK 16OZ", "6PK 12OZ", "12PK 12OZ") or "HALF KEG" / "SIXTEL KEG".
-// A 24×12oz case = 1 CE (288oz); packs/mo = l90 × 96/(P×oz). Kegs shown as kegs (half CE 6.889, sixtel 2.296).
+// Joe's rule (2026-08-16): speak in the ORIGINAL numbers — no case-equivalent math, no pack
+// conversion. A package SKU's depletions ARE cases, so show cases/mo; a keg SKU's depletions
+// ARE kegs, so show halfs / sixtels / quarters per month. One decimal under 10, whole above.
 function packMo(l90, pkg) {
-  const p = String(pkg || "").toUpperCase(), l = Number(l90) || 0, mo = l / 3;   // mo = avg case-equivalents/month
-  if (p.includes("SIXTEL")) { const n = Math.max(1, Math.ceil(mo / 2.296)); return { n, unit: n === 1 ? "keg" : "kegs" }; }
-  if (p.includes("KEG") || p.includes("BBL")) { const n = Math.max(1, Math.ceil(mo / 6.889)); return { n, unit: n === 1 ? "keg" : "kegs" }; }   // HALF KEG
-  const m = p.match(/(\d+)\s*PK\s*(\d+)\s*OZ/);                    // "4PK 16OZ" → pack size 4, 16oz
-  if (m) { const P = Number(m[1]), oz = Number(m[2]) || 12; const n = Math.max(1, Math.ceil(l * 96 / (P * oz))); return { n, unit: P + "-pk" }; }
-  return { n: Math.max(1, Math.ceil(mo)), unit: "cs" };           // unknown format → fall back to cases/mo
+  const p = String(pkg || "").toUpperCase();
+  const mo = (Number(l90) || 0) / 3;
+  const n = mo >= 10 ? Math.round(mo) : Math.round(mo * 10) / 10;
+  if (p.includes("SIXTEL")) return { n, unit: n === 1 ? "sixtel" : "sixtels" };
+  if (p.includes("HALF")) return { n, unit: n === 1 ? "half" : "halfs" };
+  if (p.includes("QUARTER") || p.includes("QTR")) return { n, unit: n === 1 ? "quarter" : "quarters" };
+  if (p.includes("KEG") || p.includes("BBL")) return { n, unit: n === 1 ? "keg" : "kegs" };
+  return { n, unit: "cs" };
 }
 // Collapse the style_parent field into display buckets — all IPA variants (HAZY IPA, IPA, DIPA…) become one "IPA" (Joe's rule).
 function styleGroup(sp) {
@@ -107,7 +109,12 @@ function buildBriefing(acc, b, items, white, liveSet, mktAll) {
   const filledSlots = new Set(active.map(i => i.slot_key).filter(Boolean));
   // only recommend winning back a SKU that's still being sold somewhere in the last 90 days (skip discontinued one-offs)
   const lostLive = lost.filter(l => (!liveSet || liveSet.has(l.product_key)) && !(l.slot_key && filledSlots.has(l.slot_key)));
-  if (lostLive.length) { const avgMo = active.length ? Math.round(totalL90 / active.length / 3) : 0; moves.push(`Win back ${lostLive[0].item_name}${avgMo > 0 ? ` — ~${avgMo} cs/mo at this account's typical SKU rate` : ""}.`); }
+  if (lostLive.length) {
+    const it0 = lostLive[0], draft0 = isDraft(it0.package);
+    const peers0 = active.filter(i => isDraft(i.package) === draft0);
+    const avgMo = peers0.length ? Math.round((peers0.reduce((s2, i) => s2 + (i.l90 || 0), 0) / peers0.length / 3) * 10) / 10 : 0;
+    moves.push(`Win back ${it0.item_name}${avgMo > 0 ? ` — ~${avgMo.toLocaleString()} ${draft0 ? "kegs" : "cs"}/mo at this account's typical ${draft0 ? "draft" : "package"} rate` : ""}.`);
+  }
   if (growing.length) moves.push(`Ride ${growing.slice(0, 2).map(i => i.item_name).join(" and ")} — already accelerating; lock the reorder.`);
   const whiteOpen = white.filter(w => !(w.slot_key && filledSlots.has(w.slot_key)));
   if (whiteOpen.length) {
@@ -190,6 +197,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   const [hoverSku, setHoverSku] = useState(null);   // hovered on-shelf/dropped row → subtle highlight
+  const [shelfOpen, setShelfOpen] = useState(false); // on-the-shelf shows top 5 until expanded
   const [cardSku, setCardSku] = useState(null);     // clicked item → quick detail card overlay
 
   useEffect(() => {
@@ -483,7 +491,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
     .slice(0, 3)
     .map(w => {
       const vel = w.velRaw != null ? w.velRaw : w.vel;
-      const pk = packMo(vel * 3, w.pkg);   // vel cs/mo → ×3 = 90-day CE → whole packs per store per month
+      const pk = packMo(vel * 3, w.pkg);   // vel units/mo → ×3 = the 90-day raw number packMo expects
       const why = (w.trend != null && w.trend >= 15) ? `surging ▲${w.trend}% nearby`
         : (w.carriers >= 2 && peerTotal) ? `${w.carriers} of ${peerTotal} like accounts stock it`
         : `peers move ~${pk.n} ${pk.unit}/mo`;
@@ -593,24 +601,27 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
       {/* On the shelf — active + dropped merged into one list; click a row for its quick card */}
       <div style={secDiv}>
         <div style={{ ...secS, margin: "0 0 6px" }}>On the shelf <span style={{ color: "var(--text-3)", fontWeight: 600 }}>· {activeItems.length} live{lostSkusLive.length ? ` · ${lostSkusLive.length} dropped` : ""}</span></div>
-        {activeItems.map((k, i) => { const on = hoverSku === k.product_key; const due = dueOf(k); const tg = itemTag(k); return (
+        {(shelfOpen ? activeItems : activeItems.slice(0, 5)).map((k, i) => { const on = hoverSku === k.product_key; const due = dueOf(k); const tg = itemTag(k); return (
           <div key={"a" + i} onClick={() => setCardSku(k.product_key)} onMouseEnter={() => setHoverSku(k.product_key)} onMouseLeave={() => setHoverSku(null)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 7px", borderRadius: 8, borderBottom: "0.5px solid #f4f3ee", cursor: "pointer", background: on ? "#eef4ee" : "transparent" }}>
             <span style={{ width: 6, height: 6, borderRadius: 9, background: skuColor(k.cell_state), flexShrink: 0 }} />
-            <span style={{ minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{k.item_name}</span>
+            <span style={{ minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "var(--text)", lineHeight: 1.25, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{k.item_name}</span>
             {tg && <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: tg[1], background: tg[2], borderRadius: 5, padding: "1.5px 6px", flexShrink: 0 }}>{tg[0]}</span>}
             <span style={{ flex: 1 }} />
-            <span style={{ width: 44, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#6b7267", background: "#eef0ea", borderRadius: 5, padding: "1.5px 6px" }}>{isDraft(k.package) ? "draft" : "pkg"}</span></span>
-            <span style={{ width: 84, textAlign: "right", flexShrink: 0 }}>{packSpan(k)}</span>
-            <span style={{ width: 58, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 10, whiteSpace: "nowrap", color: due ? "#8a6a12" : "var(--text-3)", background: due ? "#fbf1c9" : "transparent", borderRadius: 5, padding: due ? "2px 5px" : "0" }}>{k.last_sale_w != null ? `${agoDays(k.last_sale_w)} ago` : "—"}</span></span>
+            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}>{packSpan(k)}</span>
+            <span style={{ width: 54, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 10, whiteSpace: "nowrap", color: due ? "#8a6a12" : "var(--text-3)", background: due ? "#fbf1c9" : "transparent", borderRadius: 5, padding: due ? "2px 5px" : "0" }}>{k.last_sale_w != null ? `${agoDays(k.last_sale_w)} ago` : "—"}</span></span>
           </div>
         ); })}
+        {activeItems.length > 5 && (
+          <button onClick={() => setShelfOpen(o => !o)} style={{ width: "100%", border: "none", background: "transparent", fontFamily: "inherit", fontSize: 11, fontWeight: 700, color: "var(--text-3)", padding: "7px 0 5px", cursor: "pointer" }}>
+            {shelfOpen ? "Show top 5 ↑" : `Show all ${activeItems.length.toLocaleString()} items ↓`}
+          </button>
+        )}
         {lostSkusLive.slice(0, 6).map((k, i) => { const on = hoverSku === k.product_key; return (
           <div key={"d" + i} onClick={() => setCardSku(k.product_key)} onMouseEnter={() => setHoverSku(k.product_key)} onMouseLeave={() => setHoverSku(null)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 7px", borderRadius: 8, borderBottom: "0.5px solid #f4f3ee", cursor: "pointer", background: on ? "#fbeee9" : "transparent", opacity: 0.72 }}>
             <span style={{ color: "var(--pop-warm)", fontWeight: 700, fontSize: 11, width: 6, flexShrink: 0, textAlign: "center" }}>✕</span>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "#6b5b56", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textDecoration: "line-through", textDecorationColor: "#cbb8b2" }}>{k.item_name}</span>
-            <span style={{ width: 44, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#6b7267", background: "#eef0ea", borderRadius: 5, padding: "1.5px 6px", opacity: 0.8 }}>{isDraft(k.package) ? "draft" : "pkg"}</span></span>
-            <span style={{ width: 84, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--pop-warm-deep)", background: "#f6e4e1", borderRadius: 5, padding: "1.5px 6px" }}>dropped</span></span>
-            <span style={{ width: 58, textAlign: "right", flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--pop-warm-deep)" }}>{k.last_sale_w != null ? `${agoDays(k.last_sale_w)} ago` : "—"}</span>
+            <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "#6b5b56", lineHeight: 1.25, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", textDecoration: "line-through", textDecorationColor: "#cbb8b2" }}>{k.item_name}</span>
+            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--pop-warm-deep)", background: "#f6e4e1", borderRadius: 5, padding: "1.5px 6px" }}>dropped</span></span>
+            <span style={{ width: 54, textAlign: "right", flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--pop-warm-deep)" }}>{k.last_sale_w != null ? `${agoDays(k.last_sale_w)} ago` : "—"}</span>
           </div>
         ); })}
       </div>
@@ -625,9 +636,8 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
             <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: w.hot ? "#5b6bd0" : "var(--text-3)", marginTop: 1 }}>{w.hot ? "🔥 " : "· "}{w.why}</div>
           </div>
-          <span style={{ width: 44, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "#6b7267", background: "#eef0ea", borderRadius: 5, padding: "1.5px 6px" }}>{w.draft ? "draft" : "pkg"}</span></span>
-          <span style={{ width: 84, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "#3a4034" }}>~{w.packN.toLocaleString()}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> {w.packUnit}/mo</span></span></span>
-          <span style={{ width: 58, flexShrink: 0 }} />
+          <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "#3a4034" }}>~{w.packN.toLocaleString()}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> {w.packUnit}/mo</span></span></span>
+          <span style={{ width: 54, flexShrink: 0 }} />
         </div>))}
       </div>)}
     </div>
