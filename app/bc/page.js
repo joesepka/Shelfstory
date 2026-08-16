@@ -106,10 +106,12 @@ export default function BreweryMobile() {
     }
     for (const it of d.items) if (it.parent === P && inScope(it)) trailing += +it.l52 || 0;
     const cur = styles.reduce((s2, x) => s2 + x.cur, 0);
+    const prev90 = styles.reduce((s2, x) => s2 + x.prev, 0);
+    const curPct = prev90 > 0 ? Math.round(100 * (cur - prev90) / prev90) : null;   // integer %, same convention as the home card
     const now = new Set(), prev = new Set();
     for (const it of d.items) { if (it.parent !== P || !inScope(it)) continue; if ((+it.l90 || 0) > 0) now.add(it.account_id); if ((+it.l90_prev || 0) > 0) prev.add(it.account_id); }
     const acctPct = prev.size > 0 ? Math.round(100 * (now.size - prev.size) / prev.size) : null;
-    return { trailing, proj, cur, accts: now.size, acctPct };
+    return { trailing, proj, cur, curPct, accts: now.size, acctPct };
   }, [d, P, styles, scopeIds]);   // eslint-disable-line
 
   if (err) return <div className="wrap" style={{ padding: 30, color: "var(--down)" }}>Couldn’t load. {err}</div>;
@@ -123,6 +125,8 @@ export default function BreweryMobile() {
       {sub && <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{sub}</div>}
     </div>
   );
+
+  const Dlt = ({ p }) => p == null ? null : <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, color: p > 0 ? "var(--up)" : p < 0 ? "var(--down)" : "var(--text-3)" }}>{p > 0 ? "▲" : p < 0 ? "▼" : "▬"} {Math.abs(p)}%</span>;
 
   return (
     <div className="wrap pagefade" style={{ paddingBottom: 90 }}>
@@ -154,8 +158,8 @@ export default function BreweryMobile() {
           {stat.proj != null
             ? <St label="projected 52w" val={kf(stat.proj)} sub={stat.trailing > 0 ? pctS(stat.proj / stat.trailing - 1) + " vs trailing" : ""} blue />
             : <St label="projected 52w" val="—" sub="book-level only" blue />}
-          <St label="90-day CE" val={kf(stat.cur)} sub="last 3 months" />
-          <St label="accounts" val={<span>{kf(stat.accts)}{stat.acctPct != null && <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, color: stat.acctPct > 0 ? "var(--up)" : stat.acctPct < 0 ? "var(--down)" : "var(--text-3)" }}>{stat.acctPct > 0 ? "▲" : stat.acctPct < 0 ? "▼" : "▬"} {Math.abs(stat.acctPct)}%</span>}</span>} sub={`${cities.length} cities · vs prior 90`} />
+          <St label="90D Cases" val={<span>{kf(stat.cur)}<Dlt p={stat.curPct} /></span>} sub="vs prev 90D" />
+          <St label="Accounts" val={<span>{kf(stat.accts)}<Dlt p={stat.acctPct} /></span>} sub="vs prev 90D" />
         </div>
       )}
 
