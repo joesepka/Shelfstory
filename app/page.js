@@ -831,24 +831,28 @@ function SectHead({ t }) {
 // 12-month forecast (indigo — grey-blue when it's a directional sub-scope projection, same
 // rule the desktop uses below book level), split by a dashed "now" line.
 function FcGraph({ d, skey }) {
-  const vals = [...d.hist, ...d.fc];
+  const hist = d.hist || [], fc3 = d.fc3 || [];
+  const vals = [...hist, ...fc3];
   const mx = Math.max(1, ...vals);
-  const fcC = d.sim ? "#9aa0b8" : "#5b6bd0";
+  const split = vals.length ? (hist.length / vals.length) * 100 : 0;
+  const fc3sum = Math.round(fc3.reduce((s2, v) => s2 + (v || 0), 0));
   const mLbl = k => { const t = new Date(SNAPSHOT); t.setMonth(t.getMonth() + k); return t.toLocaleString("en-US", { month: "short" }).toUpperCase() + " '" + String(t.getFullYear()).slice(2); };
   return (
     <div style={{ marginTop: 10, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 14, padding: "11px 13px 9px" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, letterSpacing: ".09em", color: "var(--text-3)", fontWeight: 600 }}>CASES · MONTHLY + FORECAST</span>
-        <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--text-2)" }}>{kf(d.L52)} <span style={{ color: "var(--text-3)" }}>→</span> <span style={{ color: fcC }}>{kf(d.fc52)}{d.sim ? " est" : ""}</span></span>
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, letterSpacing: ".09em", color: "var(--text-3)", fontWeight: 600 }}>CASES · MONTHLY</span>
+        <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "#5b6bd0" }}>next 3 mo · {kf(fc3sum)}{d.sim ? " est" : ""}</span>
       </div>
       <div key={skey} className="sceneFade" style={{ position: "relative", display: "flex", alignItems: "flex-end", gap: 2, height: 84, marginTop: 8 }}>
         {vals.map((v, i) => (
-          <div key={i} style={{ flex: 1, height: `${Math.max(3, (v / mx) * 100)}%`, borderRadius: "2px 2px 0 0", background: i < 12 ? "#aab0bd" : fcC, opacity: i < 12 ? 0.8 : 0.95 }} />
+          <div key={i} style={{ flex: 1, height: `${Math.max(3, (v / mx) * 100)}%`, borderRadius: "2px 2px 0 0", background: i < hist.length ? "#aab0bd" : "#5b6bd0", opacity: i < hist.length ? 0.8 : 0.95 }} />
         ))}
-        <div style={{ position: "absolute", left: "50%", top: -2, bottom: -2, width: 0, borderLeft: "1.5px dashed #b9bdd8" }} />
+        <div style={{ position: "absolute", left: `${split}%`, top: -2, bottom: -2, width: 0, borderLeft: "1.5px dashed #b9bdd8" }} />
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".08em", color: "var(--text-3)" }}>
-        <span>{mLbl(-11)}</span><span>now</span><span style={{ color: fcC }}>{mLbl(12)}</span>
+      <div style={{ position: "relative", marginTop: 5, height: 12, fontFamily: "var(--font-mono)", fontSize: 9, letterSpacing: ".08em", color: "var(--text-3)" }}>
+        <span style={{ position: "absolute", left: 0 }}>{mLbl(-(Math.max(1, hist.length) - 1))}</span>
+        <span style={{ position: "absolute", left: `${split}%`, transform: "translateX(-100%)", paddingRight: 5 }}>now</span>
+        <span style={{ position: "absolute", right: 0, color: "#5b6bd0" }}>{mLbl(fc3.length)}</span>
       </div>
     </div>
   );
@@ -876,6 +880,7 @@ export default function Home() {
   const [dragging, setDragging] = useState(false);
   const [homeItems, setHomeItems] = useState(null);   // item_grid slice for styles + top SKUs
   const [toast, setToast] = useState(null);           // "drill coming soon" note
+  const [q, setQ] = useState("");                     // find-an-account search text
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 1900); return () => clearTimeout(t); }, [toast]);
   const { burst, styleFor } = useExplode();
   const { night, setNight } = useTheme();
@@ -1081,8 +1086,8 @@ export default function Home() {
         const rf = labelParam ? fcRows.filter(r => r.parent === labelParam) : fcRows;
         if (!rf.length) return null;
         const { root } = run(rf);
-        const hist = (root.history || []).slice(12), fc = (root.forecast || []).slice(0, 12);
-        return { hist, fc, L52: Math.round(fsum(hist)), fc52: Math.round(fsum(fc)), sim: false };
+        const H = root.history || [], fc = (root.forecast || []).slice(0, 12);
+        return { hist: H.slice(3), fc3: fc.slice(0, 3), L52: Math.round(fsum(H.slice(12))), fc52: Math.round(fsum(fc)), sim: false };
       } catch { return null; }
     }
     if (!monthly || !scopeIds) return null;
@@ -1090,7 +1095,7 @@ export default function Home() {
     for (const id of scopeIds) { const m = monthly[id]; if (!m) continue; for (let i = 0; i < 24; i++) h[i] += m[i] || 0; }
     if (!h.some(v => v > 0)) return null;
     const fc = autoForecast(h);
-    return { hist: h.slice(12), fc, L52: Math.round(fsum(h.slice(12))), fc52: Math.round(fsum(fc)), sim: true };
+    return { hist: h.slice(3), fc3: fc.slice(0, 3), L52: Math.round(fsum(h.slice(12))), fc52: Math.round(fsum(fc)), sim: true };
   }, [brewery, cur, fcRows, labelParam, monthly, scopeIds]);
   const inHome = it => (!scopeIds || scopeIds.has(it.account_id)) && (!labelParam || it.parent === labelParam);
   const homeStyles = useMemo(() => {
@@ -1102,8 +1107,8 @@ export default function Home() {
   const homeSkus = useMemo(() => {
     if (!homeItems) return null;
     const g = {};
-    for (const it of homeItems) { if (!inHome(it)) continue; const k = (it.brand || "—") + "||" + (it.package || ""); const e = g[k] || (g[k] = { brand: it.brand || "—", pack: it.package || "", cur: 0, prev: 0, wt: 0 }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; }
-    return Object.values(g).map(e => ({ ...e, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6);
+    for (const it of homeItems) { if (!inHome(it)) continue; const k = (it.brand || "—") + "||" + (it.package || ""); const e = g[k] || (g[k] = { brand: it.brand || "—", pack: it.package || "", cur: 0, prev: 0, wt: 0, accts: new Set() }); e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0; if ((+it.l90 || 0) > 0) e.accts.add(it.account_id); }
+    return Object.values(g).map(e => ({ ...e, n: e.accts.size, g90: g90OfH(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6);
   }, [homeItems, scopeIds, labelParam]);   // eslint-disable-line
   const homeCities = useMemo(() => {
     if (!rows || !cur) return null;
@@ -1112,6 +1117,12 @@ export default function Home() {
     for (const r of list) { const c = r.city || "—"; const e = g[c] || (g[c] = { city: c, cur: 0, prev: 0, wt: 0, n: 0 }); e.cur += r.cur90 || 0; e.prev += r.prev90 || 0; e.wt += r.account_weight || 0; if ((r.cur90 || 0) > 0) e.n++; }
     return Object.values(g).filter(e => e.wt > 0).sort((a2, b2) => b2.wt - a2.wt).slice(0, 6).map(e => ({ ...e, pct: gpct(e.cur, e.prev) }));
   }, [rows, cur]);
+  // find-an-account: whole book, any scope — name, city or chain, biggest first
+  const found = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!rows || t.length < 2) return null;
+    return rows.filter(r => String(r.account_name || "").toLowerCase().includes(t) || String(r.city || "").toLowerCase().includes(t) || String(r.chain || "").toLowerCase().includes(t)).slice(0, 8);
+  }, [rows, q]);
 
   // always open on "All states" — clears any remembered scope on entry
   useEffect(() => { setScope(""); }, []);
@@ -1168,17 +1179,35 @@ export default function Home() {
         {cur && (
           <div key={"tl" + cur.key} className="sceneFade" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 11 }}>
             <HTile lb="Annual" v={fcScope ? kf(fcScope.L52) : "—"} sub="52 wks" />
-            <HTile lb="Proj 52w" v={fcScope ? kf(fcScope.fc52) : "—"} tone={fcScope && fcScope.sim ? "#9aa0b8" : "#5b6bd0"} sub={fcScope && fcScope.L52 > 0 ? `${fcScope.fc52 >= fcScope.L52 ? "▲" : "▼"} ${Math.abs(Math.round((fcScope.fc52 - fcScope.L52) / fcScope.L52 * 100))}%${fcScope.sim ? " est" : " vs 52w"}` : "next 12 mo"} />
+            <HTile lb="Proj 52w" v={fcScope ? kf(fcScope.fc52) : "—"} tone="#5b6bd0" sub={fcScope && fcScope.L52 > 0 ? `${fcScope.fc52 >= fcScope.L52 ? "▲" : "▼"} ${Math.abs(Math.round((fcScope.fc52 - fcScope.L52) / fcScope.L52 * 100))}%${fcScope.sim ? " est" : " vs 52w"}` : "next 12 mo"} />
             <HTile lb="90D Cases" v={kf(cur.cur)} pct={cur.curPct} sub="vs prev 90D" />
             <HTile lb="Accounts" v={cur.acctNow.toLocaleString()} pct={cur.acctPct} sub="vs prev 90D" onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />
           </div>
         )}
 
-        {/* find an account — the fastest door into the book */}
+        {/* find an account — type, it pops up, tap to open the account */}
         {cur && (
-          <div onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} style={{ marginTop: 10, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, padding: "10px 13px", display: "flex", alignItems: "center", gap: 8, color: "var(--text-3)", fontSize: 12.5, cursor: "pointer" }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></svg>
-            Find an account — name, city, chain…
+          <div style={{ position: "relative", marginTop: 10, zIndex: 30 }}>
+            <div style={{ background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, padding: "9px 13px", display: "flex", alignItems: "center", gap: 8, color: "var(--text-3)" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.5-4.5" /></svg>
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find an account — name, city, chain…" style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontFamily: "inherit", fontSize: 12.5, color: "var(--text)", padding: 0 }} />
+              {q ? <button onClick={() => setQ("")} aria-label="Clear search" style={{ border: "none", background: "transparent", color: "var(--text-3)", cursor: "pointer", fontSize: 13, padding: 0, fontFamily: "inherit", lineHeight: 1 }}>✕</button> : null}
+            </div>
+            {found && (
+              <div style={{ position: "absolute", top: "calc(100% + 5px)", left: 0, right: 0, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 13, boxShadow: "var(--shadow-pop)", overflow: "hidden" }}>
+                {found.length === 0 && <div style={{ padding: "11px 14px", fontSize: 12, color: "var(--text-3)" }}>No accounts match “{q.trim()}”.</div>}
+                {found.map((r, i) => (
+                  <div key={r.account_id} onClick={() => { setQ(""); router.push("/account/" + encodeURIComponent(r.account_id)); }} style={{ padding: "9px 14px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer", borderTop: i === 0 ? "none" : "0.5px solid var(--border)" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.account_name}</div>
+                      <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{titleCase(r.city)}{r.chain ? ` · ${titleCase(r.chain).replace(/'(\w)/g, (m2, x2) => "'" + x2.toLowerCase())}` : ""}</div>
+                    </div>
+                    <span style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 11.5, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{kf(r.cur90 || 0)}<span style={{ fontSize: 8.5, color: "var(--text-3)" }}> cs/90d</span></span>
+                    <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1208,7 +1237,7 @@ export default function Home() {
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {homeSkus.map(it2 => (
                 <div key={it2.brand + "|" + it2.pack} onClick={() => setToast("Item drill coming soon")} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "9px 12px", display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-                  <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><span style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(it2.brand)}</span>{it2.pack ? <span style={{ fontSize: 10.5, color: "var(--text-3)" }}> · {it2.pack}</span> : null}</div>
+                  <div style={{ minWidth: 0 }}><div style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><span style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(it2.brand)}</span>{it2.pack ? <span style={{ fontSize: 10.5, color: "var(--text-3)" }}> · {it2.pack}</span> : null}</div><div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>{it2.n.toLocaleString()} account{it2.n === 1 ? "" : "s"}</div></div>
                   <span style={{ marginLeft: "auto", whiteSpace: "nowrap", fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 600, color: "var(--text)" }}>{kf(it2.wt)}<span style={{ fontSize: 10, color: pctCH(it2.g90), marginLeft: 5 }}>{pctSH(it2.g90)}</span></span>
                   <span style={{ color: "var(--border-strong)", fontSize: 14 }}>›</span>
                 </div>
