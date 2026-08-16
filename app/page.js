@@ -49,6 +49,7 @@ const STNAME = { AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA:
 const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
 const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";
+const isLapsed = h => String(h || "").toLowerCase().trim() === "lapsed";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 
 // shared cloud path
@@ -116,14 +117,10 @@ const WEATHER = {
 
 // the ShelfStory mark now lives in components/LogoMark.js (shared with the loaders)
 function HeaderLogo() {
-  const router = useRouter();
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
       <LogoMark size={30} />
       <span style={{ fontFamily: "var(--font-logo)", fontSize: 17, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px" }}>ShelfStory</span>
-      {profile.name === "brewery" && (
-        <button onClick={() => router.push("/bc")} style={{ marginLeft: 6, border: "0.5px solid var(--border-strong)", background: "var(--surface)", color: "var(--accent-deep)", borderRadius: 14, fontSize: 11, fontWeight: 700, padding: "4px 10px", fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap" }}>Overview ›</button>
-      )}
     </div>
   );
 }
@@ -236,7 +233,7 @@ function Stat({ label, value, unit, pct, divider, delay = 0 }) {
     <div style={{ flex: 1, minWidth: 0, textAlign: "center", borderLeft: divider ? "1px solid var(--border-strong)" : "none" }}>
       <div style={{ fontSize: 10, letterSpacing: 0.3, color: "var(--text-3)", lineHeight: 1.2, height: 22, textTransform: "uppercase", fontWeight: 700 }}>{label}</div>
       <div style={{ display: "flex", justifyContent: "center", alignItems: "baseline", gap: 2, marginTop: 3 }}>
-        <span className="statfloat" style={{ fontSize: 21, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1', animationDelay: `${delay}s` }}>{value}</span>
+        <span className="statfloat" style={{ fontSize: 24, fontWeight: 700, color: "var(--text)", lineHeight: 1, letterSpacing: "-0.5px", fontFeatureSettings: '"tnum" 1, "lnum" 1', animationDelay: `${delay}s` }}>{value}</span>
         {unit && <span style={{ fontSize: 9.5, color: "var(--text-3)" }}>{unit}</span>}
       </div>
       <div style={{ fontSize: 9.5, fontWeight: 700, color: c, marginTop: 5 }}>
@@ -276,7 +273,7 @@ function buildBrief(rows) {
   // structural signals worth headlining
   const acctNet = actNow ? Math.round((100 * (newC - lostC)) / actNow) : null;               // net account base change %
   const distPct = distPrev > 0 ? Math.round((100 * (distNow - distPrev)) / distPrev) : null;  // distribution (placements) change %
-  const rosNow = actNow ? cur / actNow : 0, rosPrev = actPrev ? prev / actPrev : 0;
+  const rosNow = actNow ? cur / actNow / 3 : 0, rosPrev = actPrev ? prev / actPrev / 3 : 0;   // ROS = 90D cases ÷ active accts ÷ 3 (per month)
   const rosPct = rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null;        // rate-of-sale change %
 
   // weakest / strongest channel that actually carries weight
@@ -298,11 +295,11 @@ function buildBrief(rows) {
   const cityDown = cityArr.filter(c => c.n >= 2 && c.g != null && c.g <= -8).sort((a, b) => a.d - b.d)[0] || null;
 
   const chainAtRisk = {};
-  for (const r of rows) { if (isDeclining(r.headline) && r.chain) (chainAtRisk[r.chain] ||= []).push(r); }
+  for (const r of rows) { if (isDeclining(r.headline) && !isLapsed(r.headline) && r.chain) (chainAtRisk[r.chain] ||= []).push(r); }   // watch-only: lapsed is its own bucket, never an at-risk cluster
   let cluster = null;
   for (const ch in chainAtRisk) { const l = chainAtRisk[ch]; if (l.length >= 4 && (!cluster || l.length > cluster.n)) cluster = { chain: ch, n: l.length }; }
 
-  const quietN = rows.filter(r => (r.cur90 || 0) > 0 && r.last_order_w != null && r.last_order_w >= 2 && (r.account_weight || 0) > 0).length;
+  const quietN = rows.filter(r => (r.cur90 || 0) > 0 && r.gapW != null && r.gapW >= 2 && (r.account_weight || 0) > 0).length;
 
   // growth of the strongest 20% by size — explains "up but losing accounts" (concentration)
   const sized = rows.filter(r => (r.account_weight || 0) > 0).sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0));
@@ -371,7 +368,7 @@ function Snappy({ cur }) {
     else if (b.newCount > 0) pos = <><b style={green}>{b.newCount} new account{b.newCount === 1 ? "" : "s"}</b>{gainWhere ? <> in your {gainWhere} tier{gainPl ? "s" : ""}</> : null} just opened</>;
   }
   return (
-    <p style={{ position: "relative", margin: 0, paddingLeft: 13, fontFamily: "var(--font-serif)", fontSize: 13.8, lineHeight: 1.44, color: "var(--text-2)", letterSpacing: "0.1px" }}>
+    <p style={{ position: "relative", margin: 0, paddingLeft: 13, fontFamily: "var(--font-serif)", fontSize: 12.6, lineHeight: 1.38, color: "var(--text-2)", letterSpacing: "0.1px" }}>
       <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 3, bottom: 3, width: 3, borderRadius: 3, background: "linear-gradient(var(--accent), rgba(132,178,104,.15))" }} />
       {scope} is <b style={{ color: trendColor, fontWeight: 600 }}>{trend}</b> over 90 days.{" "}
       {diverge ? diverge
@@ -384,6 +381,7 @@ function Snappy({ cur }) {
 // arrow, `highlight` gives the row a subtle coral wash (the priority action).
 // nav as a 2×2 grid: Accounts + Actions on top, Drill Down + Trends below.
 // icon = the exact Fair Skies green line-icon for each destination.
+const NAV_OVERVIEW = { href: "/bc", title: "Overview", tab: "Overview", color: "#3F6E4A", sub: "The book at a glance, scoped to your selection.", icon: <><circle cx="12" cy="12" r="8.5" /><path d="M12 12l3.5-3.5" /><path d="M12 3.5v2M20.5 12h-2M12 20.5v-2M3.5 12h2" /></> };
 const NAV = [
   { href: "/book", title: "Accounts", tab: "Accounts", color: "#3F6E4A", sub: "Find accounts by area and work your list.", icon: <><path d="M4 9l1.6-4h12.8L20 9" /><path d="M5 9v10h14V9" /><path d="M10 19v-5h4v5" /></> },
   { href: "/actions", title: "Actions", tab: "Actions", color: "#5E9277", sub: "Your highest-priority plays for the day.", highlight: true, icon: <><path d="M6 21V4" /><path d="M6 5h11l-2.2 3L17 11H6" /></> },
@@ -553,50 +551,73 @@ function tierTag(t) { const s = tierSignal(t); return s.kind ? { text: s.text, t
 // The stage is a FIXED height and the ground bleeds edge to edge, so the sky runs straight
 // into it with no card seam and nothing shifts as you swipe between scopes. Only the tree
 // itself changes size (by volume); it is bottom-anchored so the trunk stays in the soil.
-const STAGE_H = 126;      // never changes — this is what stops the page jumping on swipe
+const STAGE_H = 268;      // never changes — this is what stops the page jumping on swipe
 const BLEED = 20;         // main's horizontal padding, cancelled so the ground is full width
 function ScopeTree({ cur, maxCur, onOpen }) {
   const { night } = useTheme();
-  const share = maxCur > 0 ? Math.min(1, (cur.cur || 0) / maxCur) : 0;
-  // √ so small cities stay legible; capped so the crown never clips the top of the stage
-  const size = Math.round(66 + Math.sqrt(share) * 38);
-  const tag = cur.curPct == null ? null : cur.curPct > 0 ? { t: `▲ ${cur.curPct}%`, c: "var(--up)" }
-    : cur.curPct < 0 ? { t: `▼ ${Math.abs(cur.curPct)}%`, c: "var(--down)" } : { t: "flat", c: "var(--text-3)" };
+  // one steady tree — same size on every slide, regardless of volume (Joe's rule)
+  const size = 218;
+  // the scope's health word — same bands + colors as the desktop status scale
+  const vitStatus = v => v >= 0.80 ? ["Surging", "#2f9d63"] : v >= 0.62 ? ["Healthy", "#3f8a5a"] : v >= 0.48 ? ["Steady", "#8a8f98"] : v >= 0.37 ? ["Softening", "#cf8a54"] : v >= 0.26 ? ["Slipping", "#c0783c"] : v >= 0.15 ? ["At Risk", "#c0564e"] : ["Critical", "#a5342b"];
+  const [stWord, stColor] = vitStatus(cur.treeVit || 0.5);
   return (
     <div style={{ marginTop: 2 }}>
-      {/* the scope is already named in big serif above — only the affordance is needed here */}
-      <div style={{ textAlign: "center", fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", opacity: 0.85 }}>
-        tap the tree for {cur.label}&rsquo;s accounts →
-      </div>
       <div onClick={onOpen} style={{ position: "relative", cursor: "pointer", height: STAGE_H, overflow: "hidden",
         marginLeft: -BLEED, marginRight: -BLEED }}>
         {/* ground: sits on the page's own sky, no panel behind it */}
-        <svg viewBox="0 0 380 126" preserveAspectRatio="none" aria-hidden="true"
+        <svg viewBox="0 0 380 268" preserveAspectRatio="none" aria-hidden="true"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", zIndex: 0 }}>
           <defs><linearGradient id="stHill" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={night ? "#34502f" : "#8fbd72"} stopOpacity={night ? "0.7" : "0.55"} />
             <stop offset="1" stopColor={night ? "#16241a" : "#6f9e5a"} stopOpacity={night ? "0.25" : "0.16"} /></linearGradient></defs>
-          <path d="M0 87 C 70 74, 150 84, 220 79 C 290 74, 340 84, 380 77 L380 126 L0 126 Z" fill="url(#stHill)" />
-          <path d="M0 87 C 70 74, 150 84, 220 79 C 290 74, 340 84, 380 77" fill="none"
+          <path d="M0 228 C 70 210, 150 224, 220 217 C 290 210, 340 224, 380 214 L380 268 L0 268 Z" fill="url(#stHill)" />
+          <path d="M0 228 C 70 210, 150 224, 220 217 C 290 210, 340 224, 380 214" fill="none"
             stroke={night ? "rgba(150,200,140,.4)" : "#eaf3df"} strokeWidth="1.5" opacity="0.8" />
         </svg>
-        {/* the tree is bottom-aligned and pushed a little PAST the grass line so the trunk is planted */}
-        <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 20 }}>
-          <FluidTree h={cur.treeVit} size={size} play={false} />
+        {/* the tree stands to the LEFT, planted past the grass line; the blurb rides the sky beside it */}
+        <div style={{ position: "absolute", inset: 0, zIndex: 1, display: "flex", alignItems: "flex-end", justifyContent: "flex-start", paddingLeft: 16, paddingBottom: 13 }}>
+          <FluidTree key={cur.key} h={cur.treeVit} size={size} play={true} delay={60} />
+        </div>
+        <div key={"st" + cur.key} className="sceneFade" style={{ position: "absolute", top: 8, left: 16, width: Math.round(size * 60 / 62), textAlign: "center", zIndex: 2 }}>
+          <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: stColor }}>{stWord}</span>
+        </div>
+        <div style={{ position: "absolute", top: "48%", transform: "translateY(-50%)", left: 236, right: 12, zIndex: 2 }}>
+          <TerrBlurb cur={cur} />
         </div>
       </div>
-      {/* stats sit on the soil, flush under the ground so it reads continuous */}
-      <div style={{ marginLeft: -BLEED, marginRight: -BLEED, padding: "0 20px 6px", textAlign: "center",
-        background: night ? "linear-gradient(180deg, rgba(52,80,47,.30), rgba(52,80,47,0))" : "linear-gradient(180deg, rgba(111,158,90,.16), rgba(111,158,90,0))" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 7, justifyContent: "center" }}>
-          <span style={{ fontFamily: "var(--font-mono)", fontSize: 19, fontWeight: 700, color: "var(--text)" }}>{Math.round(cur.cur).toLocaleString()}</span>
-          <span style={{ fontSize: 10, color: "var(--text-3)" }}>cases · 90 days</span>
-          {tag && <span style={{ fontSize: 11, fontWeight: 700, color: tag.c }}>{tag.t}</span>}
-        </div>
-        <div style={{ fontSize: 10, color: "var(--text-3)", marginTop: 1 }}>
-          {cur.acctNow} active {cur.acctNow === 1 ? "account" : "accounts"} · {cur.rosNow.toFixed(1)} cases / account / mo
-        </div>
-      </div>
+      {/* the ground fades out beneath — the numbers already live in the bars up top */}
+      <div style={{ marginLeft: -BLEED, marginRight: -BLEED, height: 10,
+        background: night ? "linear-gradient(180deg, rgba(52,80,47,.30), rgba(52,80,47,0))" : "linear-gradient(180deg, rgba(111,158,90,.16), rgba(111,158,90,0))" }} />
+    </div>
+  );
+}
+
+// the little sky blurb beside the tree — overall trend + the one or two need-to-knows,
+// scoped to whatever slide is showing (reads the same brief the pills read)
+function TerrBlurb({ cur }) {
+  const b = cur.brief || {};
+  const g = cur.curPct;
+  const scope = cur.key === "ALL" ? "Your book" : cur.label;
+  const trend = g == null ? "holding steady" : g >= 6 ? `up ${g}%` : g >= -2 ? "holding steady" : g > -8 ? `softening ${Math.abs(g)}%` : `sliding ${Math.abs(g)}%`;
+  const trendColor = g == null ? "var(--text-3)" : g >= 6 ? "var(--up)" : g >= -2 ? "var(--accent-deep)" : "var(--gold)";
+  const amber = { color: "var(--gold)", fontWeight: 700 }, green = { color: "var(--up)", fontWeight: 700 };
+  const lines = [];
+  if (b.acctNet != null && b.acctNet <= -3) lines.push(<span key="a">Losing accounts — net <b style={amber}>{b.acctNet}%</b> ({b.lostCount} lapsed vs {b.newCount} new).</span>);
+  else if (b.distPct != null && b.distPct <= -2) lines.push(<span key="d">Placements down <b style={amber}>{Math.abs(b.distPct)}%</b> — watch distribution.</span>);
+  else if (b.rosPct != null && b.rosPct <= -3) lines.push(<span key="r">Rate of sale off <b style={amber}>{Math.abs(b.rosPct)}%</b>.</span>);
+  else if (b.chDown) lines.push(<span key="c"><b style={amber}>{b.chDown.name}</b> is the soft spot, down {Math.abs(b.chDown.g)}%.</span>);
+  if (lines.length < 2 && b.quietN >= 3) lines.push(<span key="q"><b style={amber}>{b.quietN} steady accounts</b> quiet 60+ days.</span>);
+  const pos = b.chUp ? <span><b style={green}>{b.chUp.name}</b> pulling +{b.chUp.g}%</span>
+    : (b.distPct != null && b.distPct >= 3) ? <span>distribution grew <b style={green}>+{b.distPct}%</b></span>
+    : b.newCount > 0 ? <span><b style={green}>{b.newCount} new account{b.newCount === 1 ? "" : "s"}</b> opened</span> : null;
+  return (
+    <div key={cur.key} className="sceneFade" style={{ position: "relative", paddingLeft: 11, fontFamily: "var(--font-serif)", fontSize: 11.5, lineHeight: 1.4, color: "var(--text-2)", letterSpacing: "0.1px" }}>
+      <span aria-hidden="true" style={{ position: "absolute", left: 0, top: 3, bottom: 3, width: 3, borderRadius: 3, background: "linear-gradient(var(--accent), rgba(132,178,104,.15))" }} />
+      <div><b style={{ color: "var(--text)", fontWeight: 700 }}>{scope}</b> is <b style={{ color: trendColor, fontWeight: 700 }}>{trend}</b> over 90 days.</div>
+      {lines.slice(0, 2).map((l, i) => <div key={i} style={{ marginTop: 3 }}>{l}</div>)}
+      {pos && <div style={{ marginTop: 3 }}>Bright spot — {pos}.</div>}
+      {!lines.length && !pos && <div style={{ marginTop: 3 }}>Nothing urgent on the watch list.</div>}
+      <div style={{ marginTop: 6, fontFamily: "var(--font-sans)", fontSize: 9.5, fontWeight: 600, color: "var(--text-3)", opacity: 0.9 }}>tap the tree for accounts →</div>
     </div>
   );
 }
@@ -766,23 +787,26 @@ export default function Home() {
   const router = useRouter();
   const [phase, setPhase] = useState(booted ? "ready" : "splash"); // splash → ready
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [labelPop, setLabelPop] = useState(false);   // the little label pop-up by the bottom switches
   const [rows, setRows] = useState(null);
   const [fcRows, setFcRows] = useState(null);   // fc_base — desktop's forecast source, so annual numbers tie out
   const [monthly, setMonthly] = useState(null);   // account_id -> months[24], for city-level annuals
-  const [labelParam, setLabelParam] = useState("");   // "" | BLIND CORNER | TORCH — mirrors desktop's parent filter
+  const [labelParam, setLabelParam] = useState(() => getLabel());   // resolved BEFORE the first fetch — no all-labels flash (getLabel defaults to BLIND CORNER)
+  const [plcMap, setPlcMap] = useState(null);   // account_id -> {now,prev} label-scoped placement counts; null = use whole-account columns
+  const plcCache = useRef({});                  // per-label cache so flipping labels doesn't refetch
   const brewery = profile.name === "brewery";
   const [err, setErr] = useState(null);
   const [greet, setGreet] = useState("Welcome");
   const [slide, setSlide] = useState(0);
   const [confirm, setConfirm] = useState(null);
   const drag = useRef({ x: 0, on: false });
+  const movedRef = useRef(false);   // a real swipe suppresses the tree's tap-through
   const [dragDx, setDragDx] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [noTrans, setNoTrans] = useState(false);
   const { burst, styleFor } = useExplode();
   const { night, setNight } = useTheme();
 
-  useEffect(() => { setLabelParam(getLabel()); }, []);
 
   useEffect(() => {
     (async () => {
@@ -791,7 +815,7 @@ export default function Home() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,account_name,cur90,prev90,state,city,chain,channel,headline,account_weight,prior90_pct,last_order_w,spark,live_placements,live_prev")
+            .select("account_id,account_name,cur90,prev90,state,city,chain,channel,sales_rep,headline,account_weight,prior90_pct,last_order_w,spark,live_placements,live_prev")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
@@ -806,6 +830,38 @@ export default function Home() {
       } catch (e) { setErr(e.message || "load failed"); }
     })();
   }, [labelParam]);   // switching label refetches so every number re-scopes
+
+  // Placements under a label: account_list's live_placements/live_prev are whole-account,
+  // so when a label is selected count label-only placements from item_grid instead
+  // (items with l90>0 now / l90_prev>0 prior, per account). No label -> columns as-is.
+  useEffect(() => {
+    if (!brewery || !labelParam) { setPlcMap(null); return; }
+    if (plcCache.current[labelParam]) { setPlcMap(plcCache.current[labelParam]); return; }
+    let dead = false;
+    setPlcMap(null);
+    (async () => {
+      try {
+        const m = {};
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase.from("item_grid")
+            .select("account_id,l90,l90_prev").eq("parent", labelParam)
+            .range(from, from + 4999);
+          if (error) throw error;
+          for (const r of (data || [])) {
+            const e = m[r.account_id] || (m[r.account_id] = { now: 0, prev: 0 });
+            if ((Number(r.l90) || 0) > 0) e.now++;
+            if ((Number(r.l90_prev) || 0) > 0) e.prev++;
+          }
+          if (!data || data.length < 5000) break;
+          from += 5000;
+        }
+        plcCache.current[labelParam] = m;
+        if (!dead) setPlcMap(m);
+      } catch { /* fall back to whole-account columns */ }
+    })();
+    return () => { dead = true; };
+  }, [labelParam, brewery]);
 
   // fc_base — the SAME source + engine the desktop forecast uses, so Current/Projected Annual match it exactly
   useEffect(() => { (async () => { try { const { data, error } = await supabase.rpc("fc_base"); if (!error && data) setFcRows(data); } catch {} })(); }, []);
@@ -842,11 +898,11 @@ export default function Home() {
         let c = 0, p = 0, an = 0; const cnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 };
         for (const r of g) { c += r.cur90 || 0; p += r.prev90 || 0; if ((r.cur90 || 0) > 0) an++; cnt[tierBucket(r.headline)]++; }
         const pct = gpct(c, p), sc = tierScore(pct, cnt, g.length);
-        return { key: t.key, label: t.label, n: g.length, cur: c, ros: an ? c / an : 0, pct, vit: sc.vit, color: sc.color, desc: tierDesc(pct, cnt, g.length) };
+        return { key: t.key, label: t.label, n: g.length, cur: c, ros: an ? c / an / 3 : 0, pct, vit: sc.vit, color: sc.color, desc: tierDesc(pct, cnt, g.length) };
       });
       const allCnt = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }, sp = new Array(12).fill(0);
       let distNow = 0, distPrev = 0;
-      for (const r of list) { allCnt[tierBucket(r.headline)]++; distNow += r.live_placements || 0; distPrev += r.live_prev || 0; const s = r.spark; if (Array.isArray(s)) for (let i = 0; i < 12; i++) sp[i] += s[i] || 0; }
+      for (const r of list) { allCnt[tierBucket(r.headline)]++; const pl = plcMap && plcMap[r.account_id]; distNow += plcMap ? (pl ? pl.now : 0) : (r.live_placements || 0); distPrev += plcMap ? (pl ? pl.prev : 0) : (r.live_prev || 0); const s = r.spark; if (Array.isArray(s)) for (let i = 0; i < 12; i++) sp[i] += s[i] || 0; }
       const curPct = gpct(cur, prev), stSc = tierScore(curPct, allCnt, list.length);
       const quarters = [2, 5, 8, 11].map((qi, k, arr) => { const cases = Math.round(sp[qi]), prior = k > 0 ? sp[arr[k - 1]] : null; return { label: QLABELS[k], cases, qoq: prior > 0 ? Math.round((100 * (cases - prior)) / prior) : null }; });
       // two windows for the rooted trees: prior 90d (left) and this 90d (right).
@@ -871,7 +927,7 @@ export default function Home() {
       };
       const bySize = list.filter(r => effWeight(r) > 0).sort((a, b) => effWeight(b) - effWeight(a));
       const NB = bySize.length, c1 = Math.round(NB * 0.2), c2 = Math.round(NB * 0.6), c3 = Math.round(NB * 0.8);
-      const tstat = (lbl, rws) => { let c = 0, p = 0, an = 0, ap = 0, newN = 0, lostN = 0, dN = 0, dP = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { const cc = r.cur90 || 0, pp = r.prev90 || 0; c += cc; p += pp; if (cc > 0) an++; if (pp > 0) ap++; dN += r.live_placements || 0; dP += r.live_prev || 0; const hl = String(r.headline || "").toLowerCase().trim(); if (hl === "new") newN++; else if (hl === "lapsed") lostN++; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length), ros = an ? c / an : 0, rosPrev = ap ? p / ap : 0, perNow = an ? dN / an : 0, perPrev = ap ? dP / ap : 0; return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color, ros, rosPct: rosPrev > 0 ? Math.round((100 * (ros - rosPrev)) / rosPrev) : null, newN, lostN, distPct: dP > 0 ? Math.round((100 * (dN - dP)) / dP) : null, distPerPct: perPrev > 0 ? Math.round((100 * (perNow - perPrev)) / perPrev) : null }; };
+      const tstat = (lbl, rws) => { let c = 0, p = 0, an = 0, ap = 0, newN = 0, lostN = 0, dN = 0, dP = 0; const cn = { thriving: 0, bearing: 0, wilting: 0, bare: 0, sapling: 0 }; for (const r of rws) { const cc = r.cur90 || 0, pp = r.prev90 || 0; c += cc; p += pp; if (cc > 0) an++; if (pp > 0) ap++; dN += r.live_placements || 0; dP += r.live_prev || 0; const hl = String(r.headline || "").toLowerCase().trim(); if (hl === "new") newN++; else if (hl === "lapsed") lostN++; cn[tierBucket(r.headline)]++; } const pc = gpct(c, p), sc = tierScore(pc, cn, rws.length), ros = an ? c / an / 3 : 0, rosPrev = ap ? p / ap / 3 : 0, perNow = an ? dN / an : 0, perPrev = ap ? dP / ap : 0; return { label: lbl, n: rws.length, cases: Math.round(c), pct: pc, vit: sc.vit, color: sc.color, ros, rosPct: rosPrev > 0 ? Math.round((100 * (ros - rosPrev)) / rosPrev) : null, newN, lostN, distPct: dP > 0 ? Math.round((100 * (dN - dP)) / dP) : null, distPerPct: perPrev > 0 ? Math.round((100 * (perNow - perPrev)) / perPrev) : null }; };
       const tiers3 = [tstat("Large", bySize.slice(0, c1)), tstat("Mid", bySize.slice(c1, c2)), tstat("Small", bySize.slice(c2, c3))];
       // fc_base only carries state-level nodes, so a city gets the same deterministic
       // projection the desktop uses below state level — annuals appear on every slide
@@ -882,25 +938,24 @@ export default function Home() {
         if (h.some(v => v > 0)) fc = { L52: fsum(h.slice(12)), fc52: fsum(autoForecast(h)) };
       }
       const l52w = fc ? Math.round(fc.L52) : null, proj52w = fc ? Math.round(fc.fc52) : null, projPct = (fc && l52w > 0) ? Math.round((proj52w - l52w) / l52w * 100) : null;   // Current/Projected Annual straight from the desktop engine (ties out exactly)
-      return { label, key, cur, curPct, acctNow, acctPct: acctNow ? Math.round((100 * (newA - lostA)) / acctNow) : null, rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers, treeVit: stSc.vit, treeColor: stSc.color, quarters, windows, tiers3, distNow, distPrev, distPct: gpct(distNow, distPrev), l52w, proj52w, projPct };
+      return { label, key, cur, curPct, acctNow, acctPct: acctPrev > 0 ? Math.round((100 * (acctNow - acctPrev)) / acctPrev) : null, /* vs prior 90 = active-now vs active-prior (desktop convention) */ rosNow, rosPct: rosPrev > 0 ? Math.round((100 * (rosNow - rosPrev)) / rosPrev) : null, n: list.length, brief: buildBrief(list), tiers, treeVit: stSc.vit, treeColor: stSc.color, quarters, windows, tiers3, distNow, distPrev, distPct: gpct(distNow, distPrev), l52w, proj52w, projPct };
     };
-    // Blind Corner is a single state, so the swipe runs by CITY: Illinois total first,
-    // then the fifteen largest cities by 90-day volume. Every account is still counted in
-    // the Illinois slide — the fifteen only caps how many city slides you swipe through.
+    // Brewery world swipes by TERRITORY — the Sales_Rep grouping, exactly how the desktop's
+    // front door slices the book. All Territories first, then each rep's book high→low
+    // (Unassigned last, whatever its size). Each slide shows ONE tree for that territory.
     if (brewery) {
-      const byCity = {};
-      for (const r of rows) { if (!r.city) continue; (byCity[r.city] || (byCity[r.city] = [])).push(r); }
-      const cities = Object.keys(byCity)
-        .map(c => mk(titleCase(c), "CITY:" + c, byCity[c]))
-        .sort((a, b) => b.cur - a.cur)
-        .slice(0, 15);
-      return [mk("Illinois", "ALL", rows), ...cities];
+      const byRep = {};
+      for (const r of rows) { const rp = r.sales_rep || "Unassigned"; (byRep[rp] || (byRep[rp] = [])).push(r); }
+      const reps = Object.keys(byRep)
+        .map(rp => mk(titleCase(rp), "REP:" + rp, byRep[rp]))
+        .sort((a, b) => ((a.label === "Unassigned") - (b.label === "Unassigned")) || b.cur - a.cur);
+      return [mk("All Territories", "ALL", rows), ...reps];
     }
     const byState = {};
     for (const r of rows) { if (!r.state) continue; (byState[r.state] || (byState[r.state] = [])).push(r); }
     const states = Object.keys(byState).map(st => mk(STNAME[st] || st, st, byState[st])).sort((a, b) => b.cur - a.cur);
     return [mk("All accounts", "ALL", rows), ...states];
-  }, [rows, fcByState, brewery, monthly]);
+  }, [rows, fcByState, brewery, monthly, plcMap]);
   // top chains across the whole book — for the chain orchard (tap → that chain's report)
   const chains = useMemo(() => {
     if (!rows) return null;
@@ -922,8 +977,8 @@ export default function Home() {
   function go(d) { if (!slides) return; const n = slides.length; pick((slide + d + n) % n); }
   // Gmail-style drag: the bar follows the finger with a little rubber-band, then
   // snaps back and commits to the next/prev slide if dragged past the threshold.
-  function onDown(e) { if (!slides || slides.length < 2) return; drag.current = { x: e.clientX, on: true }; setDragging(true); }
-  function onMove(e) { if (!drag.current.on) return; let d = e.clientX - drag.current.x; if (Math.abs(d) > 90) d = (d > 0 ? 1 : -1) * (90 + (Math.abs(d) - 90) * 0.35); setDragDx(d); }
+  function onDown(e) { if (!slides || slides.length < 2) return; drag.current = { x: e.clientX, on: true }; movedRef.current = false; setDragging(true); }
+  function onMove(e) { if (!drag.current.on) return; let d = e.clientX - drag.current.x; if (Math.abs(d) > 8) movedRef.current = true; if (Math.abs(d) > 90) d = (d > 0 ? 1 : -1) * (90 + (Math.abs(d) - 90) * 0.35); setDragDx(d); }
   function onUp() { if (!drag.current.on) return; drag.current.on = false; setDragging(false); const d = dragDx; if (d < -48) commit(1); else if (d > 48) commit(-1); else setDragDx(0); }
   // carousel commit: slide the card out the way it was swiped, swap, then slide the
   // new card in from the other side — a full rotate rather than a snap-back.
@@ -943,7 +998,7 @@ export default function Home() {
       <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "linear-gradient(180deg,#b6dcf1 0%,#cce4f4 16%,#d7e6df 46%,#f6f7f4 66%)" }} />
       <div aria-hidden="true" style={{ position: "fixed", inset: 0, zIndex: 0, pointerEvents: "none", background: "linear-gradient(180deg,#0c1830 0%,#0f1c22 24%,#0d140e 56%)", opacity: night ? 1 : 0, transition: "opacity .8s ease" }} />
 
-      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", padding: "12px 20px 10px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
+      <main className="pagefade" style={{ position: "relative", minHeight: "100vh", padding: "10px 20px 6px", fontFamily: "var(--font-sans)", maxWidth: 480, margin: "0 auto", overflow: "hidden" }}>
         {/* the sun sets & the moon rises when you toggle night — a little time-of-day transition */}
         {/* no overflow clip here — it sliced the sun's glow into a visible rectangle against the
             sky. The parked body is hidden by its own opacity, so nothing leaks without it. */}
@@ -963,11 +1018,7 @@ export default function Home() {
         {/* top row: greeting (kept low-key) + logo */}
         <div className="riseIn" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, height: 34 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-            <a href={cur && cur.key && cur.key !== "ALL" ? `/news?scope=${encodeURIComponent(cur.key)}` : "/news"} aria-label="IPA news" style={{ flexShrink: 0, width: 30, height: 30, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", boxShadow: "var(--shadow-sm)", color: "var(--accent-deep)", cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", textDecoration: "none" }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 5h13v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" /><path d="M17 8h2a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2" /><path d="M7 8h7M7 11h7M7 14h4" /></svg>
-            </a>
             <div style={{ minWidth: 0, lineHeight: 1.18 }}>
-              <div style={{ fontSize: 13, color: "var(--text-2)", fontWeight: 600, letterSpacing: "-0.1px", whiteSpace: "nowrap" }}>{greet}, Joe</div>
               <div style={{ fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>Updated {DATA_UPDATED}</div>
             </div>
           </div>
@@ -976,18 +1027,18 @@ export default function Home() {
 
         {/* the scope you're viewing — centered + prominent */}
         {cur && (
-          <div className="riseIn" style={{ marginTop: 7, textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.02 }}>{cur.key === "ALL" ? (brewery ? cur.label : "All states") : cur.label}</div>
+          <div className="riseIn" style={{ marginTop: 4, textAlign: "center" }}>
+            <div style={{ fontFamily: "var(--font-serif)", fontSize: 21, fontWeight: 600, color: "var(--text)", letterSpacing: "-0.4px", lineHeight: 1.02 }}>{cur.key === "ALL" ? (brewery ? cur.label : "All states") : cur.label}</div>
             <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 1 }}>{cur.key === "ALL" ? "Your whole book" : `Focused on ${cur.label}`}{slides.length > 1 ? " · swipe the stats to change" : ""}</div>
           </div>
         )}
 
         {/* info box (swipeable) — 90D cases / accts / ROS — ABOVE the brief */}
         {cur && (
-          <div style={{ marginTop: 8 }}>
-            <div onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
-              style={{ transform: `translateX(${dragDx}px)`, transition: (dragging || noTrans) ? "none" : "transform .3s cubic-bezier(.2,.7,.2,1)", touchAction: "pan-y", cursor: slides && slides.length > 1 ? "grab" : "default" }}>
-            <div className="riseIn" style={{ position: "relative", background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "9px 10px" }}>
+          <div style={{ marginTop: 14, touchAction: "pan-y", cursor: slides && slides.length > 1 ? "grab" : "default" }}
+            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+            <div style={{ transform: `translateX(${dragDx}px)`, transition: (dragging || noTrans) ? "none" : "transform .3s cubic-bezier(.2,.7,.2,1)" }}>
+            <div className="riseIn" style={{ position: "relative", background: night ? "rgba(18,28,20,.48)" : "rgba(255,255,255,.48)", backdropFilter: "blur(7px)", WebkitBackdropFilter: "blur(7px)", border: "0.5px solid var(--border)", borderRadius: 16, boxShadow: "var(--shadow)", padding: "8px 10px" }}>
               <span aria-hidden="true" style={{ position: "absolute", top: -1, left: -1, width: 16, height: 16, borderTop: "2px solid var(--accent)", borderLeft: "2px solid var(--accent)", borderTopLeftRadius: 7 }} />
               <span aria-hidden="true" style={{ position: "absolute", bottom: -1, right: -1, width: 13, height: 13, borderBottom: "1.5px solid var(--accent)", borderRight: "1.5px solid var(--accent)", borderBottomRightRadius: 7, opacity: 0.4 }} />
               <div key={cur.key} className="sceneFade">
@@ -998,30 +1049,20 @@ export default function Home() {
                   <Stat label="Placements" value={kf(cur.distNow)} pct={cur.distPct} divider delay={1.0} />
                   <Stat label="ROS / Acct" value={cur.rosNow.toFixed(1)} unit="cs" pct={cur.rosPct} divider delay={1.5} />
                 </div>
-                {/* annual line — current · projected · growth (centered; projected in forecast blue) */}
-                <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 7, paddingTop: 6, borderTop: "0.5px solid var(--border)" }}>
-                  <SmallStat label="Current Annual" value={cur.l52w == null ? "—" : kf(cur.l52w)} />
-                  <SmallStat label="Projected Annual" value={cur.proj52w == null ? "—" : kf(cur.proj52w)} color="#5b6bd0" />
-                  <SmallStat label="Growth" value={cur.projPct == null ? "—" : `${cur.projPct > 0 ? "+" : ""}${cur.projPct}%`} color={cur.projPct > 0 ? "var(--up)" : cur.projPct < 0 ? "var(--down)" : "var(--text-3)"} />
-                </div>
               </div>
             </div>
             </div>
-            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 5 }}>
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 4 }}>
               {slides.slice(0, 9).map((sl, i) => (
                 <span key={i} onClick={() => pick(i)} style={{ width: i === slide ? 16 : 6, height: 6, borderRadius: 3, background: i === slide ? "var(--accent)" : "var(--border-strong)", transition: "width .2s, background .2s", cursor: "pointer" }} />
               ))}
               {slides.length > 9 && <span style={{ fontSize: 10, color: "var(--text-3)", marginLeft: 2 }}>+{slides.length - 9}</span>}
             </div>
-            <div style={{ textAlign: "center", fontSize: 9.5, color: "var(--text-3)", marginTop: 2 }}>vs prior 90 days</div>
+            <div style={{ textAlign: "center", fontSize: 9, color: "var(--text-3)", marginTop: 1 }}>vs prior 90 days</div>
+            <div style={{ height: 4 }} />
+            {brewery && <ScopeTree cur={cur} maxCur={maxSlideCur} onOpen={() => { if (movedRef.current) return; setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />}
           </div>
         )}
-
-
-        {/* snappy need-to-know — BELOW the 90D card, trails the swipe with a sticky lag */}
-        <div className="riseIn" style={{ marginTop: 6, marginBottom: 0, minHeight: 121, transform: `translateX(${Math.max(-44, Math.min(44, dragDx * 0.5))}px)`, transition: dragging ? "transform .22s ease" : noTrans ? "none" : "transform .5s cubic-bezier(.2,.7,.2,1) .05s" }}>
-          {cur ? <Snappy cur={cur} /> : <div style={{ fontSize: 12.5, color: "var(--text-3)" }}>Reading your book…</div>}
-        </div>
 
         {/* loading / error */}
         {!slides && !err && <div style={{ marginTop: 18, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
@@ -1029,7 +1070,7 @@ export default function Home() {
 
         {/* your book by size — Large / Mid / Small tiers standing on the hills */}
         {cur && (brewery
-          ? <ScopeTree cur={cur} maxCur={maxSlideCur} onOpen={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book"); }} />
+          ? null
           : cur.tiers3 && (
             <div style={{ marginTop: 11 }}>
               <div style={{ textAlign: "center", marginBottom: 4 }}>
@@ -1041,46 +1082,53 @@ export default function Home() {
           ))}
 
         {/* primary nav — moved to the bottom, under the trees, so the section flows */}
-        <div className="riseIn" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 10 }}>
-          {NAV.map((c, i) => (
-            <div key={c.href} onClick={() => router.push(c.href)} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 5, padding: "10px 4px 9px", borderRadius: ["22px", "24px 22px 26px 22px", "22px 26px 22px 24px", "22px"][i] || "22px", cursor: "pointer", border: night ? "1px solid var(--border)" : "none", background: night ? "linear-gradient(180deg,#212c22,#18211a)" : "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: night ? "0 8px 20px -14px rgba(0,0,0,.55)" : "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
-              <svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{c.icon}</svg>
-              <span style={{ fontSize: 11, color: "var(--text-2)", letterSpacing: "0.2px", whiteSpace: "nowrap" }}>{c.tab}</span>
+        <div className="riseIn" style={{ display: "grid", gridTemplateColumns: brewery ? "repeat(5, 1fr)" : "1fr 1fr", gap: 6, marginTop: 12 }}>
+          {(brewery ? [NAV[0], NAV[1], NAV_OVERVIEW, NAV[2], NAV[3]] : NAV).map((c) => (
+            <div key={c.href} onClick={() => router.push(c.href)} style={{ minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, padding: "9px 2px 8px", borderRadius: 16, cursor: "pointer", border: night ? "1px solid var(--border)" : "none", background: night ? "linear-gradient(180deg,#212c22,#18211a)" : "linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.62))", boxShadow: night ? "0 8px 20px -14px rgba(0,0,0,.55)" : "0 12px 24px -18px rgba(63,110,74,.6), inset 0 1px 0 rgba(255,255,255,.6)" }}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{c.icon}</svg>
+              <span style={{ fontSize: 9.5, color: "var(--text-2)", letterSpacing: "0.1px", whiteSpace: "nowrap" }}>{c.tab === "Drill Down" ? "Drill" : c.tab}</span>
             </div>
           ))}
         </div>
 
-        {/* label filter — same Blind Corner / Torch split the desktop drill uses */}
-        {brewery && (
-          <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 10 }}>
-            {LABELS.map(([v, lbl]) => {
-              const on = labelParam === v;
-              return (
-                <button key={v || "all"} onClick={() => { if (on) return; setLabel(v); setLabelParam(v); setRows(null); setSlide(0); }}
-                  style={{ border: on ? "1px solid var(--accent)" : "0.5px solid var(--border-strong)", background: on ? "var(--accent)" : "var(--surface)",
-                    color: on ? "#fff" : "var(--text-2)", fontFamily: "inherit", fontSize: 11.5, fontWeight: 700,
-                    padding: "6px 13px", borderRadius: 999, cursor: on ? "default" : "pointer" }}>
-                  {lbl}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div style={{ height: 5 }} />
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 10 }}>
-          <button onClick={() => setPickerOpen(true)} aria-label="Change tree style" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px" }}>
+        <div style={{ height: 2 }} />
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 4 }}>
+          <button onClick={() => setPickerOpen(true)} aria-label="Change tree style" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 8px", whiteSpace: "nowrap" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1.1.9-2 2-2h2.4A4.6 4.6 0 0 0 22 11 10 10 0 0 0 12 2Z" /><circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" /><circle cx="15.5" cy="7" r="1.4" fill="currentColor" stroke="none" /><circle cx="17.5" cy="12" r="1.4" fill="currentColor" stroke="none" /></svg>
             Change style
           </button>
           <span aria-hidden="true" style={{ width: 1, height: 13, background: "var(--border-strong)", opacity: 0.55 }} />
-          <button onClick={() => setNight(!night)} aria-label={night ? "Turn off nighttime mode" : "Turn on nighttime mode"} style={{ border: "none", background: "transparent", color: night ? "#e6c86a" : "var(--text-3)", fontSize: 11.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", opacity: night ? 1 : 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 10px" }}>
+          {brewery && (
+            <span style={{ position: "relative", display: "inline-flex" }}>
+              <button onClick={() => setLabelPop(o => !o)} aria-label="Choose label" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 8px", whiteSpace: "nowrap" }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 13.4 12 22 2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none" /></svg>
+                {labelParam === "" ? "All labels" : labelParam === "TORCH" ? "Torch" : "Blind Corner"}
+              </button>
+              {labelPop && <>
+                <span onClick={() => setLabelPop(false)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />
+                <span style={{ position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)", zIndex: 71, background: "var(--surface)", border: "0.5px solid var(--border-strong)", borderRadius: 12, boxShadow: "var(--shadow-pop)", padding: 5, display: "flex", flexDirection: "column", minWidth: 148 }}>
+                  {LABELS.map(([v, lbl]) => {
+                    const on = labelParam === v;
+                    return (
+                      <button key={v || "all"} onClick={() => { setLabelPop(false); if (on) return; setLabel(v); setLabelParam(v); setRows(null); setSlide(0); }}
+                        style={{ border: "none", background: on ? "var(--surface-2)" : "transparent", color: on ? "var(--text)" : "var(--text-2)", fontFamily: "inherit", fontSize: 12.5, fontWeight: on ? 700 : 600, padding: "8px 12px", borderRadius: 8, cursor: on ? "default" : "pointer", textAlign: "left", whiteSpace: "nowrap" }}>
+                        {lbl}{on ? "  ✓" : ""}
+                      </button>
+                    );
+                  })}
+                </span>
+              </>}
+            </span>
+          )}
+          {brewery && <span aria-hidden="true" style={{ width: 1, height: 13, background: "var(--border-strong)", opacity: 0.55 }} />}
+          <button onClick={() => setNight(!night)} aria-label={night ? "Turn off nighttime mode" : "Turn on nighttime mode"} style={{ border: "none", background: "transparent", color: night ? "#e6c86a" : "var(--text-3)", fontSize: 11.5, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", opacity: night ? 1 : 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 8px", whiteSpace: "nowrap" }}>
             {night
               ? <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" /></svg>
               : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4.4" /><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.2 5.2l1.6 1.6M17.2 17.2l1.6 1.6M18.8 5.2l-1.6 1.6M6.8 17.2l-1.6 1.6" /></svg>}
             {night ? "Night on" : "Nighttime"}
           </button>
         </div>
-        <div style={{ height: 5 }} />
+        <div style={{ height: 2 }} />
         </div>
       </main>
 

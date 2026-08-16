@@ -5,7 +5,8 @@ import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
 import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
-import { parseScope, getScope } from "../../lib/scope";
+import { parseScope, getScope, getLabel } from "../../lib/scope";
+import { withHealth } from "../../lib/health";
 
 // each play bucket gets a small tree that reads its situation at a glance
 const TONE_TREE = { red: "atrisk", amber: "slipping", green: "thriving", blue: "new", ink: "steady" };
@@ -15,6 +16,7 @@ const STNAME = { AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA:
 const DECLINING = new Set(["decelerating", "at-risk", "atrisk", "at risk", "lapsed"]);
 const isDeclining = h => DECLINING.has(String(h || "").toLowerCase().trim());
 const isNew = h => String(h || "").toLowerCase().trim() === "new";
+const isLapsed = h => String(h || "").toLowerCase().trim() === "lapsed";
 const titleCase = s => String(s || "").toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
 const idsHref = (arr, cap = 40) => `/book?ids=${arr.slice(0, cap).join(",")}`;
@@ -91,6 +93,8 @@ function ActionsInner() {
   const go = href => router.push(href);
 
   useEffect(() => { const sc = parseScope(); if (sc.kind === "state") setStF(sc.value); }, []);   // remembered scope from home (no city filter here, so a city scope is left alone)
+  // single-state book (Blind Corner = Illinois only): auto-scope to that state — nothing else to pick
+  useEffect(() => { if (!rows) return; const sts = [...new Set(rows.map(r => r.state).filter(Boolean))]; if (sts.length === 1) setStF(sts[0]); }, [rows]);
 
   useEffect(() => {
     (async () => {
@@ -99,7 +103,7 @@ function ActionsInner() {
         while (true) {
           const { data, error } = await supabase
             .from("account_list")
-            .select("account_id,account_name,chain,city,state,distributor,channel_type,headline,account_weight,cur90,prev90,prior90_pct,cases_per_month,placements_delta,lost_sku,last_order_w")
+            .select("account_id,account_name,chain,city,state,distributor,channel_type,headline,account_weight,cur90,prev90,prior90_pct,cases_per_month,placements_delta,lost_sku")
             .order("account_weight", { ascending: false })
             .range(from, from + 4999);
           if (error) throw error;
@@ -107,10 +111,12 @@ function ActionsInner() {
           if (!data || data.length < 5000) break;
           from += 5000;
         }
-        setRows(all);
+        // heal: classifier headline + gapW + recomputed 90s, scoped to the selected label
+        const { rows: healed } = await withHealth(all, getLabel() || null);
+        setRows(healed);
 
         // SKU-level rows for the "top SKU, missing here" play
-        const ids = all.map(a => a.account_id);
+        const ids = healed.map(a => a.account_id);
         let g = [];
         for (let i = 0; i < ids.length; i += 200) {
           const { data: gd, error: ge } = await supabase
@@ -166,7 +172,7 @@ function ActionsInner() {
     const out = [];
 
     // 1. WIN-BACK
-    const wb = rows.filter(r => (r.cur90 || 0) > 0 && r.last_order_w != null && r.last_order_w >= 2 && (r.cases_per_month || 0) >= 4 && !isNew(r.headline))
+    const wb = rows.filter(r => (r.cur90 || 0) > 0 && r.gapW != null && r.gapW >= 2 && (r.cases_per_month || 0) >= 4 && !isNew(r.headline) && String(r.headline || "").toLowerCase().trim() !== "lapsed")
       .sort((a, b) => (b.account_weight || 0) - (a.account_weight || 0)).slice(0, 12);
     if (wb.length >= 2) {
       const atRisk = wb.reduce((s, r) => s + (r.cases_per_month || 0), 0);
@@ -176,14 +182,14 @@ function ActionsInner() {
         title: `${wb.length} steady buyers have gone quiet`,
         detail: `No order in 60+ days, but each ran a steady ${Math.min(...wb.map(r => Math.round(r.cases_per_month || 0)))}–${Math.max(...wb.map(r => Math.round(r.cases_per_month || 0)))} cs/mo. Catch them before they read as lapsed.`,
         expandLabel: `see the ${Math.min(wb.length, 8)} accounts`,
-        targets: wb.slice(0, 6).map(r => ({ name: r.account_name, sub: r.city, metric: `${(r.last_order_w || 0) * 30}d · ${Math.round(r.cases_per_month || 0)} cs/mo`, href: `/book?ids=${r.account_id}` })),
+        targets: wb.slice(0, 6).map(r => ({ name: r.account_name, sub: r.city, metric: `${(r.gapW || 0) * 30}d · ${Math.round(r.cases_per_month || 0)} cs/mo`, href: `/book?ids=${r.account_id}` })),
         foot: "Open these in Accounts", footHref: idsHref(wb.map(r => r.account_id)),
       });
     }
 
     // 2. RISK CLUSTER (by chain)
     const byChain = {};
-    rows.filter(r => isDeclining(r.headline) && r.chain).forEach(r => { (byChain[r.chain] ||= []).push(r); });
+    rows.filter(r => isDeclining(r.headline) && !isLapsed(r.headline) && r.chain).forEach(r => { (byChain[r.chain] ||= []).push(r); });   // watch-only clusters: lapsed is its own bucket
     let cluster = null;
     for (const ch in byChain) { const lst = byChain[ch]; if (lst.length >= 4 && (!cluster || lst.length > cluster.lst.length)) cluster = { chain: ch, lst }; }
     if (cluster) {
@@ -201,8 +207,8 @@ function ActionsInner() {
     }
 
     // 3. NEW-ACCOUNT RESCUE
-    const nr = rows.filter(r => isNew(r.headline) && r.last_order_w != null && r.last_order_w >= 1)
-      .sort((a, b) => (b.last_order_w || 0) - (a.last_order_w || 0)).slice(0, 30);
+    const nr = rows.filter(r => isNew(r.headline) && r.gapW != null && r.gapW >= 1)
+      .sort((a, b) => (b.gapW || 0) - (a.gapW || 0)).slice(0, 30);
     if (nr.length >= 2) {
       out.push({
         id: "newrescue", tag: "NEW ACCOUNT", tone: "blue", section: "urgent",
@@ -210,7 +216,7 @@ function ActionsInner() {
         title: `${nr.length} new accounts stalled after first order`,
         detail: `Opened recently, bought once, no reorder yet. New accounts that stall past their first cycle churn far more often than not — this is the window to lock them in.`,
         expandLabel: `see the ${Math.min(nr.length, 8)} accounts`,
-        targets: nr.slice(0, 6).map(r => ({ name: r.account_name, sub: r.city, metric: `${(r.last_order_w || 0) * 30}d quiet`, href: `/book?ids=${r.account_id}` })),
+        targets: nr.slice(0, 6).map(r => ({ name: r.account_name, sub: r.city, metric: `${(r.gapW || 0) * 30}d quiet`, href: `/book?ids=${r.account_id}` })),
         foot: "Open all new at-risk in Accounts", footHref: idsHref(nr.map(r => r.account_id)),
       });
     }

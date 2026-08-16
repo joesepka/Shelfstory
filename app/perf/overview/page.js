@@ -7,8 +7,18 @@ import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { BarCard, AcctRosCard } from "../../../components/Charts";
 import { buildDeckSlides } from "../../../components/deckSlides";
-import { gpct, kfmt, titleCase, healthBucket, vol, isOn, monthLabels } from "../../../lib/utils";
-import { SNAP_SHORT } from "../../../lib/snapshot";
+import { gpct, kfmt, titleCase, healthBucket, vol, isOn } from "../../../lib/utils";
+import { SNAP_SHORT, SNAPSHOT } from "../../../lib/snapshot";
+import { getLabel } from "../../../lib/scope";
+import { withHealth } from "../../../lib/health";
+
+// labels for 30-day windows anchored to the data snapshot (window 0 = the 30 days
+// ending at the snapshot) — stepped by 30 days, oldest -> newest, NOT calendar months
+function winLabels(n) {
+  const out = [];
+  for (let k = n - 1; k >= 0; k--) { const d = new Date(SNAPSHOT); d.setDate(d.getDate() - k * 30); out.push(d.toLocaleString("en-US", { month: "short" })); }
+  return out;
+}
 
 const PREPARED_BY = "Joe Sepka";
 const DATA_THRU = SNAP_SHORT;
@@ -34,8 +44,10 @@ function OvInner() {
       if (scope.distributor) q = q.eq("distributor", scope.distributor);
       const { data, error } = await q.limit(20000);
       if (error) { setErr(error.message); return; }
-      setRows(data || []);
-      const ids = (data || []).map(a => a.account_id);
+      // heal: classifier headline + gapW + recomputed 90s/spark, scoped to the selected label
+      const { rows: healed } = await withHealth(data || [], getLabel() || null);
+      setRows(healed);
+      const ids = healed.map(a => a.account_id);
       if (!ids.length) { setGrid([]); return; }
       let all = [];
       for (let i = 0; i < ids.length; i += 200) {
@@ -83,8 +95,8 @@ function OvInner() {
       const off = Math.max(0, NP - s.length);
       for (let i = 0; i < s.length && off + i < NP; i++) { const v = +s[i] || 0; const idx = off + i; cases[idx] += v; if (v > 0) accts[idx] += 1; }
     }
-    cases = cases.slice(0, NP - 1);
-    accts = accts.slice(0, NP - 1);
+    // keep all 12 windows — window 0 (newest) included; the highlighted band is the
+    // last 3 bars, which is the true 90D window
     const ros = cases.map((c, i) => accts[i] > 0 ? c / accts[i] : 0);
     const rosNow = aNow ? cur / aNow / 3 : 0;
     const rosPrev = aPrev ? prev / aPrev / 3 : 0;
@@ -201,16 +213,18 @@ function OvInner() {
     let cur = 0, prev = 0, accts = 0;
     for (const a of rows) { const c = a.cur90 || 0, p = a.prev90 || 0; cur += c; if (c > 0) accts++; prev += p; }
     const totRos = accts ? cur / accts / 3 : 0;
-    const pick = (agg, keys, labels) => {
-      const bars = [{ label: "Total", ros: totRos, gPct: gpct(cur, prev) }];
-      if (!agg) return bars;
-      const by = {}; agg.forEach(r => { by[r.key] = r; });
-      keys.forEach((k, i) => { const e = by[k]; if (e && e.accts) bars.push({ label: labels[i], ros: e.ros, gPct: e.gPct }); });
-      return bars;
+    // group by whatever bucket values are actually present (mirrors desktop deckData) —
+    // brewery buckets aren't the demo world's; a panel whose column is null on every
+    // row comes back empty and is dropped rather than shown blank
+    const present = agg => {
+      const list = (agg || []).filter(e => e.accts).sort((a, b) => b.cases - a.cases);
+      if (!list.length) return [];
+      return [{ label: "Total", ros: totRos, gPct: gpct(cur, prev) },
+        ...list.map(e => ({ label: String(e.key), ros: e.ros, gPct: e.gPct }))];
     };
     return {
-      area: pick(aggBy(a => a.area_type || null), ["Urban", "Suburban", "Small Town", "Rural"], ["Urban", "Suburban", "Small Town", "Rural"]),
-      income: pick(aggBy(a => a.income_bucket || null), ["Low (<$58K)", "Moderate ($58-70K)", "High ($70-84K)", "Affluent ($84K+)"], ["Low", "Moderate", "High", "Affluent"]),
+      area: present(aggBy(a => a.area_type || null)),
+      income: present(aggBy(a => a.income_bucket || null)),
       benchmark: totRos,
     };
   }, [rows, plcByAcct]); // eslint-disable-line
@@ -219,7 +233,7 @@ function OvInner() {
   // (cur90 − prev90). No real growth drivers → top non-declining accounts by volume.
   const bookLists = useMemo(() => {
     if (!rows || !rows.length) return null;
-    const tagFor = h => { const x = String(h || "").toLowerCase(); return x === "lapsed" ? "lapsed" : x === "at-risk" ? "at-risk" : x === "decelerating" ? "softening" : x === "new" ? "new" : x === "accelerating" ? "accelerating" : ""; };
+    const tagFor = h => { const x = String(h || "").toLowerCase(); return x === "lapsed" ? "lapsed" : x === "at-risk" ? "at risk" : x === "decelerating" ? "softening" : x === "new" ? "new" : x === "accelerating" ? "surging" : ""; };
     const wd = rows.map(a => ({ account_id: a.account_id, account_name: a.account_name, city: a.city, chain: a.chain, channel_type: a.channel_type, cur90: a.cur90 || 0, prev90: a.prev90 || 0, delta: Math.round((a.cur90 || 0) - (a.prev90 || 0)), pct: gpct(a.cur90 || 0, a.prev90 || 0), weight: Math.round(a.account_weight || 0), plcDelta: (a.live_placements || 0) - (a.live_prev || 0), tag: tagFor(a.headline), lapsed: String(a.headline || "").toLowerCase() === "lapsed" }));
     let growers = wd.filter(a => a.delta > 0).sort((x, y) => y.delta - x.delta).slice(0, 10);
     let growMode = "growing";
@@ -325,8 +339,8 @@ function OvInner() {
                 <Bracket cool />
                 <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.55 }}>{verdict}</div>
               </div>
-              <BarCard title="12-month volume" sub="rolling-90 cases · quarter in focus highlighted" data={m.cases} labels={monthLabels(11)} hi={3} unit="cs" />
-              <AcctRosCard title="Accounts & rate of sale" sub="rolling-90 accounts (bars) · monthly ROS (line)" accts={m.accts} ros={m.ros} labels={monthLabels(11)} hi={3} />
+              <BarCard title="12-month volume" sub="30-day windows · newest right · last 90 days highlighted" data={m.cases} labels={winLabels(12)} hi={3} unit="cs" />
+              <AcctRosCard title="Accounts & rate of sale" sub="accounts with volume in each 30-day window (bars) · ROS (line)" accts={m.accts} ros={m.ros} labels={winLabels(12)} hi={3} />
 
               {movers && (movers.up.length > 0 || movers.down.length > 0) && (
                 <div style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow)", padding: "13px 14px", marginTop: 12 }}>
@@ -565,7 +579,7 @@ function PPanelHead({ children }) { return <div style={{ fontSize: 9.5, fontWeig
 // each slide via the ported HTML generators (components/deckSlides.js). aspect-ratio is
 // swapped to height:100% so html2canvas captures the fixed-size .pslide correctly.
 function DeckV2({ deckRef, title, kind, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows, bookLists }) {
-  const lbls = monthLabels(m.cases.length);
+  const lbls = winLabels(m.cases.length);
   const hiFrom = Math.max(0, m.cases.length - 3);
   const tc = s => titleCase(s || "");
   const noteFor = a => (a.lapsed ? "lapsed" : a.plcDelta < 0 ? `lost ${Math.abs(a.plcDelta)} SKU` : "");
@@ -640,7 +654,7 @@ function DeckV2({ deckRef, title, kind, m, health, items, movers, verdict, table
 }
 
 function PrintDeck({ deckRef, title, kind, m, health, items, movers, verdict, tableA, tableB, dims, summary, demoRows, bookLists }) {
-  const labels = monthLabels(11);
+  const labels = winLabels(m.cases.length);
   const topItems = (items?.all || []).slice(0, 8);
   const itemMx = Math.max(...topItems.map(it => Math.max(it.l90, it.prev)), 1);
   const shortVerdict = (() => {
@@ -708,7 +722,7 @@ function PrintDeck({ deckRef, title, kind, m, health, items, movers, verdict, ta
             <div style={{ flex: 1.55, display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
               <div style={{ position: "relative", background: PT.card, border: `1px solid ${PT.line}`, borderRadius: 8, padding: "0.12in 0.15in", flexShrink: 0, display: "flex", flexDirection: "column" }}>
                 <PBracket c={PT.greenMid} />
-                <PPanelHead>12-month volume — rolling 90, quarter in focus</PPanelHead>
+                <PPanelHead>12-month volume — 30-day windows, last 90 days in focus</PPanelHead>
                 <PChartBars data={m.cases} labels={labels} hi={3} color="#C9DCD0" colorHi={PT.greenMid} inkHi={PT.green} />
               </div>
               <div style={{ position: "relative", background: PT.card, border: `1px solid ${PT.line}`, borderRadius: 8, padding: "0.12in 0.15in", flexShrink: 0, display: "flex", flexDirection: "column" }}>

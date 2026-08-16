@@ -13,23 +13,25 @@ const norm = h => String(h || "").toLowerCase().trim();
 // headline (+ momentum) → one of 10 states along the health ramp
 export function plantState(headline, pct) {
   const h = norm(headline);
+  // a canonical headline always wins — the tree must never contradict the chip beside it;
+  // pct only refines WITHIN a headline's own family, never across families
   if (h === "lapsed") return "lapsed";
   if (h === "new") return "new";
   if (h === "stable") return "steady";   // a stable account always reads green, never yellow
+  if (h === "accelerating") return "accelerating";
+  if (h === "at-risk" || h === "atrisk" || h === "at risk") return pct != null && pct <= -22 ? "declining" : "atrisk";
+  if (h === "decelerating") return "softening";
+  // no recognized headline: let momentum place it on the ramp
   if (pct != null) {
-    if (h === "accelerating" || pct >= 28) return "accelerating";
+    if (pct >= 28) return "accelerating";
     if (pct >= 15) return "thriving";
     if (pct >= 5) return "growing";
     if (pct >= -3) return "steady";
-    if (h === "at-risk" || h === "atrisk" || h === "at risk") return pct <= -22 ? "declining" : "atrisk";
     if (pct >= -10) return "softening";
     if (pct >= -20) return "slipping";
     if (pct >= -32) return "atrisk";
     return "declining";
   }
-  if (h === "accelerating") return "accelerating";
-  if (h === "at-risk" || h === "atrisk" || h === "at risk") return "atrisk";
-  if (h === "decelerating") return "softening";
   return "steady";
 }
 
@@ -42,8 +44,10 @@ export function vit(st, pct) {
   return pct == null ? base : Math.max(0.12, Math.min(1, base + Math.max(-0.05, Math.min(0.05, pct / 600))));
 }
 
-// user-facing labels + accent colors per state
-export const stateLabel = { new: "New", accelerating: "Accelerating", thriving: "Thriving", growing: "Growing", steady: "Steady", softening: "Softening", slipping: "Slipping", atrisk: "At risk", declining: "Declining", lapsed: "Lapsed" };
+// user-facing labels + accent colors per state — display words come from the canonical
+// vocabulary ONLY (Surging / Softening / At Risk / Stable / Lapsed / New); the finer
+// visual states share their family's canonical word
+export const stateLabel = { new: "New", accelerating: "Surging", thriving: "Surging", growing: "Stable", steady: "Stable", softening: "Softening", slipping: "Softening", atrisk: "At Risk", declining: "At Risk", lapsed: "Lapsed" };
 export const stateColor = { new: NEW_COLOR, ...RAMP, lapsed: LAPSED_COLOR };
 
 // coarse 5-bucket map for the home tier rollup (keeps page.js math stable)

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import TreeGlyph from "../../components/TreeGlyph";
 import { run, fsum } from "../../lib/forecast";
+import { parseScope, getLabel } from "../../lib/scope";
 
 const kf = v => { const a = Math.abs(v || 0); if (a < 1000) return String(Math.round(v || 0)); return ((v || 0) / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "k"; };
 const pctS = v => v == null ? "" : `${v > 0 ? "▲" : v < 0 ? "▼" : ""}${Math.abs(Math.round(v * 100))}%`;
@@ -23,13 +24,15 @@ export default function BreweryMobile() {
   const [err, setErr] = useState(null);
   const [parent, setParent] = useState(null);
   const [style, setStyle] = useState(null);
+  const [scopeRep, setScopeRep] = useState(null);   // territory carried over from home's selection
+  useEffect(() => { const sc = parseScope(); if (sc.kind === "rep") setScopeRep(sc.value); const lb = getLabel(); if (lb) setParent(lb); }, []);
 
   useEffect(() => {
     (async () => {
       try {
         const [ar, ir, fr] = await Promise.all([
-          supabase.from("account_list").select("account_id,city,cur90,prev90,account_weight"),
-          supabase.from("item_grid").select("account_id,parent,brand,package,l90,l90_prev,l52"),
+          supabase.from("account_list").select("account_id,city,cur90,prev90,account_weight,sales_rep"),
+          supabase.from("item_grid").select("account_id,parent,brand,package,l90,l90_prev,l52,fc_group"),
           supabase.rpc("fc_base"),
         ]);
         if (ar.error || ir.error || fr.error) throw (ar.error || ir.error || fr.error);
@@ -41,12 +44,17 @@ export default function BreweryMobile() {
   const parents = useMemo(() => d ? [...new Set(d.fc.map(r => r.parent).filter(Boolean))].sort() : [], [d]);
   const P = parent || parents[0] || null;
   const acctCity = useMemo(() => { const m = new Map(); if (d) for (const a of d.acc) m.set(a.account_id, a.city || "—"); return m; }, [d]);
+  // territory scope from home — every read below narrows to these accounts
+  const scopeIds = useMemo(() => { if (!d || !scopeRep) return null; const s2 = new Set(); for (const a of d.acc) if ((a.sales_rep || "Unassigned") === scopeRep) s2.add(a.account_id); return s2; }, [d, scopeRep]);
+  const inScope = it => !scopeIds || scopeIds.has(it.account_id);
+  // fc_group -> style group (fc_base carries the mapping) so styles can be computed item-side, scoped
+  const styleOf = useMemo(() => { const m = {}; if (d) for (const r of d.fc) if (r.product_key && m[r.product_key] == null) m[r.product_key] = r.style_group || "—"; return m; }, [d]);
 
   const cities = useMemo(() => {
     if (!d || !P) return [];
     const g = {};
     for (const it of d.items) {
-      if (it.parent !== P) continue;
+      if (it.parent !== P || !inScope(it)) continue;
       const c = acctCity.get(it.account_id) || "—";
       const e = g[c] || (g[c] = { city: c, cur: 0, prev: 0, wt: 0, accts: new Set() });
       e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0;
@@ -58,48 +66,51 @@ export default function BreweryMobile() {
   const styles = useMemo(() => {
     if (!d || !P) return [];
     const g = {};
-    for (const r of d.fc) {
-      if (r.parent !== P) continue;
-      const sg = r.style_group || "—";
+    for (const it of d.items) {
+      if (it.parent !== P || !inScope(it)) continue;
+      const sg = styleOf[it.fc_group] || "—";
       const e = g[sg] || (g[sg] = { sg, cur: 0, prev: 0, wt: 0 });
-      const w = +r.window_index, c = +r.cases || 0;
-      if (w <= 2) e.cur += c; if (w >= 3 && w <= 5) e.prev += c; if (w <= 11) e.wt += c;
+      e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0;
     }
     return Object.values(g).map(e => ({ ...e, g90: g90Of(e.cur, e.prev) })).filter(s => s.wt > 0).sort((a, b) => b.wt - a.wt);
-  }, [d, P]);
+  }, [d, P, scopeIds, styleOf]);   // eslint-disable-line
 
   const styleGroups = useMemo(() => {
     if (!d || !P || !style) return [];
     const g = {};
-    for (const r of d.fc) {
-      if (r.parent !== P || (r.style_group || "—") !== style) continue;
-      const e = g[r.product_key] || (g[r.product_key] = { fg: r.product_key, cur: 0, prev: 0, wt: 0 });
-      const w = +r.window_index, c = +r.cases || 0;
-      if (w <= 2) e.cur += c; if (w >= 3 && w <= 5) e.prev += c; if (w <= 11) e.wt += c;
+    for (const it of d.items) {
+      if (it.parent !== P || !inScope(it) || (styleOf[it.fc_group] || "—") !== style) continue;
+      const e = g[it.fc_group] || (g[it.fc_group] = { fg: it.fc_group, cur: 0, prev: 0, wt: 0 });
+      e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0;
     }
     return Object.values(g).map(e => ({ fg: e.fg, wt: e.wt, g90: g90Of(e.cur, e.prev) })).sort((a, b) => b.wt - a.wt);
-  }, [d, P, style]);
+  }, [d, P, style, scopeIds, styleOf]);   // eslint-disable-line
 
   const topItems = useMemo(() => {
     if (!d || !P) return [];
     const g = {};
     for (const it of d.items) {
-      if (it.parent !== P) continue;
+      if (it.parent !== P || !inScope(it)) continue;
       const key = (it.brand || "—") + "||" + (it.package || "");
       const e = g[key] || (g[key] = { brand: it.brand || "—", pack: it.package || "", cur: 0, prev: 0, wt: 0 });
       e.cur += +it.l90 || 0; e.prev += +it.l90_prev || 0; e.wt += +it.l52 || 0;
     }
     return Object.values(g).map(e => ({ ...e, g90: g90Of(e.cur, e.prev) })).filter(x => x.wt > 0).sort((a, b) => b.wt - a.wt);
-  }, [d, P]);
+  }, [d, P, scopeIds]);   // eslint-disable-line
 
   const stat = useMemo(() => {
     if (!d || !P) return null;
-    let trailing = 0, proj = 0;
-    try { const m = run(d.fc.filter(r => r.parent === P)); if (m) for (const s of m.root.children.values()) { trailing += fsum(s.history.slice(12)); proj += fsum(s.forecast || []); } } catch {}
-    const cur = styles.reduce((s, x) => s + x.cur, 0);
-    const accts = new Set(); for (const it of d.items) if (it.parent === P && (+it.l90 || 0) > 0) accts.add(it.account_id);
-    return { trailing, proj, cur, accts: accts.size };
-  }, [d, P, styles]);
+    let proj = null, trailing = 0;
+    if (!scopeIds) {
+      try { const m = run(d.fc.filter(r => r.parent === P)); if (m) { proj = 0; for (const s2 of m.root.children.values()) proj += fsum(s2.forecast || []); } } catch {}
+    }
+    for (const it of d.items) if (it.parent === P && inScope(it)) trailing += +it.l52 || 0;
+    const cur = styles.reduce((s2, x) => s2 + x.cur, 0);
+    const now = new Set(), prev = new Set();
+    for (const it of d.items) { if (it.parent !== P || !inScope(it)) continue; if ((+it.l90 || 0) > 0) now.add(it.account_id); if ((+it.l90_prev || 0) > 0) prev.add(it.account_id); }
+    const acctPct = prev.size > 0 ? Math.round(100 * (now.size - prev.size) / prev.size) : null;
+    return { trailing, proj, cur, accts: now.size, acctPct };
+  }, [d, P, styles, scopeIds]);   // eslint-disable-line
 
   if (err) return <div className="wrap" style={{ padding: 30, color: "var(--down)" }}>Couldn’t load. {err}</div>;
   if (!d) return <div className="wrap" style={{ padding: 30, color: "var(--text-3)" }}>Loading brewery…</div>;
@@ -116,9 +127,15 @@ export default function BreweryMobile() {
   return (
     <div className="wrap pagefade" style={{ paddingBottom: 90 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0 8px" }}>
-        <div style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-.01em" }}>Blind Corner</div>
-        <button onClick={() => router.push("/")} style={{ border: "none", background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 16, fontSize: 11.5, fontWeight: 600, padding: "5px 12px", fontFamily: "inherit" }}>accounts →</button>
+        <div style={{ fontFamily: "var(--font-serif)", fontSize: 22, fontWeight: 600, letterSpacing: "-.01em" }}>Overview{scopeRep ? ` · ${titleCase(scopeRep)}` : ""}</div>
+        <button onClick={() => router.push("/")} style={{ border: "none", background: "var(--surface-2)", color: "var(--text-2)", borderRadius: 16, fontSize: 11.5, fontWeight: 600, padding: "5px 12px", fontFamily: "inherit" }}>home →</button>
       </div>
+      {scopeRep && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, margin: "0 0 10px", padding: "7px 12px", background: "var(--pop-cool-soft)", borderRadius: 10 }}>
+          <span style={{ fontSize: 11.5, color: "var(--pop-cool-deep)" }}>Scoped to your {titleCase(scopeRep)} selection from home</span>
+          <button onClick={() => setScopeRep(null)} style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 14, border: "none", background: "var(--surface)", color: "var(--pop-cool-deep)", cursor: "pointer", fontFamily: "inherit" }}>whole book ✕</button>
+        </div>
+      )}
 
       {/* parent toggle */}
       <div style={{ display: "flex", gap: 4, background: "var(--surface-2)", borderRadius: 11, padding: 4, marginBottom: 14 }}>
@@ -134,9 +151,11 @@ export default function BreweryMobile() {
       {stat && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 18 }}>
           <St label="annual (CE)" val={kf(stat.trailing)} sub="trailing 52 wks" />
-          <St label="projected 52w" val={kf(stat.proj)} sub={stat.trailing > 0 ? pctS(stat.proj / stat.trailing - 1) + " vs trailing" : ""} blue />
+          {stat.proj != null
+            ? <St label="projected 52w" val={kf(stat.proj)} sub={stat.trailing > 0 ? pctS(stat.proj / stat.trailing - 1) + " vs trailing" : ""} blue />
+            : <St label="projected 52w" val="—" sub="book-level only" blue />}
           <St label="90-day CE" val={kf(stat.cur)} sub="last 3 months" />
-          <St label="accounts" val={kf(stat.accts)} sub={`${cities.length} cities`} />
+          <St label="accounts" val={<span>{kf(stat.accts)}{stat.acctPct != null && <span style={{ fontSize: 11, fontWeight: 700, marginLeft: 6, color: stat.acctPct > 0 ? "var(--up)" : stat.acctPct < 0 ? "var(--down)" : "var(--text-3)" }}>{stat.acctPct > 0 ? "▲" : stat.acctPct < 0 ? "▼" : "▬"} {Math.abs(stat.acctPct)}%</span>}</span>} sub={`${cities.length} cities · vs prior 90`} />
         </div>
       )}
 

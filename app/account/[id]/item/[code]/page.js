@@ -45,7 +45,9 @@ export default function ItemHistory() {
         const avg = total / 12;
         const lastOrderIdx = months.find((m) => m.cases > 0)?.i;
         const lastOrdered = lastOrderIdx == null ? "—" : monthLabel(lastOrderIdx, true);
-        const lost = (byIdx[0] || 0) === 0;
+        // canonical placement rule: lost = no volume across the newest three 30-day
+        // windows (the true 90D window) — a single quiet month isn't "lost"
+        const lost = ((byIdx[0] || 0) + (byIdx[1] || 0) + (byIdx[2] || 0)) === 0;
 
         setData({
           item: prodRes.data?.item_name || prodRes.data?.product || "Item",

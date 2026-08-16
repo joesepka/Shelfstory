@@ -5,10 +5,12 @@ import Splash from "../../components/Splash";
 import { BarCard, AcctRosCard, ChannelRosCard, ItemRosLines } from "../../components/Charts";
 import { isOn, titleCase } from "../../lib/utils";
 import FilterSelect from "../../components/FilterSelect";
-import { parseScope, getScope } from "../../lib/scope";
+import { parseScope, getScope, getLabel } from "../../lib/scope";
+import { withHealth } from "../../lib/health";
+import { profile } from "../../lib/profile";
 
 // Wholesale Trends — over-time view. Same top filters as the book (minus "near me"),
-// plus Item. View toggle is 24 Month (24 x 30-day buckets) / Quarterly (8 x 90-day).
+// plus Item. View toggle is 12 Month (12 x 30-day buckets) / Quarterly (4 x 90-day).
 // First graph: ACTUAL 30-day cases per period (from ai_window_dense, window 0 = most
 // recent 30 days) summed across whatever the filters select. NOT rolling-90.
 
@@ -65,7 +67,9 @@ export default function WholesalePage() {
           if (!data || data.length < 5000) break;
           from += 5000;
         }
-        setRows(all);
+        // heal: classifier headline + recomputed 90s, scoped to the selected label
+        const { rows: healed } = await withHealth(all, getLabel() || null);
+        setRows(healed);
       } catch (e) { setErr(e.message || "load failed"); }
     })();
     (async () => {
@@ -158,17 +162,18 @@ export default function WholesalePage() {
       return { ros: cA > 0 ? cC / cA / 3 : 0, prevRos: pA > 0 ? pC / pA / 3 : 0 };
     };
     const total = grp(src);
-    const series = (keyFn, order, labelMap) => {
+    // group by whatever bucket values are actually present (brewery buckets aren't the
+    // demo world's); a cut whose column is empty on every row returns null and is hidden
+    const series = keyFn => {
       const by = {};
-      for (const r of src) { const k = keyFn(r); if (!k) continue; (by[k] = by[k] || []).push(r); }
+      for (const r of src) { const k = keyFn(r); if (!k) continue; const e = by[k] = by[k] || { rows: [], cases: 0 }; e.rows.push(r); e.cases += Number(r.cur) || 0; }
+      const keys = Object.keys(by).sort((a, b) => by[b].cases - by[a].cases);
+      if (!keys.length) return null;
       const bars = [{ label: "Total", ros: total.ros, prevRos: total.prevRos }];
-      for (const k of order) if (by[k] && by[k].length) { const g = grp(by[k]); bars.push({ label: labelMap[k] || k, ros: g.ros, prevRos: g.prevRos }); }
+      for (const k of keys) { const g = grp(by[k].rows); bars.push({ label: k, ros: g.ros, prevRos: g.prevRos }); }
       return { bars, benchmark: total.ros };
     };
-    const AREA = ["Urban", "Suburban", "Small Town", "Rural"];
-    const INCOME = ["Low (<$58K)", "Moderate ($58-70K)", "High ($70-84K)", "Affluent ($84K+)"];
-    const INCOME_SHORT = { "Low (<$58K)": "Low", "Moderate ($58-70K)": "Moderate", "High ($70-84K)": "High", "Affluent ($84K+)": "Affluent" };
-    return { area: series(r => r.area_type, AREA, {}), income: series(r => r.income_bucket, INCOME, INCOME_SHORT) };
+    return { area: series(r => r.area_type), income: series(r => r.income_bucket) };
   }, [scopedRows, itemF, itemChan]);
 
   // load the 24-window series — one fast server-side RPC (sums inside Postgres).
@@ -180,6 +185,8 @@ export default function WholesalePage() {
     const t = setTimeout(async () => {
       try {
         const sparams = {};                          // scope only (no product key)
+        const lbl = profile.name === "brewery" ? getLabel() : "";   // trends_* RPCs (brewery) all accept p_parent
+        if (lbl) sparams.p_parent = lbl;
         if (stF !== "All") sparams.p_state = stF;
         if (cityF !== "All") sparams.p_city = cityF;
         if (chainF !== "All") sparams.p_chain = chainF;
@@ -334,13 +341,13 @@ export default function WholesalePage() {
                 sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"
                 bars={channelRos.bars} benchmark={channelRos.benchmark} />
             )}
-            {demoRos && (
+            {demoRos && demoRos.area && (
               <ChannelRosCard
                 title={itemF !== "All" ? `ROS by area type · ${items.find(x => x.key === itemF)?.name || itemF}` : "ROS by area type"}
                 sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"
                 bars={demoRos.area.bars} benchmark={demoRos.area.benchmark} />
             )}
-            {demoRos && (
+            {demoRos && demoRos.income && (
               <ChannelRosCard
                 title={itemF !== "All" ? `ROS by household income · ${items.find(x => x.key === itemF)?.name || itemF}` : "ROS by household income"}
                 sub="Current 90-day rate of sale · momentum vs prior 90 · dashed = overall"

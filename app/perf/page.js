@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import Splash from "../../components/Splash";
-import { parseScope, getScope } from "../../lib/scope";
+import { parseScope, getScope, getLabel } from "../../lib/scope";
+import { withHealth } from "../../lib/health";
 
 function gpct(cur, prev) { return prev > 0 ? Math.round(100 * (cur - prev) / prev) : (cur > 0 ? 999 : null); }
 function fmtPct(g) { if (g == null || g === 999) return "new"; return (g > 0 ? "+" : "") + g + "%"; }
@@ -54,7 +55,9 @@ function PerfInner() {
         if (!data || data.length < 5000) break;
         from += 5000;
       }
-      setRows(all);
+      // heal: classifier headline + recomputed 90s/weight, scoped to the selected label
+      const { rows: healed } = await withHealth(all, getLabel() || null);
+      setRows(healed);
     })();
   }, []);
 
@@ -196,7 +199,7 @@ function PerfInner() {
       </div>
 
       <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.3px", color: "var(--text-3)", padding: "2px 14px 5px", flexShrink: 0 }}>
-        {vtitle()} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-3)", fontSize: 11 }}>· size = L52W volume · color = 90-day growth</span>
+        {vtitle()} <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0, color: "var(--text-3)", fontSize: 11 }}>· size = L52W volume · New annualized ×3 · color = 90-day growth</span>
       </div>
       <div style={{ display: "flex", gap: 11, flexWrap: "wrap", padding: "0 14px 8px", fontSize: 9.5, color: "var(--text-3)", flexShrink: 0 }}>
         {[["var(--up)", "material growth"], ["var(--text-3)", "flat"], ["var(--gold)", "moderate decline"], ["var(--down)", "material decline"]].map(([c, t]) => (

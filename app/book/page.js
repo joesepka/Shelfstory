@@ -8,12 +8,15 @@ import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
 import { parseScope, getScope } from "../../lib/scope";
 import { tierIdSet, TIER_LABEL, sizeIdSet, SIZE_LABEL } from "../../lib/tiers";
+import { withHealth } from "../../lib/health";
+import { getLabel } from "../../lib/scope";
+import { SNAPSHOT } from "../../lib/snapshot";
 
 
 function label(hd) {
   switch (String(hd || "").toLowerCase().trim()) {
-    case "accelerating": return { t: "Accelerating", c: "var(--growing-ink)", bg: "var(--growing-bg)" };
-    case "at-risk": case "atrisk": case "at risk": return { t: "At risk", c: "var(--atrisk-ink)", bg: "var(--atrisk-bg)" };
+    case "accelerating": return { t: "Surging", c: "var(--growing-ink)", bg: "var(--growing-bg)" };
+    case "at-risk": case "atrisk": case "at risk": return { t: "At Risk", c: "var(--atrisk-ink)", bg: "var(--atrisk-bg)" };
     case "decelerating": return { t: "Softening", c: "var(--watch-ink)", bg: "var(--watch-bg)" };
     case "new": return { t: "New", c: "var(--new-ink)", bg: "var(--new-bg)" };
     case "lapsed": return { t: "Lapsed", c: "#fff", bg: "var(--lapsed-bg)" };
@@ -43,9 +46,11 @@ function cardTapBg(hd) {
   if (h === "decelerating") return "#f6ead0";
   return "#dcefda";
 }
-function lastSold(iso) {
-  if (!iso) return null;
-  const d = new Date(iso + "T00:00:00");
+// last-sold month derived from the WINDOW line (gapW x 30 days back from the snapshot) —
+// never from last_invoice_date, so it can't disagree with the lapsed math (Joe's rule)
+function lastSoldFromGap(gapW) {
+  if (gapW == null) return null;
+  const d = new Date(SNAPSHOT.getTime() - gapW * 30 * 86400000);
   return d.toLocaleString("en-US", { month: "short" }) + " '" + String(d.getFullYear()).slice(2);
 }
 
@@ -60,13 +65,13 @@ function buildNote(r) {
     if (!facts.length) facts.push("running below pace");
   } else if (hd === "accelerating") {
     if (r.growing_count > 0) facts.push(`${r.growing_count} of ${r.active_count} SKUs growing`);
-    else facts.push(`accelerating across ${r.active_count || 0} SKUs`);
+    else facts.push(`surging across ${r.active_count || 0} SKUs`);
     if (r.placements_delta > 0) facts.push(`added ${plc(r.placements_delta)}`);
   } else if (hd === "new") {
     facts.push("ramping");
     facts.push(`${r.live_placements || 0} placement${(r.live_placements || 0) === 1 ? "" : "s"}`);
   } else if (hd === "lapsed") {
-    const ls = lastSold(r.last_invoice_date);
+    const ls = lastSoldFromGap(r.gapW);
     facts.push(ls ? `last sold ${ls}` : "no recent sales");
   } else {
     if (r.growing_count > 0) facts.push(`holding · ${r.growing_count} of ${r.active_count} growing`);
@@ -434,6 +439,7 @@ function BookInner() {
   const [healthFilter, setHealthFilter] = useState(null);
   const [tierFilter, setTierFilter] = useState(null);
   const [sizeFilter, setSizeFilter] = useState(null);
+  const [repF, setRepF] = useState(null);   // territory (Sales_Rep) scope handed over from home
   const [linkScope, setLinkScope] = useState(null);
 
   useEffect(() => {
@@ -443,8 +449,9 @@ function BookInner() {
   }, [searchParams]); // eslint-disable-line
 
   useEffect(() => {
+    let scRep = null;
     if (linkState && linkState !== "All") setStF(linkState);
-    else { const sc = parseScope(); if (sc.kind === "city") setCityF(sc.value); else if (sc.kind === "state") setStF(sc.value); }   // remembered scope from home (a city key must not land in the state filter)
+    else { const sc = parseScope(); if (sc.kind === "city") setCityF(sc.value); else if (sc.kind === "state") setStF(sc.value); else if (sc.kind === "rep") { setRepF(sc.value); scRep = sc.value; } }   // remembered scope from home (city/territory keys must not land in the state filter)
     if (linkCity) setCityF(linkCity);
     if (linkChain) setChainF(linkChain);
     if (linkDist) setDistF(linkDist);
@@ -463,12 +470,14 @@ function BookInner() {
       setLinkScope({ kind: "chain", label: titleCase(linkChain) });
     } else if (linkDist) {
       setLinkScope({ kind: "distributor", label: titleCase(linkDist) });
+    } else if (scRep) {
+      setLinkScope({ kind: "rep", label: titleCase(scRep) + " territory" });
     } else setLinkScope(null);
   }, [linkIds, linkCity, linkState, linkChain, linkDist, linkHealth, linkTier, linkSize]);
 
   function clearLink() {
     setLinkScope(null);
-    setStF("All"); setCityF("All"); setChainF("All"); setDistF("All"); setHealthFilter(null); setTierFilter(null); setSizeFilter(null);
+    setStF("All"); setCityF("All"); setChainF("All"); setDistF("All"); setHealthFilter(null); setTierFilter(null); setSizeFilter(null); setRepF(null);
     router.replace(view === "account" ? "/book" : `/book?view=${view}`, { scroll: false });
   }
 
@@ -484,7 +493,7 @@ function BookInner() {
       while (true) {
         const { data, error } = await supabase
           .from("account_list")
-          .select("account_id,account_name,channel,chain,city,state,zip,distributor,account_weight,cur90,prior90_pct,cases_per_month,placements_delta,live_placements,live_prev,headline,lost_sku,growing_count,active_count,spark,last_invoice_date,last_order_w")
+          .select("account_id,account_name,channel,chain,city,state,zip,distributor,sales_rep,account_weight,cur90,prior90_pct,cases_per_month,placements_delta,live_placements,live_prev,headline,lost_sku,growing_count,active_count,spark,last_invoice_date,last_order_w")
           .order("account_weight", { ascending: false, nullsFirst: false })
           .range(from, from + 4999);
         if (error) { setErr(error.message); return; }
@@ -492,7 +501,10 @@ function BookInner() {
         if (!data || data.length < 5000) break;
         from += 5000;
       }
-      setRows(all);
+      // heal through the shared window-based classifier (same as home + desktop) so the
+      // headline, 90-day figures and recency all come from the depletion windows alone
+      const { rows: healed } = await withHealth(all, getLabel() || null);
+      setRows(healed);
     })();
   }, []);
 
@@ -522,8 +534,9 @@ function BookInner() {
     if (chainF !== "All") f = f.filter(r => r.chain === chainF);
     if (premF !== "All") f = f.filter(r => premF === "ON" ? isOn(r) : !isOn(r));
     if (distF !== "All") f = f.filter(r => r.distributor === distF);
+    if (repF) f = f.filter(r => (r.sales_rep || "Unassigned") === repF);
     return f;
-  }, [rows, stF, cityF, chainF, premF, distF, linkScope]);
+  }, [rows, stF, cityF, chainF, premF, distF, linkScope, repF]);
 
   const bal = useMemo(() => {
     if (!geo) return null;
@@ -643,7 +656,7 @@ function BookInner() {
               <span style={{ color: "var(--accent)", fontWeight: 700 }}>●</span> Healthy <b style={{ color: "var(--text)" }}>{bal.healthy.n.toLocaleString()}</b>
             </span>
             <span onClick={() => toggleHealth("atrisk")} style={{ cursor: "pointer" }}>
-              <span style={{ color: "var(--pop-warm)", fontWeight: 700 }}>●</span> At Risk <b style={{ color: "var(--text)" }}>{bal.atrisk.n.toLocaleString()}</b>
+              <span style={{ color: "var(--pop-warm)", fontWeight: 700 }}>●</span> Watch <b style={{ color: "var(--text)" }}>{bal.atrisk.n.toLocaleString()}</b>
             </span>
             <span onClick={() => toggleHealth("lapsed")} style={{ cursor: "pointer" }}>
               <span style={{ color: "var(--lapsed-bg)", fontWeight: 700 }}>●</span> Lapsed <b style={{ color: "var(--text)" }}>{bal.lapsed.n.toLocaleString()}</b>
@@ -654,7 +667,7 @@ function BookInner() {
               <button onClick={() => setHealthFilter(null)}
                 style={{ fontSize: 10.5, fontWeight: 600, padding: "3px 11px", borderRadius: 20, cursor: "pointer", fontFamily: "inherit",
                   border: "0.5px solid var(--border-strong)", background: "var(--surface)", color: "var(--text-2)" }}>
-                Showing {healthFilter === "atrisk" ? "at-risk" : healthFilter} only · clear ✕
+                Showing {healthFilter === "atrisk" ? "watch" : healthFilter} only · clear ✕
               </button>
             </div>
           )}
@@ -683,7 +696,9 @@ function BookInner() {
           const v = Math.round(r.account_weight || 0);
           const pct = r.prior90_pct;
           const note = buildNote(r);
-          const stale = (r.last_order_w != null && r.last_order_w >= 2) ? r.last_order_w * 30 : null;
+          // no-order flag strictly from the depletion windows: 2+ empty rolling-30 windows
+          // = quiet 60+ days. Lapsed accounts skip it — the label already says it.
+          const stale = (!isLapsed(r.headline) && r.gapW != null && r.gapW >= 2) ? r.gapW * 30 : null;
           const loc = `${r.city} · ${r.chain || "Independent"}`;
           const bc = bracketColor(r.headline);
           const lapsed = isLapsed(r.headline);
