@@ -1,0 +1,100 @@
+"use client";
+import { useMemo } from "react";
+import { createPortal } from "react-dom";
+import { renderDeck } from "./deckSlidesCast";
+import { useEffect, useState } from "react";
+const X = ({ size = 16, strokeWidth = 2.2 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+);
+
+// Full-screen deck. Download goes through the browser's own print-to-PDF, so the slides stay
+// real vector text (crisp and searchable) instead of being flattened to images.
+export default function DeckView({ data, onClose }) {
+  const html = useMemo(() => (data ? renderDeck(data).join("") : ""), [data]);
+  // phone: shrink the 940px slides to the screen (zoom keeps print untouched via the CSS reset)
+  const [zoom, setZoom] = useState(1);
+  useEffect(() => {
+    const m = () => setZoom(Math.min(1, (window.innerWidth - 8) / 956));
+    m(); window.addEventListener("resize", m);
+    return () => window.removeEventListener("resize", m);
+  }, []);
+  if (!data) return null;
+  const fileName = `${String(data.scope.name).replace(/[^\w]+/g, "_")}_Business_Review`;
+
+  // Portaled to <body> so the print CSS can isolate the deck (page breaks only work in-flow,
+  // and hiding body children would otherwise hide the deck's own ancestors).
+  return createPortal(
+    <div className="deckRoot" style={{ position: "fixed", inset: 0, zIndex: 60, background: "#8A8A8A", display: "flex", flexDirection: "column" }}>
+      <style>{`
+        @page { size: 11in 8.5in; margin: .18in; }
+        /* the slide markup carries its own palette — scope those tokens to the deck only */
+        .deckPages{--ink:#0A0A0A;--pink:#EDB3B0;--pink2:#D98F8A;--pinkPale:#FCF1F0;--grey:#6E6E6E;--grey2:#9A9A9A;
+          --rule:#E3E3E3;--ruleLt:#EFEFEF;--up:#2E7D52;--upL:#C7E0D2;--dn:#C0564E;--dnL:#EBCCC7;--green:#52A97B;
+          --lite:#BFD9C9;--prior:#BDBDBD;--new:#4F8F52;--teal:#2F7D8C;--tealLt:#A9CFD7;--fcBlue:#5B6BD0;
+          --warm:#B5817A;--warmD:#8B3A2B;--disp:'Arial Black','Helvetica Neue',Arial,sans-serif;}
+        .deckPages .slide{width:940px;height:726px;background:#fff;margin:0 auto 16px;position:relative;overflow:hidden;
+          color:#0A0A0A;font-family:Arial,Helvetica,sans-serif;box-shadow:0 2px 14px rgba(0,0,0,.28)}
+        .deckPages .lbl{font-size:8.5px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:#9A9A9A}
+        .deckPages .fig{font-family:'Arial Black','Helvetica Neue',Arial,sans-serif;letter-spacing:-1px;line-height:.94}
+        .deckPages .dlt{font-size:10.5px;font-weight:700}
+        .deckPages .up{color:#2E7D52}.deckPages .dn{color:#C0564E}
+        .deckPages .tag{font-size:6.3px;font-weight:700;letter-spacing:.35px;text-transform:uppercase;border-radius:3px;padding:1.2px 4px;white-space:nowrap;flex-shrink:0}
+        .deckPages .tier{font-size:6.4px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:3px;padding:1.2px 4px;background:#F4EAD6;color:#8A6A12;flex-shrink:0}
+        .deckPages .rw{display:flex;align-items:center;gap:8px;height:23px;border-bottom:1px solid #EFEFEF}
+        .deckPages .cNm{width:150px;flex-shrink:0;min-width:0;display:flex;align-items:center;gap:5px}
+        .deckPages .cNm b{font-size:9.2px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .deckPages .cTrk{flex:1;min-width:0;position:relative;height:14px}
+        .deckPages .plot{position:absolute;left:30px;right:30px;top:0;bottom:0}
+        .deckPages .cDel{width:34px;text-align:right;font-size:9.5px;font-weight:700;flex-shrink:0}
+        .deckPages .cSku{width:44px;text-align:right;font-size:8.8px;flex-shrink:0;white-space:nowrap}
+        .deckPages table{border-collapse:collapse}
+        .deckScroll{scrollbar-width:none;-ms-overflow-style:none}.deckScroll::-webkit-scrollbar{display:none}
+        @media print{
+          .deckPages{zoom:1 !important}
+          body > *:not(.deckRoot){display:none !important}
+          .deckRoot{position:static !important;background:#fff !important;height:auto !important}
+          .deckBar{display:none !important}
+          .deckPages{overflow:visible !important;padding:0 !important;background:#fff !important}
+          .deckPages .slide{margin:0 !important;box-shadow:none !important;page-break-after:always;break-after:page}
+          .deckPages .slide:last-child{page-break-after:auto}
+        }
+      `}</style>
+      <div className="deckBar" style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 12, padding: "12px 22px", background: "#1C1C1C", color: "#fff" }}>
+        <button onClick={onClose} title="Close"
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 999, border: "none", background: "#333", color: "#fff", cursor: "pointer" }}>
+          <X size={16} strokeWidth={2.2} />
+        </button>
+        <div style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 700 }}>
+          {data.scope.name}<span style={{ color: "#9A9A9A", fontWeight: 400 }}> · business review</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        {zoom >= 1 && <button onClick={async (e) => {
+            const btn = e.currentTarget; const t0 = btn.textContent; btn.textContent = "Building…";
+            try {
+              const [pgMod, builder] = await Promise.all([import("pptxgenjs"), import("../lib/deckPptx")]);
+              // brand logo rides along as an embedded image (skipped quietly if the asset is absent)
+              let logoData = null;
+              try {
+                const blob = await fetch("/blindcorner/mobile/brand/blindcorner/logo.png").then(r => (r.ok ? r.blob() : null));
+                if (blob) logoData = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).replace(/^data:/, "")); fr.readAsDataURL(blob); });
+              } catch {}
+              const pres = await builder.deckToPptx(pgMod.default || pgMod, data, { snapLabel: data.dataThru, universe: "Blind Corner + Torch", logoData });
+              await pres.writeFile({ fileName: `${fileName}.pptx` });
+            } catch (err) { console.error("pptx export failed", err); }
+            btn.textContent = t0;
+          }}
+          title="Native PowerPoint — every chart, table and shape stays editable"
+          style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8, border: "none", background: "#C9D8F0", color: "#0A0A0A", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginRight: 8 }}>
+          PowerPoint
+        </button>}
+        <button onClick={() => { const t = document.title; document.title = fileName; window.print(); setTimeout(() => { document.title = t; }, 500); }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8, border: "none", background: "#EDB3B0", color: "#0A0A0A", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+          PDF
+        </button>
+      </div>
+      <div className="deckPages deckScroll" style={{ flex: 1, overflowY: "auto", padding: "22px 0 40px", zoom }}
+        dangerouslySetInnerHTML={{ __html: html }} />
+    </div>,
+    document.body
+  );
+}

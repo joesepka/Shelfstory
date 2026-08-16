@@ -51,7 +51,7 @@ function Inner() {
         if (ar.error || fr.error) throw (ar.error || fr.error);
         let items = [], from = 0;
         while (true) {
-          const { data, error } = await supabase.from("item_grid").select("account_id,product_key,brand,package,fc_group,parent,l90,l90_prev,l52").range(from, from + 4999);
+          const { data, error } = await supabase.from("item_grid").select("account_id,product_key,brand,package,fc_group,parent,l90,l90_prev,l52,is_new_item").range(from, from + 4999);
           if (error) throw error;
           items = items.concat(data || []);
           if (!data || data.length < 5000) break;
@@ -142,7 +142,7 @@ function Inner() {
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <TreeGlyph {...(stat.cur > 0 ? { pct: stat.pct == null ? 0 : stat.pct } : { headline: "lapsed" })} h={54} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px", lineHeight: 1.1 }}>{name}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}><span style={{ fontFamily: "var(--font-serif)", fontSize: 23, fontWeight: 700, color: "var(--text)", letterSpacing: "-0.3px", lineHeight: 1.1, overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>{rowsF && rowsF.length > 0 && rowsF.some(it => it.is_new_item) ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#5b6bd0", background: "rgba(91,107,208,.12)", borderRadius: 5, padding: "1.5px 6px", flexShrink: 0 }}>New item</span> : null}</div>
           <div style={{ fontSize: 10.5, color: "var(--text-3)", marginTop: 2 }}>{scopeWord} · {labelWord} · {type === "style" ? "style" : "item"}</div>
         </div>
       </div>
@@ -181,7 +181,10 @@ function Inner() {
       {/* who's buying it */}
       {topAccts && topAccts.length > 0 && (
         <>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--text-3)", margin: "16px 0 7px" }}>Top accounts</div>
+          <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", margin: "16px 0 7px" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--text-3)" }}>Top accounts</span>
+            <span style={{ fontSize: 9, color: "var(--text-3)" }}>this {type === "style" ? "style" : "item"}’s 90D cases · vs prev</span>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {topAccts.map(t => { const a2 = accOf.get(t.id) || {}; const p2 = t.prev > 0 ? Math.round(100 * (t.cur - t.prev) / t.prev) : null; return (
               <div key={t.id} onClick={() => router.push("/account/" + encodeURIComponent(t.id))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "8px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>

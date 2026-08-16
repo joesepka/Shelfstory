@@ -111,3 +111,13 @@ a { color: inherit; text-decoration: none; }
 .b-lapsed { background:transparent; color:var(--lapsed-ink); border:0.5px solid var(--border-strong);}
 
 .state-msg { text-align:center; color: var(--text-2); font-size:14px; padding: 48px 16px; }
+/* header clouds — slow sideways drift */
+@keyframes clDrift { 0% { transform: translateX(0); } 50% { transform: translateX(14px); } 100% { transform: translateX(0); } }
+.cl { animation: clDrift 14s ease-in-out infinite; }
+.cl2 { animation-duration: 19s; animation-delay: -6s; }
+
+/* alive — a quick, quiet press-in on anything tappable */
+button, .tap { transition: transform .12s cubic-bezier(.3,.7,.4,1); -webkit-tap-highlight-color: transparent; }
+button:active, .tap:active { transform: scale(.985); }
+
+@keyframes fsPop { from { opacity: 0; transform: scale(.98); } to { opacity: 1; transform: none; } }

@@ -206,7 +206,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
         const [accRes, benRes, itemRes, mktRes, depRes] = await Promise.all([
           supabase.from("account_list").select("*").eq("account_id", id).maybeSingle(),
           supabase.from("account_benchmark").select("*").eq("account_id", id).maybeSingle(),
-          supabase.from("item_grid").select("product_key, item_name, l90, l90_prev, cell_state, last_sale_w, package, parent, style_parent, slot_key").eq("account_id", id),
+          supabase.from("item_grid").select("product_key, item_name, l90, l90_prev, cell_state, last_sale_w, package, parent, style_parent, slot_key, is_new_item").eq("account_id", id),
           supabase.from("item_market").select("product_key, item_name, market_rank, market_l90, slot_key").order("market_rank"),
           supabase.from("depletions_window").select("product_key, window_index, cases").eq("account_id", id).lte("window_index", 20),
         ]);
@@ -606,6 +606,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
             <span style={{ width: 6, height: 6, borderRadius: 9, background: skuColor(k.cell_state), flexShrink: 0 }} />
             <span style={{ minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "var(--text)", lineHeight: 1.25, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{k.item_name}</span>
             {tg && <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: tg[1], background: tg[2], borderRadius: 5, padding: "1.5px 6px", flexShrink: 0 }}>{tg[0]}</span>}
+            {k.is_new_item ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#5b6bd0", background: "rgba(91,107,208,.12)", borderRadius: 5, padding: "1.5px 6px", flexShrink: 0 }}>New item</span> : null}
             <span style={{ flex: 1 }} />
             <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}>{packSpan(k)}</span>
             <span style={{ width: 54, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 10, whiteSpace: "nowrap", color: due ? "#8a6a12" : "var(--text-3)", background: due ? "#fbf1c9" : "transparent", borderRadius: 5, padding: due ? "2px 5px" : "0" }}>{k.last_sale_w != null ? `${agoDays(k.last_sale_w)} ago` : "—"}</span></span>

@@ -598,6 +598,7 @@ function BookInner() {
             style={{ border: "none", background: "none", outline: "none", fontFamily: "inherit", fontSize: 13, color: "var(--text)", width: "100%" }} />
           {q && <span onClick={() => setQ("")} style={{ cursor: "pointer", color: "var(--text-3)", fontWeight: 700, fontSize: 13 }}>✕</span>}
         </div>
+        <button onClick={() => router.push("/report")} style={{ marginTop: 8, width: "100%", border: "0.5px solid var(--border-strong)", background: "var(--surface)", borderRadius: 11, padding: "9px 0", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: "var(--text-2)", cursor: "pointer", boxShadow: "var(--shadow-sm)" }}>Generate report</button>
       </div>
 
       <div className="nobar" style={{ display: "flex", gap: 6, padding: "10px 12px 8px", overflowX: "auto", flexShrink: 0 }}>
