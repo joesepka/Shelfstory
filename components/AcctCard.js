@@ -482,7 +482,24 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
   const ITAG = { new: ["new", "#6b7267", "#eef0ea"], accelerating: ["surging", "#22633f", "#dcefe1"], decelerating: ["softening", "#9c7420", "#f3ead0"], "at-risk": ["at risk", "#9c7420", "#f3ead0"] };
   // only SKUs the account actually REPEATS carry a status — a rotating one-case-and-done listing has no trend
   // to report, and tagging every one of them "new" buries the handful that matter.
-  const itemTag = (k) => { const d = dep.byPk[k.product_key]; if (!d) return null; if (d.dots.filter(v => v > 0).length < 2) return null; return ITAG[acctHealth(d.dots)] || null; };
+  // Rotating-tier liquids (Limited/Collab/Seasonal/House/Seltzer/THC) come and go by
+  // design — a fading Limited is retirement, not risk. Only CORE items earn softening /
+  // at-risk talk, and a core that ordered within the last two windows is never "at risk"
+  // (Joe, 2026-08-17: it just ordered a month ago — don't cry wolf).
+  const TIER_RE = /LIMITED|SEASONAL|COLLAB|HOUSE|SELTZER|THC/i;
+  const isCoreItem = (k) => !(TIER_RE.test(String(k.slot_key || "")) || TIER_RE.test(String(k.style_parent || "")));
+  const itemTag = (k) => {
+    const d = dep.byPk[k.product_key]; if (!d) return null;
+    if (d.dots.filter(v => v > 0).length < 2) return null;
+    const h = acctHealth(d.dots);
+    if (h === "new") return ITAG.new;
+    if (h === "accelerating") return ITAG.accelerating;
+    if (h !== "decelerating" && h !== "at-risk") return null;
+    if (!isCoreItem(k)) return null;
+    const orderedRecently = (d.dots[d.dots.length - 1] || 0) > 0 || (d.dots[d.dots.length - 2] || 0) > 0;
+    if (h === "at-risk" && orderedRecently) return ITAG.decelerating;
+    return ITAG[h] || null;
+  };
   // "What's working nearby" whitespace picks — peers' gaps you don't carry, off-prem never gets draft, each with a why (top 3)
   const peerTotal = penetration ? penetration.total : 0;
   const nearbyPicks = wsReal
@@ -655,8 +672,12 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
     const ounit = packMo(60, it.package).unit, omlab = Array.from({ length: 12 }, (_, x) => monthLabel(11 - x));   // 60 = dummy for a plural unit label
     const lost = it.cell_state === "lost_recent" || (it.l90 || 0) <= 0;
     const pk = packMo(lost ? (it.l90_prev || 0) : (it.l90 || 0), it.package);
+    // trend words are for CORE items only — "declining" on a rotating tier that's simply
+    // sunsetting reads as a false alarm. Non-core gets plain facts.
+    const coreIt = isCoreItem(it);
     const chip = lost ? { t: "Dropped", c: "var(--pop-warm-deep)", bg: "#f6e4e1" }
       : it.cell_state === "growth" ? { t: "Growing", c: "#2f6b46", bg: "#e6f2e9" }
+      : !coreIt ? { t: "Ordering", c: "#5c6353", bg: "#eef0ea" }
       : it.cell_state === "decline" ? { t: "Declining", c: "#a3423a", bg: "#f6e4e1" }
       : { t: "Steady", c: "#5c6353", bg: "#eef0ea" };
     const due = !lost ? dueOf(it) : null;
@@ -671,11 +692,12 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
             <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, color: chip.c, background: chip.bg, borderRadius: 6, padding: "3px 8px", flexShrink: 0 }}>{chip.t}</span>
             <button onClick={() => setCardSku(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--text-3)", fontSize: 15, lineHeight: 1, padding: 0, flexShrink: 0 }}>✕</button>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(12,1fr)", gap: 3, marginTop: 15 }}>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--text-3)", marginTop: 14 }}>Actual orders · last 12 months</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12,1fr)", gap: 3, marginTop: 6 }}>
             {opacks.map((p, i) => (<div key={i} title={`${omlab[i]}: ${p ? p + " " + ounit : "no order"}`} style={{ aspectRatio: "1", borderRadius: 3, border: "0.5px solid var(--border)", background: p > 0 ? hexA(lost ? "#b0573a" : "#2f9d63", 0.12 + 0.5 * p / pMax) : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, fontWeight: 700, color: p > 0 ? (lost ? "#8B3A2B" : "#15703b") : "var(--text-3)" }}>{p > 0 ? (p >= 1000 ? (p / 1000).toFixed(1) + "k" : p) : "·"}</span></div>))}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(12,1fr)", gap: 3, marginTop: 3 }}>{omlab.map((m, i) => (<span key={i} style={{ textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 7, color: "var(--text-3)" }}>{m}</span>))}</div>
-          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-3)", marginTop: 5 }}>orders / month · {ounit}</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 8, color: "var(--text-3)", marginTop: 5 }}>actual {ounit} ordered each month · blank = no order</div>
           <div style={{ display: "flex", gap: 18, marginTop: 14, borderTop: "0.5px solid var(--border)", paddingTop: 12 }}>
             <div><div style={colheadS}>{lost ? "Was moving" : "Moving"}</div><div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700, marginTop: 3 }}>{pk.n.toLocaleString()}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> {pk.unit}/mo</span></div></div>
             <div><div style={colheadS}>Last order</div><div style={{ fontFamily: "var(--font-mono)", fontSize: 15, fontWeight: 700, marginTop: 3, color: lost ? "var(--pop-warm-deep)" : "var(--text)" }}>{it.last_sale_w != null ? agoDays(it.last_sale_w) : "—"}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> ago</span></div></div>

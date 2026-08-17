@@ -8,7 +8,7 @@ import TreeGlyph, { tierBucket, TierTree } from "../components/TreeGlyph";
 import GreyLoader from "../components/Splash";
 import { fluidArt } from "../components/treeArt";
 import { useTheme } from "../lib/theme";
-import { getScope, setScope, getLabel, setLabel, parseScope, LABELS } from "../lib/scope";
+import { setScope, getLabel, setLabel, LABELS } from "../lib/scope";
 import { withHealth } from "../lib/health";
 import { SNAPSHOT, SNAP_LABEL } from "../lib/snapshot";
 import ThemeChooser from "../components/ThemeChooser";
@@ -911,6 +911,12 @@ function TrendGraph({ cases, accts, ros, pct, skey }) {
   );
 }
 
+// The remembered territory lives in plain JS memory, on purpose: it survives in-app
+// navigation (account card → back reopens the ledger) but dies the moment the link is
+// opened fresh — so a cold open ALWAYS lands on the front door. localStorage and
+// sessionStorage both leaked through Chrome's "continue where you left off" (Joe, 2026-08-16).
+let warmKey = null;
+
 export default function Home() {
   const router = useRouter();
   const [phase, setPhase] = useState(booted ? "ready" : "splash"); // splash → ready
@@ -1231,19 +1237,19 @@ export default function Home() {
     return rows.filter(r => String(r.account_name || "").toLowerCase().includes(t) || String(r.city || "").toLowerCase().includes(t) || String(r.chain || "").toLowerCase().includes(t)).slice(0, 8);
   }, [rows, q]);
 
-  // coming back from a drill or account card: reopen the ledger on the remembered
-  // territory. The ‹ Territories button is what clears the slate now.
+  // Coming back from a drill or account card mid-session: reopen the ledger on the
+  // remembered territory (held in module memory — see warmKey above). A fresh open of
+  // the link has no memory, so it always starts on the front door.
+  const restoreKey = useRef(warmKey).current;   // captured once, at first mount
   useEffect(() => {
-    if (!brewery || !slides) return;
-    // ...but ONLY inside the same session. The territory is remembered in localStorage,
-    // so without this a cold open of the app landed in whatever book you were last in
-    // instead of the front door (Joe, 2026-08-16).
-    let warm = false;
-    try { warm = sessionStorage.getItem("ssWarm") === "1"; sessionStorage.setItem("ssWarm", "1"); } catch { }
-    if (!warm) return;
-    const sc = parseScope();
-    if (sc.kind === "rep") { const i = slides.findIndex(sl => sl.key === "REP:" + sc.value); if (i >= 0) { setSlide(i); setView("ledger"); } }
+    if (!brewery || !slides || !restoreKey) return;
+    const i = slides.findIndex(sl => sl.key === restoreKey);
+    if (i >= 0 && slides[i].key !== "ALL") { setSlide(i); setView("ledger"); }
   }, [slides]);   // eslint-disable-line
+  // mirror where the user is; ‹ Territories (view -> grid) clears the memory
+  useEffect(() => {
+    warmKey = (view === "ledger" && slides && slides[slide]) ? slides[slide].key : null;
+  }, [view, slide, slides]);
 
   function navTo(href) {
     burst(href, () => router.push(href)); // explode the cards, then navigate
