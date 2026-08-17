@@ -2,8 +2,9 @@
 // renderDeck(D, logoSrc) returns the slides in order, skipping any with no real data.
 /* eslint-disable */
 import { SNAP_LABEL } from "../lib/snapshot.js";
-export function renderDeck(D, logoSrc) {
+export function renderDeck(D, logoSrc, brandName) {
   const LOGO = logoSrc || "/blindcorner/mobile/brand/blindcorner/logo.png";
+const BRAND_NAME = brandName || "Blind Corner Brewery";
 const fmt=n=>Math.round(n).toLocaleString();
 const kf=v=>v>=1000?(v/1000).toFixed(1)+'k':String(Math.round(v));
 const arrow=p=>p==null?'':(p>0?'▲':p<0?'▼':'');
@@ -63,7 +64,7 @@ const gHead=(t,sub,legend)=>'<div style="display:flex;align-items:baseline;justi
 /* ---------- 1 · cover (watermark) ---------- */
 function sTitle(){
   return `<div class="slide"><div style="height:100%;position:relative;overflow:hidden;padding:52px 56px 38px;display:flex;flex-direction:column">
-   <img src="/blindcorner/mobile/brand/blindcorner/logo.png" style="position:absolute;right:-150px;top:-90px;height:720px;opacity:.10">
+   <img src="${LOGO}" style="position:absolute;right:-150px;top:-90px;height:720px;opacity:.10">
    <div style="position:relative;display:flex;justify-content:space-between;align-items:flex-start">
      <div style="font-size:9.5px;font-weight:700;letter-spacing:2.2px;text-transform:uppercase;color:var(--grey2)">Business Review</div>
      ${logo(70)}
@@ -73,7 +74,7 @@ function sTitle(){
      <div style="height:3px;width:110px;background:var(--pink);margin:24px 0 20px"></div>
      <div style="font-size:16px;color:var(--grey)">${D.scope.sub} &nbsp;·&nbsp; ${PERIOD}</div>
    </div>
-   <div style="position:relative;font-size:9.5px;color:var(--grey2)">Prepared from distributor depletion reporting through the snapshot date &nbsp;·&nbsp; Blind Corner Brewery</div>
+   <div style="position:relative;font-size:9.5px;color:var(--grey2)">Prepared from distributor depletion reporting through the snapshot date &nbsp;·&nbsp; ${BRAND_NAME}</div>
   </div></div>`;
 }
 

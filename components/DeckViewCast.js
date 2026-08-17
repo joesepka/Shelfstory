@@ -11,8 +11,9 @@ const X = ({ size = 16, strokeWidth = 2.2 }) => (
 // native 940px (no phone zoom in the way), rasterized, and packed into a downloadable PDF —
 // on phones this runs automatically as soon as the deck opens (Joe's call: browser
 // print-to-PDF mangled the spacing on phones).
-export default function DeckView({ data, onClose }) {
-  const html = useMemo(() => (data ? renderDeck(data).join("") : ""), [data]);
+export default function DeckView({ data, onClose, brand = "blindcorner" }) {
+  const LOGO = `/blindcorner/mobile/brand/${brand}/logo.png`;
+  const html = useMemo(() => (data ? renderDeck(data, LOGO, brand === "torch" ? "Torch" : "Blind Corner Brewery").join("") : ""), [data, LOGO]);
   // phone: shrink the 940px slides to the screen (the offscreen PDF pass never sees this zoom)
   const [zoom, setZoom] = useState(1);
   const [pdfMsg, setPdfMsg] = useState(null);
@@ -135,10 +136,10 @@ export default function DeckView({ data, onClose }) {
               // brand logo rides along as an embedded image (skipped quietly if the asset is absent)
               let logoData = null;
               try {
-                const blob = await fetch("/blindcorner/mobile/brand/blindcorner/logo.png").then(r => (r.ok ? r.blob() : null));
+                const blob = await fetch(LOGO).then(r => (r.ok ? r.blob() : null));
                 if (blob) logoData = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).replace(/^data:/, "")); fr.readAsDataURL(blob); });
               } catch {}
-              const pres = await builder.deckToPptx(pgMod.default || pgMod, data, { snapLabel: data.dataThru, universe: "Blind Corner + Torch", logoData });
+              const pres = await builder.deckToPptx(pgMod.default || pgMod, data, { snapLabel: data.dataThru, universe: brand === "torch" ? "Torch" : "Blind Corner", logoData });
               await pres.writeFile({ fileName: `${fileName}.pptx` });
             } catch (err) { console.error("pptx export failed", err); }
             btn.textContent = t0;

@@ -89,7 +89,7 @@ export default function ReportPage() {
     })();
   };
 
-  if (deck) return <DeckViewCast data={deck} onClose={() => setDeck(null)} />;
+  if (deck) return <DeckViewCast data={deck} brand={(label || "") === "TORCH" ? "torch" : "blindcorner"} onClose={() => setDeck(null)} />;
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       {!base && !err && <div style={{ padding: 30, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}
