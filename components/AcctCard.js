@@ -5,6 +5,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import TreeGlyph from "./TreeGlyph";
+import SellStory from "./SellStory";
 import { greenBar } from "../lib/utils";
 import { acctHealth } from "../lib/acctHealth";
 import { SNAPSHOT as SNAP } from "../lib/snapshot";
@@ -575,6 +576,8 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
           {briefBullets.map((t, i) => { const isMix = mixBullet && t === mixBullet; return (<div key={i} style={{ display: "flex", gap: 9, alignItems: "flex-start" }}><span style={{ width: 6, height: 6, borderRadius: 9, background: isMix ? "var(--gold)" : i === 0 ? "var(--accent-deep)" : "var(--text-2)", marginTop: 5, flexShrink: 0 }} /><span style={{ fontSize: 12, lineHeight: 1.35, color: "#3a4034" }}>{t}</span></div>); })}
         </div>
       </div>
+      {/* Sell Story — 4-5 sayable, data-backed sell-in angles (approved buckets, 2026-08-16) */}
+      <SellStory d={d} parents={parents} />
       {/* depletions bars + a blue "# of SKUs" line (90-day rolling placement) — squished so name/stats/brief/graph share one pane */}
       <div style={{ ...secDiv, margin: "10px 0 0", paddingTop: 10 }}>
         <div style={{ ...secS, margin: "0 0 6px", display: "flex", alignItems: "baseline", gap: 8 }}>90-day rolling depletions <span style={{ fontSize: 8.5, fontWeight: 600, color: "#4a5ac4", textTransform: "none", letterSpacing: 0 }}>— # SKUs on shelf</span></div>

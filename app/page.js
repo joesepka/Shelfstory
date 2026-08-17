@@ -1373,10 +1373,26 @@ export default function Home() {
         {/* accounts — watch first, then lapsed / surging / the rest; See all opens the book */}
         {view === "ledger" && cur && watchRows && watchRows.length > 0 && (
           <>
-            <SectHead t="Accounts" more={watchRows.length > 3 ? (openAccts ? "Show less ↑" : "See all ↓") : undefined} onMore={() => setOpenAccts(o => !o)} />
+            <SectHead t="Accounts" more={openAccts ? "Show less ↑" : "See all ↓"} onMore={() => setOpenAccts(o => !o)} />
+            {bookCounts && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 8 }}>
+                {[
+                  ["Watch", "watch", watchRows.filter(r2 => { const h2 = String(r2.headline || "").toLowerCase().trim(); return h2 === "decelerating" || h2 === "at-risk"; }).length, "#8a5a20", "rgba(176,127,54,.08)", "rgba(176,127,54,.3)"],
+                  ["Lapsed", "lapsed", bookCounts.lapsed, "#a05242", "rgba(176,87,58,.07)", "rgba(176,87,58,.3)"],
+                  ["Surging", "surging", bookCounts.surging, "var(--up)", "rgba(47,125,82,.07)", "rgba(47,125,82,.3)"],
+                  ["All accounts", "", bookCounts.total, "var(--text-2)", "var(--surface)", "var(--border-strong)"],
+                ].map(([lb2, hp, n2, fg, bg2, bd]) => (
+                  <button key={lb2} className="tapd" onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book" + (hp ? "?health=" + hp : "")); }} style={{ border: `0.5px solid ${bd}`, background: bg2, borderRadius: 13, padding: "8px 2px 7px", fontFamily: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 700, color: fg, whiteSpace: "nowrap" }}>{lb2}</span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: fg }}>{Number(n2).toLocaleString()}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {openAccts && <div className="rowIn" style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, textTransform: "uppercase", color: "#9c7420", margin: "0 2px 6px" }}>Watch list · slowing or at-risk</div>}
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {(openAccts ? watchRows : watchRows.slice(0, 3)).map(r => { const h = String(r.headline || "").toLowerCase().trim(); const cPct = (r.prev90 || 0) > 0 ? Math.round(100 * ((r.cur90 || 0) - r.prev90) / r.prev90) : null; const plcN = plcMap ? ((plcMap[r.account_id] || {}).now || 0) : (r.live_placements || 0); const plcPv = plcMap ? ((plcMap[r.account_id] || {}).prev || 0) : (r.live_prev || 0); const pd = plcN - plcPv; return (
-                <div key={r.account_id} className="tap" onClick={() => router.push("/account/" + encodeURIComponent(r.account_id))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+              {(openAccts ? watchRows.filter(r2 => { const h2 = String(r2.headline || "").toLowerCase().trim(); return h2 === "decelerating" || h2 === "at-risk"; }) : watchRows.slice(0, 3)).map((r, i2) => { const h = String(r.headline || "").toLowerCase().trim(); const cPct = (r.prev90 || 0) > 0 ? Math.round(100 * ((r.cur90 || 0) - r.prev90) / r.prev90) : null; const plcN = plcMap ? ((plcMap[r.account_id] || {}).now || 0) : (r.live_placements || 0); const plcPv = plcMap ? ((plcMap[r.account_id] || {}).prev || 0) : (r.live_prev || 0); const pd = plcN - plcPv; return (
+                <div key={r.account_id} className="tap rowIn" onClick={() => router.push("/account/" + encodeURIComponent(r.account_id))} style={{ animationDelay: `${Math.min(i2 * 18, 240)}ms`, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
                   <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph headline={r.headline} h={30} /></span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.account_name}</div>
@@ -1395,30 +1411,15 @@ export default function Home() {
           </>
         )}
 
-        {/* four doors into the book — lightly tinted, each carrying its headcount */}
-        {view === "ledger" && cur && bookCounts && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginTop: 10 }}>
-            {[
-              ["All accounts", "", bookCounts.total, "var(--text-2)", "var(--surface)", "var(--border-strong)"],
-              ["Watch", "watch", watchRows ? watchRows.filter(r => { const h = String(r.headline || "").toLowerCase().trim(); return h === "decelerating" || h === "at-risk"; }).length : 0, "#8a5a20", "rgba(176,127,54,.08)", "rgba(176,127,54,.3)"],
-              ["Lapsed", "lapsed", bookCounts.lapsed, "#a05242", "rgba(176,87,58,.07)", "rgba(176,87,58,.3)"],
-              ["Surging", "surging", bookCounts.surging, "var(--up)", "rgba(47,125,82,.07)", "rgba(47,125,82,.3)"],
-            ].map(([lb2, hp, n2, fg, bg2, bd]) => (
-              <button key={lb2} onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book" + (hp ? "?health=" + hp : "")); }} style={{ border: `0.5px solid ${bd}`, background: bg2, borderRadius: 13, padding: "8px 2px 7px", fontFamily: "inherit", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: fg, whiteSpace: "nowrap" }}>{lb2}</span>
-                <span style={{ fontFamily: "var(--font-mono)", fontSize: 14, fontWeight: 600, color: fg }}>{Number(n2).toLocaleString()}</span>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* (the four book doors now live at the top of the Accounts section, Watch first) */}
 
         {/* styles — top three; cases + placements, numbers on a fixed grid */}
         {view === "ledger" && brewery && cur && homeStyles && homeStyles.length > 0 && (
           <>
             <SectHead t={`${cur.key === "ALL" ? "Book" : cur.label} · Styles`} more={openStyles ? "Show less ↑" : "See all ↓"} onMore={() => setOpenStyles(o => !o)} />
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {(openStyles ? homeStyles : homeStyles.slice(0, 3)).map(st2 => { const pd = (st2.plc || 0) - (st2.plcP || 0); return (
-                <div key={st2.sg} className="tap" onClick={() => router.push("/drill?type=style&k=" + encodeURIComponent(st2.sg))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+              {(openStyles ? homeStyles : homeStyles.slice(0, 3)).map((st2, i2) => { const pd = (st2.plc || 0) - (st2.plcP || 0); return (
+                <div key={st2.sg} className="tap rowIn" onClick={() => router.push("/drill?type=style&k=" + encodeURIComponent(st2.sg))} style={{ animationDelay: `${Math.min(i2 * 18, 240)}ms`, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
                   <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph {...treePropsH(st2.cur, st2.g90)} h={30} /></span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{styleLabelH(st2.sg)}</div>
@@ -1442,8 +1443,8 @@ export default function Home() {
           <>
             <SectHead t="Items" more={openSkus ? "Show less ↑" : "See all ↓"} onMore={() => setOpenSkus(o => !o)} />
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {(openSkus ? homeSkus : homeSkus.slice(0, 3)).map(it2 => { const pd = (it2.n || 0) - (it2.nP || 0); return (
-                <div key={it2.brand + "|" + it2.pack} className="tap" onClick={() => router.push("/drill?type=item&k=" + encodeURIComponent(it2.brand + "||" + it2.pack))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+              {(openSkus ? homeSkus : homeSkus.slice(0, 3)).map((it2, i2) => { const pd = (it2.n || 0) - (it2.nP || 0); return (
+                <div key={it2.brand + "|" + it2.pack} className="tap rowIn" onClick={() => router.push("/drill?type=item&k=" + encodeURIComponent(it2.brand + "||" + it2.pack))} style={{ animationDelay: `${Math.min(i2 * 18, 240)}ms`, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
                   <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph {...treePropsH(it2.cur, it2.g90)} h={30} /></span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}><span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><span style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)" }}>{titleCase(it2.brand)}</span>{it2.pack ? <span style={{ fontSize: 10.5, color: "var(--text-3)" }}> · {it2.pack}</span> : null}</span>{it2.isNew ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#5b6bd0", background: "rgba(91,107,208,.12)", borderRadius: 5, padding: "1.5px 6px", flexShrink: 0 }}>New item</span> : null}</div>
@@ -1467,8 +1468,8 @@ export default function Home() {
           <>
             <SectHead t="Chains" more={openChains ? "Show less ↑" : "See all ↓"} onMore={() => setOpenChains(o => !o)} />
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {(openChains ? homeChains : homeChains.slice(0, 3)).map(c3 => { const nd = (c3.n || 0) - (c3.nP || 0); return (
-                <div key={c3.ch} className="tap" onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book?chain=" + encodeURIComponent(c3.ch)); }} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
+              {(openChains ? homeChains : homeChains.slice(0, 3)).map((c3, i2) => { const nd = (c3.n || 0) - (c3.nP || 0); return (
+                <div key={c3.ch} className="tap rowIn" onClick={() => { setScope(cur.key === "ALL" ? "" : cur.key); router.push("/book?chain=" + encodeURIComponent(c3.ch)); }} style={{ animationDelay: `${Math.min(i2 * 18, 240)}ms`, background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
                   <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph {...(c3.cur > 0 ? { pct: c3.pct == null ? 0 : c3.pct } : { headline: "lapsed" })} h={30} /></span>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{titleCase(c3.ch).replace(/'(\w)/g, (m3, x3) => "'" + x3.toLowerCase())}</div>

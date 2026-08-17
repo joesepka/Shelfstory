@@ -23,8 +23,12 @@ a { color: inherit; text-decoration: none; }
 .fsel, .tapd { transition: transform .12s ease, background .14s ease, border-color .14s ease, color .14s ease; }
 .fsel:active, .tapd:active { transform: scale(.96); }
 
+/* see-all expanders + sell-story rows — a fast cascade as rows mount */
+@keyframes rowIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: none; } }
+.rowIn { animation: rowIn .2s ease both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .pagefade, .backbtn { animation: none; }
+  .pagefade, .backbtn, .rowIn { animation: none; }
   .fsel, .tapd { transition: none; }
 }
 
