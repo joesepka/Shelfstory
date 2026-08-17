@@ -16,6 +16,9 @@ export default function DeckView({ data, onClose }) {
   // phone: shrink the 940px slides to the screen (the offscreen PDF pass never sees this zoom)
   const [zoom, setZoom] = useState(1);
   const [pdfMsg, setPdfMsg] = useState(null);
+  // on a phone the shrunken slides look broken while the PDF is being rasterized —
+  // keep them out of sight until the file lands (Joe, 2026-08-16)
+  const [hidden, setHidden] = useState(() => typeof window !== "undefined" && window.innerWidth < 956);
   const building = useRef(false);
   const autoRan = useRef(false);
   useEffect(() => {
@@ -62,6 +65,7 @@ export default function DeckView({ data, onClose }) {
     }
     if (host) host.remove();
     building.current = false;
+    setHidden(false);   // file's done — now the preview is worth looking at
   };
 
   // phones: the PDF starts building itself the moment the deck opens.
@@ -149,7 +153,20 @@ export default function DeckView({ data, onClose }) {
           {pdfMsg || "PDF"}
         </button>
       </div>
-      <div className="deckPages deckScroll" style={{ flex: 1, overflowY: "auto", padding: "22px 0 40px", zoom }}
+      {hidden && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, color: "#fff", padding: 30, textAlign: "center" }}>
+          <svg width="46" height="46" viewBox="0 0 50 50" aria-hidden="true" style={{ animation: "deckSpin 1.1s linear infinite" }}>
+            <circle cx="25" cy="25" r="20" fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="4" />
+            <path d="M25 5 a20 20 0 0 1 20 20" fill="none" stroke="#EDB3B0" strokeWidth="4" strokeLinecap="round" />
+          </svg>
+          <div style={{ fontFamily: "var(--font-sans)", fontSize: 15, fontWeight: 700 }}>{pdfMsg || "Building your PDF…"}</div>
+          <div style={{ fontFamily: "var(--font-sans)", fontSize: 12, color: "rgba(255,255,255,.6)", maxWidth: 260, lineHeight: 1.45 }}>
+            {data.scope.name} · business review. It'll download on its own in a few seconds.
+          </div>
+          <style>{`@keyframes deckSpin{to{transform:rotate(360deg)}}`}</style>
+        </div>
+      )}
+      <div className="deckPages deckScroll" style={{ flex: 1, overflowY: "auto", padding: "22px 0 40px", zoom, display: hidden ? "none" : "block" }}
         dangerouslySetInnerHTML={{ __html: html }} />
     </div>,
     document.body

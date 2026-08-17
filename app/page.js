@@ -1235,6 +1235,12 @@ export default function Home() {
   // territory. The ‹ Territories button is what clears the slate now.
   useEffect(() => {
     if (!brewery || !slides) return;
+    // ...but ONLY inside the same session. The territory is remembered in localStorage,
+    // so without this a cold open of the app landed in whatever book you were last in
+    // instead of the front door (Joe, 2026-08-16).
+    let warm = false;
+    try { warm = sessionStorage.getItem("ssWarm") === "1"; sessionStorage.setItem("ssWarm", "1"); } catch { }
+    if (!warm) return;
     const sc = parseScope();
     if (sc.kind === "rep") { const i = slides.findIndex(sl => sl.key === "REP:" + sc.value); if (i >= 0) { setSlide(i); setView("ledger"); } }
   }, [slides]);   // eslint-disable-line

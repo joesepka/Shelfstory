@@ -41,7 +41,7 @@ export default function ReportPage() {
         let ig = [], f2 = 0;
         while (true) {
           const { data, error } = await supabase.from("item_grid")
-            .select("account_id,product_key,item_name,brand,package,style_parent,parent,l90,l90_prev,l52")
+            .select("account_id,product_key,item_name,brand,package,style_parent,fc_group,parent,l90,l90_prev,l52")
             .range(f2, f2 + 4999);
           if (error) throw error;
           ig = ig.concat(data || []);
@@ -49,7 +49,7 @@ export default function ReportPage() {
           f2 += 5000;
         }
         const pgrid = ig.filter(r => !label || r.parent === label)
-          .map(r => ({ account_id: r.account_id, pk: r.product_key, item: r.item_name, brand: r.brand, package: r.package, sp: r.style_parent, l90: +r.l90 || 0, prev: +r.l90_prev || 0, l52: +r.l52 || 0 }));
+          .map(r => ({ account_id: r.account_id, pk: r.product_key, item: r.item_name, brand: r.brand, package: r.package, sp: r.style_parent, fg: r.fc_group || "—", l90: +r.l90 || 0, prev: +r.l90_prev || 0, l52: +r.l52 || 0 }));
         const accts = rows.map(a => ({ id: a.account_id, name: a.account_name, city: a.city, chain: a.chain, income: a.income_bucket, ctype: a.channel_type, rep: a.sales_rep || "Unassigned" }));
         setBase({ accts, acctMo: monthly, pgrid });
       } catch (e) { setErr(e.message || "load failed"); }
@@ -79,7 +79,10 @@ export default function ReportPage() {
           const { data: rows } = await supabase.rpc("deck_item_windows", { p_ids: scope.ids, p_parent: label || null });
           if (rows) { itemWin = {}; for (const r of rows) { const a = itemWin[r.pk] || (itemWin[r.pk] = new Array(24).fill(0)); if (r.w >= 0 && r.w <= 23) a[23 - r.w] = Number(r.cases) || 0; } }
         }
-        const d = buildDeck({ scope, accts: base.accts, acctMo: base.acctMo, pgrid: base.pgrid, tf: { key, cmp }, itemWin });
+        // same style map the desktop deck uses, so both apps tell an identical story
+        let styleOf = null;
+        try { const { data: fb } = await supabase.rpc("fc_base"); if (fb) { styleOf = {}; for (const r of fb) if (r.product_key && styleOf[r.product_key] == null) styleOf[r.product_key] = r.style_group || null; } } catch { }
+        const d = buildDeck({ scope, accts: base.accts, acctMo: base.acctMo, pgrid: base.pgrid, tf: { key, cmp }, itemWin, styleOf });
         if (d) setDeck(d);
       } catch (e) { setErr(e.message || "build failed"); }
       setBusy(false);

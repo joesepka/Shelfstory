@@ -128,6 +128,15 @@ export default function DeckPrompt({ scope, universe, busy, err, onBuild, onClos
             style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit", padding: "8px 12px", borderRadius: 10, cursor: busy ? "default" : "pointer" }}>
             Cancel
           </button>
+          {/* small-sample warning — a handful of accounts can't carry a trend (Joe, 2026-08-16) */}
+          {active && active.n != null && active.n < 5 && (
+            <div style={{ display: "flex", gap: 9, alignItems: "flex-start", background: "#f8f1e0", border: "0.5px solid #e6d9b8", borderRadius: 10, padding: "9px 12px", marginBottom: 10 }}>
+              <span style={{ fontSize: 13, lineHeight: 1.1, color: "#9c7420" }}>&#9888;</span>
+              <span style={{ fontSize: 11.5, lineHeight: 1.4, color: "#6b5a2e" }}>
+                <b>Small sample.</b> This selection covers {active.n} account{active.n === 1 ? "" : "s"} — percentages and trends can swing hard on a single order. Read the numbers as a snapshot, not a trend.
+              </span>
+            </div>
+          )}
           <button type="button" disabled={busy} onClick={() => onBuild({ key: tfKey, cmp: tfKey === "YTD" ? "yoy" : cmp, which })}
             style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "0.5px solid #cfe0d4", background: "#eef4ee", color: "#2f6b46",
               fontSize: 12.5, fontWeight: 700, fontFamily: "inherit", padding: "8px 16px", borderRadius: 10, cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }}>

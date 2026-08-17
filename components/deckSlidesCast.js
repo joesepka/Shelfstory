@@ -190,17 +190,7 @@ function sItems(seg,label){
          <span class="lbl">Rate of sale · top ${top6.length}${M.dflt?'':' · last 90 days'}</span>
          <span style="font-size:8px;color:var(--grey2)">dotted line = ${top6[0].n}</span></div>
        ${rosSvg}
-       <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:14px 0 4px;border-top:1px solid var(--rule);margin-top:12px">
-         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
-           <span class="lbl">Share of ${label.toLowerCase()} cases by style</span><span style="font-size:8px;color:var(--grey2)">${M.winShort}</span></div>
-         <div style="display:flex;height:32px;border-radius:3px;overflow:hidden">
-           ${s.mix.map(([k,v])=>`<div style="width:${v}%;background:${MIXC[k]||'#CFCFCF'};display:flex;align-items:center;justify-content:center">
-             ${v>=7?'<span class="fig" style="font-size:12px;color:#fff">'+v.toFixed(1)+'%</span>':''}</div>`).join('')}</div>
-         <div style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px">
-           ${s.mix.map(([k,v])=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:9px">
-             <span style="width:9px;height:9px;border-radius:2px;background:${MIXC[k]||'#CFCFCF'}"></span>
-             <b>${k}</b> <span style="color:var(--grey)">${v.toFixed(1)}%</span></span>`).join('')}</div>
-       </div>
+       <!-- (style-mix stacked bar removed 2026-08-16 at Joe's request) -->
      </div>
    </div>${foot(SRC+" Brands aggregate every "+label.toLowerCase()+" format they sell in. Accounts = accounts that ordered the brand in the window.")}`);
 }
@@ -233,10 +223,12 @@ function sUniverse(){
     x+='<text x="'+pl+'" y="'+(pt-10)+'" font-family="Arial" font-size="7.2" font-weight="bold" fill="var(--pink2)">● = ACTIVE ACCOUNTS</text>';
     return x+'</svg>';};
   const incomeDim=D.income.filter(i=>i.act>0), typeDim=D.types.filter(t=>t.act>0);
-  const panels = isChain
-    ? [["Rate of sale by income band", chartFor(incomeDim,"income band",260)]]
+  // one channel in scope says nothing — drop that chart entirely (Joe, 2026-08-16)
+  const oneChan = typeDim.length < 2;
+  const panels = (isChain || oneChan)
+    ? (incomeOK ? [["Rate of sale by area demographic", chartFor(incomeDim,"income band",260)]] : [])
     : [["Rate of sale by channel", chartFor(typeDim,"channel",188)]]
-      .concat(incomeOK ? [["Rate of sale by income band", chartFor(incomeDim,"income band",188)]] : []);
+      .concat(incomeOK ? [["Rate of sale by area demographic", chartFor(incomeDim,"income band",188)]] : []);
   const surg=D.buckets.find(b=>b.k==="Surging"), lap=D.buckets.find(b=>b.k==="Lapsed");
   const bl=[
     `<b>${D.accts} of ${D.withHist} accounts ordered in the last 90 days</b>${D.acctsPct!=null?`, ${D.acctsPct>=0?'up':'down'} ${Math.abs(D.acctsPct)}% on the prior quarter`:''}.`,
@@ -471,8 +463,69 @@ function sRecap(){
 }
 
 
+/* ---------- 3 · brand story (only when there IS one) ---------- */
+// The three levers of real growth: more accounts carrying, more facings inside them,
+// and faster turns on each one. If the quarter isn't actually a growth story the slide
+// drops out entirely rather than spin a bad one (Joe, 2026-08-16).
+function brandStoryOK(){
+  const lv=[D.acctsPct,D.plcPct,rosPct()].filter(v=>v!=null&&v>0).length;
+  return D.casesPct!=null && D.casesPct>0 && lv>=2 && (D.styles||[]).length>=2;
+}
+function rosPct(){ return D.rosPrev>0 ? Math.round((D.ros-D.rosPrev)/D.rosPrev*100) : null; }
+function sBrandStory(){
+  const rp=rosPct();
+  const up=[[D.acctsPct,"more accounts carrying it"],[D.plcPct,"more of the shelf inside them"],[rp,"faster turns on every facing"]]
+    .filter(([v])=>v!=null&&v>0).map(([,t])=>t);
+  const lead = up.length>=3 ? `<b>${D.scope.name}</b> is growing on <b>all three levers at once</b> — ${up[0]}, ${up[1]}, and ${up[2]}. Growth this quarter is <b>real distribution</b>, not a handful of big orders.`
+    : `<b>${D.scope.name}</b> is up <b>${D.casesPct}%</b> on the quarter, carried by <b>${up.join("</b> and <b>")}</b>.`;
+  const stat=(lab,val,prev,pctv,sub,col)=>`
+    <div style="flex:1;padding:0 22px;${col?'border-left:1px solid var(--rule)':''}">
+      <div class="lbl">${lab}</div>
+      <div style="display:flex;align-items:baseline;gap:9px;margin-top:5px">
+        <span class="fig" style="font-size:34px">${val}</span>
+        ${pctv!=null?`<span class="dlt ${sgn(pctv)}">${arrow(pctv)} ${Math.abs(pctv)}%</span>`:''}</div>
+      <div style="font-size:9.5px;color:var(--grey2);margin-top:3px">${prev} a quarter ago${sub?' · '+sub:''}</div>
+    </div>`;
+  // vertical style columns — cases this window, prior ghosted behind, change under each
+  const st=(D.styles||[]).slice(0,7), smx=Math.max(...st.map(s=>Math.max(s.cur,s.prev)),1);
+  const CW2=840,H2=330,pl2=6,pb2=54,pt2=26,ph2=H2-pt2-pb2,step2=(CW2-pl2*2)/st.length,bw2=Math.min(step2*0.34,54);
+  let sv='<svg viewBox="0 0 '+CW2+' '+H2+'" style="width:100%;height:auto;display:block">';
+  sv+='<line x1="'+pl2+'" y1="'+(pt2+ph2)+'" x2="'+(CW2-pl2)+'" y2="'+(pt2+ph2)+'" stroke="#E3E3E3"/>';
+  st.forEach((s2,i)=>{
+    const cx=pl2+i*step2+step2/2, hC=Math.max(2,(s2.cur/smx)*ph2), hP=Math.max(1,(s2.prev/smx)*ph2);
+    // prior sits just behind and left, in grey — the movement reads instantly
+    sv+='<rect x="'+(cx-bw2*0.94).toFixed(1)+'" y="'+(pt2+ph2-hP).toFixed(1)+'" width="'+(bw2*0.5).toFixed(1)+'" height="'+hP.toFixed(1)+'" rx="2" fill="#E1E4DF"/>';
+    sv+='<rect x="'+(cx-bw2*0.4).toFixed(1)+'" y="'+(pt2+ph2-hC).toFixed(1)+'" width="'+bw2.toFixed(1)+'" height="'+hC.toFixed(1)+'" rx="2.5" fill="'+(i===0?'var(--up)':'var(--green)')+'" opacity="'+(i===0?1:0.86-i*0.07)+'"/>';
+    sv+='<text x="'+(cx+bw2*0.1).toFixed(1)+'" y="'+(pt2+ph2-hC-7).toFixed(1)+'" text-anchor="middle" font-family="Arial" font-size="11" font-weight="bold" fill="#0A0A0A">'+fmt(s2.cur)+'</text>';
+    sv+='<text x="'+cx.toFixed(1)+'" y="'+(pt2+ph2+16)+'" text-anchor="middle" font-family="Arial" font-size="9.6" font-weight="bold" fill="#2B2B2B">'+s2.k+'</text>';
+    if(s2.pct!=null) sv+='<text x="'+cx.toFixed(1)+'" y="'+(pt2+ph2+30)+'" text-anchor="middle" font-family="Arial" font-size="9.4" font-weight="bold" fill="'+(s2.pct>0?'#2E7D52':s2.pct<0?'#C0564E':'#9A9A9A')+'">'+arrow(s2.pct)+Math.abs(s2.pct)+'%</text>';
+    sv+='<text x="'+cx.toFixed(1)+'" y="'+(pt2+ph2+43)+'" text-anchor="middle" font-family="Arial" font-size="8.4" fill="#9A9A9A">'+s2.acc+' accts</text>';
+  });
+  sv+='</svg>';
+  return wrap(`${head("THE BRAND STORY",D.scope.name+" · "+PERIOD+" · "+D.scope.sub)}
+   <div style="border-top:2px solid var(--ink);margin-top:11px;padding:15px 0 14px;border-bottom:1px solid var(--rule)">
+     <div style="font-size:20px;line-height:1.32;max-width:840px">${lead}</div>
+   </div>
+   <div style="display:flex;margin:18px 0 4px">
+     ${stat("Accounts carrying",fmt(D.accts),fmt(D.acctsP),D.acctsPct,(D.accts-D.acctsP>0?'+'+(D.accts-D.acctsP)+' accounts':''),false)}
+     ${stat("Placements on shelf",fmt(D.plN),fmt(D.plP),D.plcPct,(D.plN-D.plP>0?'+'+fmt(D.plN-D.plP)+' facings':''),true)}
+     ${stat("Rate of sale · cases / acct / mo",D.ros,D.rosPrev,rp,"each door working harder",true)}
+   </div>
+   <div style="flex:1;display:flex;flex-direction:column;border-top:1px solid var(--rule);margin-top:16px;padding-top:14px">
+     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px">
+       <span class="lbl">What's carrying it · by style</span>
+       <span style="display:inline-flex;align-items:center;gap:12px;font-size:8px;color:var(--grey2)">
+         <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;background:var(--green);border-radius:2px"></span>${M.winShort}</span>
+         <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:9px;height:9px;background:#E1E4DF;border-radius:2px"></span>${M.cmpShort}</span>
+       </span></div>
+     <div style="flex:1;min-height:0">${sv}</div>
+   </div>
+   ${foot(SRC+" Placements count account-and-SKU pairs that moved in the window. Styles aggregate every brand and format selling in that style across the scope.")}`);
+}
+
 /* ---------- assemble; skip anything with no real data ---------- */
 const slides=[sTitle(), sOverview()];
+if(brandStoryOK()) slides.push(sBrandStory());
 if(D.draft.tot >= D.pkg.tot*0.05 && D.draft.rows.length) slides.push(sItems("draft","Draft"));
 if(D.pkg.tot   >= D.draft.tot*0.05 && D.pkg.rows.length) slides.push(sItems("pkg","Package"));
 slides.push(sUniverse(), sMovers(), sLapsed(), sRecap());
