@@ -64,7 +64,9 @@ function Inner() {
 
   const styleOf = useMemo(() => { const m = {}; if (d) for (const r of d.fc) if (r.product_key && m[r.product_key] == null) m[r.product_key] = r.style_group || "—"; return m; }, [d]);
   const scope = useMemo(() => parseScope(), []);
-  const scopeIds = useMemo(() => { if (!d || scope.kind !== "rep") return null; const s2 = new Set(); for (const a of d.acc) if ((a.sales_rep || "Unassigned") === scope.value) s2.add(a.account_id); return s2; }, [d, scope]);
+  // an empty set means the remembered territory no longer exists (Aug 2026 re-cut) — read
+  // unscoped rather than rendering a blank drill
+  const scopeIds = useMemo(() => { if (!d || scope.kind !== "rep") return null; const s2 = new Set(); for (const a of d.acc) if ((a.sales_rep || "Unassigned") === scope.value) s2.add(a.account_id); return s2.size ? s2 : null; }, [d, scope]);
   const accOf = useMemo(() => { const m = new Map(); if (d) for (const a of d.acc) m.set(a.account_id, a); return m; }, [d]);
   const inScope = it => (!label || it.parent === label) && (!scopeIds || scopeIds.has(it.account_id));
   const rowsF = useMemo(() => {

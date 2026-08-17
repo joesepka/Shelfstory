@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import TreeGlyph from "../../components/TreeGlyph";
 import { run, fsum } from "../../lib/forecast";
-import { parseScope, getLabel } from "../../lib/scope";
+import { parseScope, getLabel, setScope } from "../../lib/scope";
 
 const kf = v => { const a = Math.abs(v || 0); if (a < 1000) return String(Math.round(v || 0)); return ((v || 0) / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "k"; };
 const pctS = v => v == null ? "" : `${v > 0 ? "▲" : v < 0 ? "▼" : ""}${Math.abs(Math.round(v * 100))}%`;
@@ -26,6 +26,8 @@ export default function BreweryMobile() {
   const [style, setStyle] = useState(null);
   const [scopeRep, setScopeRep] = useState(null);   // territory carried over from home's selection
   useEffect(() => { const sc = parseScope(); if (sc.kind === "rep") setScopeRep(sc.value); const lb = getLabel(); if (lb) setParent(lb); }, []);
+  // a territory that no longer exists (Aug 2026 re-cut) would scope this to nothing — drop it
+  useEffect(() => { if (!d || !scopeRep) return; if (!d.acc.some(a => (a.sales_rep || "Unassigned") === scopeRep)) { setScopeRep(null); setScope(""); } }, [d, scopeRep]);
 
   useEffect(() => {
     (async () => {

@@ -6,7 +6,7 @@ import Splash from "../../components/Splash";
 import { useExplode } from "../../lib/useExplode";
 import FilterSelect from "../../components/FilterSelect";
 import TreeGlyph from "../../components/TreeGlyph";
-import { parseScope, getScope } from "../../lib/scope";
+import { parseScope, getScope, setScope } from "../../lib/scope";
 import { tierIdSet, TIER_LABEL, sizeIdSet, SIZE_LABEL } from "../../lib/tiers";
 import { withHealth } from "../../lib/health";
 import { getLabel } from "../../lib/scope";
@@ -507,6 +507,16 @@ function BookInner() {
       setRows(healed);
     })();
   }, []);
+
+  // a remembered territory that no longer exists (Aug 2026 re-cut: West/Northshore/Near City
+  // → North/Central/South/House) would filter the book down to nothing — forget it instead,
+  // banner included, so the book opens whole rather than empty-and-mislabelled
+  useEffect(() => {
+    if (!rows || !rows.length || !repF) return;
+    if (rows.some(r => (r.sales_rep || "Unassigned") === repF)) return;
+    setRepF(null); setScope("");
+    setLinkScope(s => (s && s.kind === "rep") ? null : s);
+  }, [rows, repF]);
 
   const states = useMemo(() => rows ? ["All", ...[...new Set(rows.map(r => r.state).filter(Boolean))].sort()] : ["All"], [rows]);
   const cities = useMemo(() => {

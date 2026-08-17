@@ -13,13 +13,14 @@ import { withHealth } from "../lib/health";
 import { SNAPSHOT, SNAP_LABEL } from "../lib/snapshot";
 import ThemeChooser from "../components/ThemeChooser";
 import LogoMark from "../components/LogoMark";
-import { profile } from "../lib/profile";
+import { profile, rules } from "../lib/profile";
 
 const T = {
   bg: "var(--bg)", ink: "var(--text)", muted: "var(--text-3)", line: "var(--border)", primary: "var(--accent)",
   font: "var(--font-sans)",
   serif: "var(--font-serif)",
 };
+const HIDE_REP = new Set(rules.hideTerritories || []);   // territories kept off the rail (mirrors desktop)
 const gpct = (c, p) => p > 0 ? Math.round(100 * (c - p) / p) : null;
 // case-volume formatter: <1K -> whole number (134); >=1K -> abbreviated (5.1k / 51k)
 const kf = v => { const a = Math.abs(v || 0); if (a < 1000) return String(Math.round(v || 0)); return ((v || 0) / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + "k"; };   // <1k -> whole (439); >=1k -> one decimal (1.2k) — matches desktop
@@ -1119,6 +1120,7 @@ export default function Home() {
       const byRep = {};
       for (const r of rows) { const rp = r.sales_rep || "Unassigned"; (byRep[rp] || (byRep[rp] = [])).push(r); }
       const reps = Object.keys(byRep)
+        .filter(rp => !HIDE_REP.has(rp))   // House is the brewery's own taproom, not a rep's book — still inside All Territories
         .map(rp => mk(titleCase(rp), "REP:" + rp, byRep[rp]))
         .sort((a, b) => ((a.label === "Unassigned") - (b.label === "Unassigned")) || b.cur - a.cur);
       return [mk("All Territories", "ALL", rows), ...reps];
