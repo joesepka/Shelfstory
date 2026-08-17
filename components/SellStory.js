@@ -125,9 +125,9 @@ export default function SellStory({ d, parents = null }) {
       const aD = sc.an - sc.ap, plD = sc.pl - sc.plp;
       const rosG = sc.rosP > 0 ? Math.round((sc.ros - sc.rosP) / sc.rosP * 100) : null;
       const moves = [];
-      if (aD >= 2) moves.push({ v: aD / Math.max(1, sc.ap), line: `${fmt(sc.an)} accounts buying ${scWhere}, was ${fmt(sc.ap)}.`, r: `90D active` });
-      if (plD >= 3 && sc.plp > 0) moves.push({ v: plD / sc.plp, line: `${fmt(sc.pl)} placements ${scWhere}, up ${Math.round(plD / sc.plp * 100)}%.`, r: `live SKUs on shelf` });
-      if (rosG != null && rosG >= 5) moves.push({ v: rosG / 100, line: `Each account selling ${rosG}% more — ${r1(sc.ros)} cs/mo.`, r: `rate of sale ${scWhere}` });
+      if (aD >= 2) moves.push({ v: aD / Math.max(1, sc.ap), line: `Up ${fmt(aD)} accounts ${scWhere}.`, r: `${fmt(sc.an)} buying now` });
+      if (plD >= 3 && sc.plp > 0) moves.push({ v: plD / sc.plp, line: `Up ${fmt(plD)} placements ${scWhere} (+${Math.round(plD / sc.plp * 100)}%).`, r: `${fmt(sc.pl)} live now` });
+      if (rosG != null && rosG >= 5) moves.push({ v: rosG / 100, line: `Rate of sale up ${rosG}% ${scWhere}.`, r: `${r1(sc.ros)} cs per account/mo` });
       moves.sort((a, b) => b.v - a.v).slice(0, 2).forEach(m => brand.push(m));
 
       // ============ HOT NEARBY — no velocity stat, just who's carrying it ============
@@ -161,9 +161,10 @@ export default function SellStory({ d, parents = null }) {
         const m90 = Math.round(median(topQ.map(a => a.cur90 || 0)));
         const mRosV = topQ.map(a => (a.live_placements > 0 ? (a.cur90 || 0) / a.live_placements / 3 : null)).filter(x => x != null);
         const mRos = mRosV.length ? median(mRosV) : 0;
+        // what the good ones do — no scorekeeping against this account (Joe: just give the info)
         const uw = onP ? draftUnit.many : "cs";
-        if (mPlc >= 1) peers.push({ line: `Best ${peerWord} near ${cityWord || "here"}: ${mPlc} ${handleWord}${mPlc === 1 ? "" : "s"}, ${fmt(m90)} ${uw}/qtr. This one: ${myPlc}.`, r: `top ¼ of ${pool.length}` });
-        if (mRos > 0) peers.push({ line: `They turn ~${r1(mRos)} ${uw}/${handleWord}/mo. This one: ${r1(myRos)}.`, r: `rate of sale` });
+        if (mPlc >= 1) peers.push({ line: `Best ${peerWord} near ${cityWord || "here"}: ${mPlc} ${handleWord}${mPlc === 1 ? "" : "s"}, ${fmt(m90)} ${uw}/qtr.`, r: `top ¼ of ${pool.length}` });
+        if (mRos > 0) peers.push({ line: `They turn ~${r1(mRos)} ${uw}/${handleWord}/mo.`, r: `rate of sale` });
       }
       if (isBinnys && sibs.length >= 3 && sibItems.length) {
         const byPk = {};
@@ -191,7 +192,11 @@ export default function SellStory({ d, parents = null }) {
 
   return (
     <div style={{ marginTop: 10 }}>
-      <button className="tapd" onClick={toggle}
+      {/* self-contained so the component drops into either app (mobile also defines these) */}
+      <style>{`@keyframes rowIn{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:none}}
+        .ttkRow{animation:rowIn .2s ease both}
+        .ttkBtn{transition:transform .12s ease,background .14s ease}.ttkBtn:active{transform:scale(.98)}`}</style>
+      <button className="ttkBtn" onClick={toggle}
         style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, border: "0.5px solid var(--border-strong)", background: open ? "var(--surface-2)" : "var(--surface)", borderRadius: open ? "12px 12px 0 0" : 12, padding: "8px 0", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: open ? "var(--text)" : "var(--text-2)", cursor: "pointer", boxShadow: open ? "none" : "var(--shadow-sm)" }}>
         <LogoMark size={20} />Things to Know{open ? " ↑" : ""}
       </button>
@@ -207,7 +212,7 @@ export default function SellStory({ d, parents = null }) {
               {s.rows.map((row, i) => {
                 n++;
                 return (
-                  <div key={i} className="rowIn" style={{ animationDelay: `${Math.min(n * 22, 240)}ms`, padding: "3.5px 0" }}>
+                  <div key={i} className="ttkRow" style={{ animationDelay: `${Math.min(n * 22, 240)}ms`, padding: "3.5px 0" }}>
                     <span style={{ fontSize: 11.5, lineHeight: 1.34, color: "var(--text)", fontWeight: 500 }}>{row.line}</span>
                     {row.r && <span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: "var(--text-3)" }}> · {row.r}</span>}
                   </div>
