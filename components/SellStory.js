@@ -1,37 +1,35 @@
 "use client";
-// SELL STORY — a flat run of sayable bullets (Joe, 2026-08-16 v3): positive brand
-// momentum first (city-level when the city has enough signal, with accounts/ros
-// breakouts), a generic seasonal-gap call, the hottest items not sold here, banner
-// talk for Binny's, nearby peers, their own history, their own math. Up to ~10
-// bullets, observational tone, every line carries its receipts. A story that isn't
-// true for THIS account never renders.
+// THINGS TO KNOW — three sections of tight bullets a rep scans in the parking lot
+// (Joe, 2026-08-16 v5 "dense"): THE BRAND · HOT NEARBY · NEARBY PEERS. Information
+// only — no pitch chips, no instructions; the rep decides.
+//
+// LABEL DISCIPLINE (bug caught by Joe 2026-08-16): brand numbers MUST come from
+// account_parent filtered to the selected label, never account_list — account_list is
+// the whole account (Blind Corner + Torch), which reported 305 accounts / 8.7k cases
+// where the book says 276 / 7.2k, and turned a Lisle that is DOWN 15% on Blind Corner
+// into "up 17%". account_parent carries city/channel/placements per label.
 import { useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import LogoMark from "./LogoMark";
 
-const BUCKET = {
-  brand: ["Momentum", "#5E9277"],
-  accounts: ["Accounts", "#5E9277"],
-  seasonal: ["Seasonal gap", "#2F7D8C"],
-  new: ["Just landed", "#2F7D8C"],
-  hot: ["Hot nearby", "#a8742c"],
-  family: ["Same banner", "#2F7D8C"],
-  peer: ["Nearby peers", "#2f7d52"],
-  history: ["Sold here before", "#8b3a2b"],
-  math: ["Their math", "#8b3a2b"],
-};
+const SECTIONS = [
+  { key: "brand", label: "The brand", color: "#5E9277" },
+  { key: "hot", label: "Hot nearby", color: "#a8742c" },
+  { key: "peers", label: "Nearby peers", color: "#2f7d52" },
+];
 const STATE_NAME = { IL: "Illinois", WI: "Wisconsin", IN: "Indiana", MO: "Missouri", IA: "Iowa" };
 const titleCase = s => !s ? "" : String(s).toLowerCase().replace(/(?<!['\w])\w/g, c => c.toUpperCase());
 const kf = v => v >= 1000 ? (v / 1000).toFixed(1) + "k" : String(Math.round(v));
+const fmt = n => Math.round(n || 0).toLocaleString();
 const median = a => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-const packUnits = (mo, pkg) => {
+const r1 = v => v >= 10 ? Math.round(v) : Math.round(v * 10) / 10;
+const isKegPkg = p => /1\/2|1\/6|HALF|SIXTEL|BBL|KEG/i.test(String(p || ""));
+const unitFor = (n, pkg) => {
   const p = String(pkg || "").toUpperCase();
-  const n1 = mo >= 10 ? Math.round(mo) : Math.round(mo * 10) / 10;
-  if (p.includes("SIXTEL") || p.includes("1/6")) return { n: n1, unit: n1 === 1 ? "sixtel" : "sixtels" };
-  if (p.includes("HALF") || p.includes("1/2")) return { n: n1, unit: n1 === 1 ? "half" : "halfs" };
-  return { n: n1, unit: "cs" };
+  if (p.includes("SIXTEL") || p.includes("1/6")) return n === 1 ? "sixtel" : "sixtels";
+  if (p.includes("HALF") || p.includes("1/2")) return n === 1 ? "half" : "halfs";
+  return "cs";
 };
-// "Booter 1/2bbl" / "Half Keg Booter" → "Booter draft" — reps talk handles, not keg sizes
 const draftName = (name) => {
   const s = String(name || "").trim();
   if (!/1\/2|1\/6|HALF|SIXTEL|BBL|KEG|DRAFT/i.test(s)) return s;
@@ -42,142 +40,118 @@ const SEASONALW = /MARZEN|MÄRZEN|OKTOBER|FEST|AUTUMN|SEASONAL|WINTER|SUMMER|PUM
 
 export default function SellStory({ d, parents = null }) {
   const [open, setOpen] = useState(false);
-  const [stories, setStories] = useState(null);
+  const [secs, setSecs] = useState(null);
   const busy = useRef(false);
 
   const build = async () => {
-    if (busy.current || stories) return;
+    if (busy.current || secs) return;
     busy.current = true;
     try {
-      const { acc, items = [], cohort = [], wsReal = [], penetration = null, peerAvgGrowth = null, zipTrend = {}, zipScope = null, dep = { byPk: {} }, mktAll = [], liveSet = null, onP } = d;
+      const { acc, items = [], cohort = [], wsReal = [], zipTrend = {}, zipScope = null, mktAll = [], onP } = d;
       const uTitle = s => String(s || "").toLowerCase().replace(/(?<![\p{L}\p{N}'])\p{L}/gu, c => c.toUpperCase());
-      const pretty = s => uTitle(s).replace(/\bIpa\b/g, "IPA").replace(/\bDipa\b/g, "DIPA").replace(/\bThc\b/g, "THC").replace(/\bSl\b/g, "SL");
-      const nameOf = pk => { const m = mktAll.find(x => x.product_key === pk); return m ? m.item_name : null; };
+      const pretty = s => uTitle(s).replace(/\bIpa\b/g, "IPA").replace(/\bDipa\b/g, "DIPA").replace(/\bTipa\b/g, "TIPA").replace(/\bThc\b/g, "THC").replace(/\bSl\b/g, "SL");
       const carried = new Set(items.map(i => i.product_key));
       const liveSlots = new Set(items.filter(x => (x.l90 || 0) > 0).map(x => x.slot_key).filter(Boolean));
-      const handleWord = onP ? "tap" : "SKU";
-      const chWord = titleCase(acc.channel_type || acc.channel || "similar");
       const cityWord = acc.city ? titleCase(acc.city) : null;
+      const stName = STATE_NAME[acc.state] || acc.state;
       const myPlc = acc.live_placements || 0;
       const myRos = myPlc > 0 ? (acc.cur90 || 0) / myPlc / 3 : 0;
       const isBinnys = /BINNY/i.test(String(acc.chain || ""));
+      const labels = (parents && parents.length) ? parents.map(p => String(p).toUpperCase()) : null;   // null = all labels
+      const brandWord = labels && labels.length === 1 ? titleCase(labels[0]) : "The book";
+      const ct = String(acc.channel_type || "").toUpperCase();
+      const peerWord = /BAR|RESTAURANT/.test(ct) ? "bars and restaurants" : /LIQUOR/.test(ct) ? "liquor stores" : /GROCERY/.test(ct) ? "grocery stores" : /GOLF/.test(ct) ? "golf courses" : /CONVENIENCE/.test(ct) ? "c-stores" : "accounts";
+      const draftUnit = (() => {
+        if (!onP) return { one: "case", many: "cases" };
+        let half = 0, six = 0;
+        for (const i of items) { if ((i.l90 || 0) <= 0 || !isKegPkg(i.package)) continue; const p = String(i.package).toUpperCase(); if (p.includes("SIXTEL") || p.includes("1/6")) six++; else half++; }
+        if (six > half) return { one: "sixtel", many: "sixtels" };
+        if (half > 0) return { one: "half", many: "halfs" };
+        return { one: "keg", many: "kegs" };
+      })();
+      const handleWord = onP ? "tap" : "SKU";
 
-      // ---- lazy fetches: state rows (with city, for city-level momentum), new items, Binny's siblings ----
-      let newItems = [], sibs = [], sibItems = [], stRows = [];
+      const brand = [], hot = [], peers = [];
+      const named = new Set();
+
+      // ---- label-scoped market rows (account_parent), new items, Binny's siblings ----
+      let mkRows = [], newItems = [], sibs = [], sibItems = [];
       try {
-        const [niRes, stRes, sbRes] = await Promise.all([
-          supabase.from("new_items").select("item_name, package, parent, style_group, first_seen, l90"),
-          supabase.from("account_list").select("city, cur90, prev90").eq("state", acc.state),
-          isBinnys ? supabase.from("account_list").select("account_id, cur90, live_placements").eq("chain", acc.chain) : Promise.resolve({ data: null }),
+        const pullMarket = async () => {
+          let out = [], from = 0;
+          while (true) {
+            let q = supabase.from("account_parent").select("account_id,parent,city,cur90,prev90,live_placements,live_prev").eq("state", acc.state);
+            if (labels) q = q.in("parent", labels);
+            const { data, error } = await q.range(from, from + 4999);
+            if (error) break;
+            out = out.concat(data || []);
+            if (!data || data.length < 5000) break;
+            from += 5000;
+          }
+          return out;
+        };
+        const [mk, niRes, sbRes] = await Promise.all([
+          pullMarket(),
+          supabase.from("new_items").select("item_name, package, parent, style_group, l90"),
+          isBinnys ? supabase.from("account_list").select("account_id, cur90").eq("chain", acc.chain) : Promise.resolve({ data: null }),
         ]);
-        newItems = (niRes.data || []).filter(n => String(n.parent || "").toUpperCase() !== "TORCH" || (parents || []).includes("TORCH"));
-        stRows = stRes.data || [];
-        sibs = (sbRes.data || []).filter(a => a.account_id !== acc.account_id);
+        mkRows = mk;
+        newItems = (niRes.data || []).filter(n => !labels || labels.includes(String(n.parent || "").toUpperCase()));
+        sibs = (sbRes.data || []).filter(a => a.account_id !== acc.account_id && (a.cur90 || 0) > 0);
         if (sibs.length >= 3) {
           const ids = sibs.map(a => a.account_id).slice(0, 150);
           const { data: si } = await supabase.from("item_grid").select("account_id, product_key, item_name, l90, package, slot_key, parent, style_parent").in("account_id", ids);
-          const wantTorch = (parents || []).includes("TORCH");
-          sibItems = (si || []).filter(r => {
-            const torch = String(r.parent || "").toUpperCase() === "TORCH" || String(r.style_parent || "").toUpperCase().includes("THC");
-            return wantTorch ? true : !torch;
-          });
+          sibItems = (si || []).filter(r => { const torch = String(r.parent || "").toUpperCase() === "TORCH" || String(r.style_parent || "").toUpperCase().includes("THC"); return !labels ? true : (labels.includes("TORCH") ? true : !torch); });
         }
       } catch { }
 
-      const out = [];
-      const seen = new Set();
-      const push = c => { if (out.length >= 10) return; if (c.pitch && seen.has(c.pitch)) return; if (c.pitch) seen.add(c.pitch); out.push(c); };
+      // ============ THE BRAND ============
+      const agg = rows => {
+        let c = 0, p = 0, an = 0, ap = 0, pl = 0, plp = 0;
+        for (const r of rows) { const cv = +r.cur90 || 0, pv = +r.prev90 || 0; c += cv; p += pv; if (cv > 0) an++; if (pv > 0) ap++; pl += +r.live_placements || 0; plp += +r.live_prev || 0; }
+        return { c, p, an, ap, pl, plp, g: p >= 30 ? Math.round((c - p) / p * 100) : null, ros: an > 0 ? c / an / 3 : 0, rosP: ap > 0 ? p / ap / 3 : 0 };
+      };
+      const st = agg(mkRows);
+      const cityRows = cityWord ? mkRows.filter(r => String(r.city || "").toUpperCase() === String(acc.city).toUpperCase()) : [];
+      const city = cityRows.length >= 4 ? agg(cityRows) : null;
 
-      // ---- 1 · brand momentum — the account's own city when it has enough signal ----
-      const agg = rows => { let c = 0, p = 0, an = 0, ap = 0; for (const r of rows) { const cv = +r.cur90 || 0, pv = +r.prev90 || 0; c += cv; p += pv; if (cv > 0) an++; if (pv > 0) ap++; } return { c, p, an, ap, g: p >= 30 ? Math.round((c - p) / p * 100) : null }; };
-      const cityRows = cityWord ? stRows.filter(r => r.city === acc.city) : [];
-      const cityA = cityRows.length >= 5 ? agg(cityRows) : null;
-      const stateA = agg(stRows);
-      const stName = STATE_NAME[acc.state] || acc.state;
-      if (cityA && cityA.g != null && cityA.g >= 3) {
-        push({ bucket: "brand",
-          line: `Blind Corner is up ${cityA.g}% around ${cityWord} this quarter — ${kf(cityA.c)} cases across ${cityA.an.toLocaleString()} accounts.`,
-          receipts: `${cityWord} 90D vs prior · every account in the city` });
-      } else if (stateA.g != null && stateA.g >= 3) {
-        push({ bucket: "brand",
-          line: `Blind Corner is up ${stateA.g}% in ${stName} this quarter — ${kf(stateA.c)} cases in the last 90 days.`,
-          receipts: `state 90D vs prior · every account` });
-      }
-      // ...and the accounts / ros side of that story, broken out (city first, else state)
-      const bo = cityA && cityA.an >= 5 ? { ...cityA, where: `around ${cityWord}` } : { ...stateA, where: `in ${stName}` };
-      const rosNow = bo.an > 0 ? bo.c / bo.an / 3 : 0, rosPrev = bo.ap > 0 ? bo.p / bo.ap / 3 : 0;
-      const rosG = rosPrev > 0 ? Math.round((rosNow - rosPrev) / rosPrev * 100) : null;
-      const aD = bo.an - bo.ap;
-      if (aD >= 2 || (rosG != null && rosG >= 5)) {
-        const bits = [];
-        if (aD >= 2) bits.push(`carriers went ${bo.ap.toLocaleString()} → ${bo.an.toLocaleString()}`);
-        if (rosG != null && rosG >= 5) bits.push(`rate of sale up ${rosG}%`);
-        push({ bucket: "accounts",
-          line: `${bo.where.replace(/^around |^in /, m => m[0].toUpperCase() + m.slice(1))} this quarter: ${bits.join(", ")}.`,
-          receipts: `active = any 90D order · vs prior 90D` });
-      }
+      if (st.g != null && st.g >= 3) brand.push({ line: `Up ${st.g}% in ${stName} — ${kf(st.c)} cases.`, r: `state 90D vs prior` });
+      // the city only earns a line when it's actually a good story here
+      if (city && city.g != null && city.g >= 3) brand.push({ line: `Up ${city.g}% around ${cityWord} — ${fmt(city.c)} cs / ${fmt(city.an)} accts.`, r: `${cityWord} 90D vs prior` });
 
-      // ---- 2 · seasonal gap — generic on purpose ("just say seasonal") ----
+      // strongest movement — accounts, placements, or rate of sale (top two)
+      const sc = (city && city.an >= 5 && city.g != null && city.g >= 3) ? city : st;
+      const scWhere = sc === city ? `around ${cityWord}` : `in ${stName}`;
+      const aD = sc.an - sc.ap, plD = sc.pl - sc.plp;
+      const rosG = sc.rosP > 0 ? Math.round((sc.ros - sc.rosP) / sc.rosP * 100) : null;
+      const moves = [];
+      if (aD >= 2) moves.push({ v: aD / Math.max(1, sc.ap), line: `${fmt(sc.an)} accounts buying ${scWhere}, was ${fmt(sc.ap)}.`, r: `90D active` });
+      if (plD >= 3 && sc.plp > 0) moves.push({ v: plD / sc.plp, line: `${fmt(sc.pl)} placements ${scWhere}, up ${Math.round(plD / sc.plp * 100)}%.`, r: `live SKUs on shelf` });
+      if (rosG != null && rosG >= 5) moves.push({ v: rosG / 100, line: `Each account selling ${rosG}% more — ${r1(sc.ros)} cs/mo.`, r: `rate of sale ${scWhere}` });
+      moves.sort((a, b) => b.v - a.v).slice(0, 2).forEach(m => brand.push(m));
+
+      // ============ HOT NEARBY — no velocity stat, just who's carrying it ============
       const carriesSeasonal = items.some(i => (i.l90 || 0) > 0 && SEASONALW.test(String(i.item_name || "") + " " + String(i.style_parent || "")));
-      const isKeg = n => /1\/2|1\/6|HALF|SIXTEL|BBL|KEG/i.test(String(n.item_name || "") + " " + String(n.package || ""));
-      const seasonalNew = newItems.filter(n => SEASONALW.test(n.item_name + " " + (n.style_group || "")) && !carried.has(n.item_name) && (n.l90 || 0) > 0 && (onP || !isKeg(n))).sort((a, b) => (b.l90 || 0) - (a.l90 || 0))[0];
-      if (!carriesSeasonal && seasonalNew) {
-        push({ bucket: "seasonal", pitch: "the seasonal",
-          line: `No seasonal on this ${onP ? "tap list" : "shelf"} — the new one's at ${kf(seasonalNew.l90)} cases already, and the window's open.`,
-          receipts: `${draftName(pretty(seasonalNew.item_name))} · NEW ≤ 90 days · not carried here` });
-      } else {
-        // non-seasonal new item still earns a named line (naming = pitching)
-        const ni = newItems.filter(n => !SEASONALW.test(n.item_name + " " + (n.style_group || "")) && !carried.has(n.item_name) && (n.l90 || 0) > 0 && (onP || !isKeg(n))).sort((a, b) => (b.l90 || 0) - (a.l90 || 0))[0];
-        if (ni) { const nname = draftName(pretty(ni.item_name)); push({ bucket: "new", pitch: nname, line: `${nname} is brand new and already at ${kf(ni.l90)} cases book-wide.`, receipts: `NEW ≤ 90 days · not carried here` }); }
-      }
-
-      // ---- 3 · hottest items not sold here (up to 3) ----
+      const seasonalNew = newItems.filter(n => SEASONALW.test(n.item_name + " " + (n.style_group || "")) && !carried.has(n.item_name) && (n.l90 || 0) > 0 && (onP || !isKegPkg(n.package))).sort((a, b) => (b.l90 || 0) - (a.l90 || 0))[0];
+      if (!carriesSeasonal && seasonalNew) hot.push({ line: `No seasonal on ${onP ? "tap" : "the shelf"} — new one at ${kf(seasonalNew.l90)} cs book-wide.`, r: `${draftName(pretty(seasonalNew.item_name))}, new` });
       const picks = wsReal
         .filter(w => onP || !w.draft)
-        .map(w => ({ ...w, trend: w.pk != null && zipTrend[w.pk] != null ? zipTrend[w.pk] : null }))
+        .map(w => ({ ...w, nm: draftName(pretty(w.name)), trend: w.pk != null && zipTrend[w.pk] != null ? zipTrend[w.pk] : null }))
         .sort((a, b) => (((b.trend >= 15 ? 100 : 0) + b.carriers) - ((a.trend >= 15 ? 100 : 0) + a.carriers)) || (b.dollars - a.dollars));
-      let hotN = 0;
       for (const mv of picks) {
-        if (hotN >= 3) break;
+        if (hot.length >= 5) break;
         if (!(mv.trend >= 15 || mv.carriers >= 3)) continue;
-        if (SEASONALW.test(mv.name)) continue;   // seasonals are pitched generically, never by name
-        const mname = draftName(mv.name);
-        if (seen.has(mname)) continue;
-        const u = packUnits(mv.velRaw != null ? mv.velRaw : mv.vel, mv.pkg);
-        push({ bucket: "hot", pitch: mname,
+        if (SEASONALW.test(mv.name) || named.has(mv.nm)) continue;
+        named.add(mv.nm);
+        hot.push({
           line: mv.trend >= 15
-            ? `${mname} is up ${mv.trend}% ${zipScope ? `around ${zipScope}` : "nearby"} — ${mv.carriers.toLocaleString()} comparable ${onP ? "bars pour it" : "shelves stock it"}.`
-            : `${mv.carriers.toLocaleString()} ${chWord.toLowerCase()} accounts like this one ${onP ? "pour" : "stock"} ${mname}${u.n >= 1 ? `, ~${u.n.toLocaleString()} ${u.unit}/mo` : ""}.`,
-          receipts: `${mv.trend != null ? `nearby 90D ▲${mv.trend}% · ` : ""}not carried here · slot open` });
-        hotN++;
+            ? `${mv.nm} up ${mv.trend}% ${zipScope ? `around ${zipScope}` : "nearby"} — ${fmt(mv.carriers)} ${peerWord} ${onP ? "pour" : "stock"} it.`
+            : `${fmt(mv.carriers)} ${peerWord} like this one ${onP ? "pour" : "stock"} ${mv.nm}.`,
+          r: `not here`,
+        });
       }
 
-      // ---- 4 · Binny's banner talk ----
-      const sibsActive = sibs.filter(a => (a.cur90 || 0) > 0);
-      if (isBinnys && sibsActive.length >= 3 && sibItems.length) {
-        const byPk = {};
-        for (const r of sibItems) { if ((r.l90 || 0) > 0) { const g = byPk[r.product_key] || (byPk[r.product_key] = { name: r.item_name, pkg: r.package, slot: r.slot_key, vels: [] }); g.vels.push((r.l90 || 0) / 3); } }
-        const need = Math.max(2, Math.ceil(sibsActive.length / 3));
-        const gaps = Object.entries(byPk)
-          .filter(([pk, g]) => !carried.has(pk) && !(g.slot && liveSlots.has(g.slot)))
-          .map(([pk, g]) => ({ pk, name: draftName(nameOf(pk) || pretty(g.name)), pkg: g.pkg, n: g.vels.length, vel: median(g.vels) }))
-          .filter(g => g.n >= need)
-          .sort((a, b) => (b.n - a.n) || (b.vel - a.vel));
-        if (gaps[0]) {
-          const g = gaps[0], u = packUnits(g.vel, g.pkg);
-          push({ bucket: "family", pitch: g.name,
-            line: `${g.n} other Binny's carry ${g.name}${u.n >= 1 ? ` — banner average ${u.n.toLocaleString()} ${u.unit}/mo` : ""}.`,
-            receipts: `${g.n}/${sibsActive.length} stores · not on this shelf · slot open` });
-        }
-        const med90 = Math.round(median(sibsActive.map(a => a.cur90 || 0)));
-        if (med90 >= (acc.cur90 || 0) * 1.25 && med90 - (acc.cur90 || 0) >= 5) {
-          push({ bucket: "family",
-            line: `Binny's stores average ${med90.toLocaleString()} cases per 90 days on this book — this one's at ${(acc.cur90 || 0).toLocaleString()}.`,
-            receipts: `banner median · ${sibsActive.length} stores` });
-        }
-      }
-
-      // ---- 5 · nearby peers (top quartile, observation only) ----
+      // ============ NEARBY PEERS ============
       const ch = acc.channel_type;
       let pool = cohort.filter(a => a.account_id !== acc.account_id && (!ch || a.channel_type === ch) && a.state === acc.state && (a.cur90 || 0) > 0);
       if (pool.length < 8) pool = cohort.filter(a => a.account_id !== acc.account_id && (!ch || a.channel_type === ch) && (a.cur90 || 0) > 0);
@@ -187,50 +161,33 @@ export default function SellStory({ d, parents = null }) {
         const m90 = Math.round(median(topQ.map(a => a.cur90 || 0)));
         const mRosV = topQ.map(a => (a.live_placements > 0 ? (a.cur90 || 0) / a.live_placements / 3 : null)).filter(x => x != null);
         const mRos = mRosV.length ? median(mRosV) : 0;
-        if (mPlc - myPlc >= 1 && (acc.cur90 || 0) < m90) {
-          push({ bucket: "peer",
-            line: onP
-              ? `The top ${chWord.toLowerCase()} accounts ${cityWord ? `around ${cityWord}` : "in the area"} run ${mPlc} Blind Corner ${mPlc === 1 ? "tap" : "taps"} and do ${m90.toLocaleString()} cases a quarter.`
-              : `The top ${chWord.toLowerCase()} shelves ${cityWord ? `around ${cityWord}` : "in the area"} carry ${mPlc} Blind Corner SKUs and do ${m90.toLocaleString()} cases a quarter.`,
-            receipts: `top ¼ of ${pool.length} ${chWord.toLowerCase()} accts · this shelf: ${myPlc} ${handleWord}${myPlc === 1 ? "" : "s"}` });
-        } else if (myRos > 0 && mRos > 0 && mRos >= myRos * 1.25) {
-          const f = v => v >= 3 ? Math.round(v) : Math.round(v * 10) / 10;
-          push({ bucket: "peer",
-            line: `Peers at the top turn ${f(mRos)} cases per ${handleWord} a month around here.`,
-            receipts: `top ¼ of ${pool.length} peers · this shelf: ${f(myRos)}/${handleWord}/mo` });
-        }
+        const uw = onP ? draftUnit.many : "cs";
+        if (mPlc >= 1) peers.push({ line: `Best ${peerWord} near ${cityWord || "here"}: ${mPlc} ${handleWord}${mPlc === 1 ? "" : "s"}, ${fmt(m90)} ${uw}/qtr. This one: ${myPlc}.`, r: `top ¼ of ${pool.length}` });
+        if (mRos > 0) peers.push({ line: `They turn ~${r1(mRos)} ${uw}/${handleWord}/mo. This one: ${r1(myRos)}.`, r: `rate of sale` });
       }
-
-      // ---- 6 · sold here before — their own history, said plainly ----
-      const lost = items
-        .filter(i => (i.l90 || 0) <= 0 && (!liveSet || liveSet.has(i.product_key)))
-        .map(i => { const line = ((dep.byPk[i.product_key] || {}).line) || []; return { ...i, peak: Math.max(0, ...line) }; })
-        .filter(i => i.peak >= 3 && !(i.slot_key && liveSlots.has(i.slot_key)))
-        .sort((a, b) => b.peak - a.peak)[0];
-      if (lost) {
-        const lname = draftName(lost.item_name);
-        const u = packUnits(lost.peak / 3, lost.package);
-        push({ bucket: "history", pitch: lname,
-          line: `${lname} used to sell here — ${u.n.toLocaleString()} ${u.unit}/mo at its peak. The ${onP ? "handle" : "slot"}'s open, and it still moves nearby.`,
-          receipts: `this account's own history · peak ${Math.round(lost.peak)} cs/90D` });
+      if (isBinnys && sibs.length >= 3 && sibItems.length) {
+        const byPk = {};
+        for (const r of sibItems) { if ((r.l90 || 0) > 0) { const g = byPk[r.product_key] || (byPk[r.product_key] = { name: r.item_name, pkg: r.package, slot: r.slot_key, vels: [] }); g.vels.push((r.l90 || 0) / 3); } }
+        const need = Math.max(2, Math.ceil(sibs.length / 3));
+        const gap = Object.entries(byPk)
+          .filter(([pk, g]) => !carried.has(pk) && !(g.slot && liveSlots.has(g.slot)))
+          .map(([pk, g]) => { const m = mktAll.find(x => x.product_key === pk); return { nm: draftName(pretty(m ? m.item_name : g.name)), n: g.vels.length }; })
+          .filter(g => g.n >= need && !named.has(g.nm))
+          .sort((a, b) => b.n - a.n)[0];
+        if (gap) peers.push({ line: `${gap.n} other Binny's carry ${gap.nm}.`, r: `${gap.n} of ${sibs.length} stores · not here` });
       }
-
-      // ---- 7 · their math ----
       if (myRos >= 0.6 && myPlc >= 2) {
         const annual = Math.round((myRos * 12) / 5) * 5;
-        if (annual >= 20) {
-          push({ bucket: "math",
-            line: `At this ${onP ? "bar" : "shelf"}'s own pace, one added ${handleWord} is worth roughly ${annual.toLocaleString()} cases a year.`,
-            receipts: `their ros ${myRos >= 3 ? Math.round(myRos) : Math.round(myRos * 10) / 10} cs/${handleWord}/mo × 12` });
-        }
+        if (annual >= 20) peers.push({ line: `One more ${handleWord} here ≈ ${fmt(annual)} ${onP ? draftUnit.many : "cs"}/yr.`, r: `their own rate of sale` });
       }
 
-      setStories(out);
-    } catch { setStories([]); }
+      setSecs([{ ...SECTIONS[0], rows: brand }, { ...SECTIONS[1], rows: hot }, { ...SECTIONS[2], rows: peers }].filter(s => s.rows.length));
+    } catch { setSecs([]); }
     busy.current = false;
   };
 
   const toggle = () => { const next = !open; setOpen(next); if (next) build(); };
+  let n = 0;
 
   return (
     <div style={{ marginTop: 10 }}>
@@ -239,23 +196,25 @@ export default function SellStory({ d, parents = null }) {
         <LogoMark size={20} />Things to Know{open ? " ↑" : ""}
       </button>
       {open && (
-        <div style={{ border: "0.5px solid var(--border-strong)", borderTop: "none", borderRadius: "0 0 14px 14px", background: "var(--surface)", padding: "2px 12px 9px" }}>
-          {!stories && <div style={{ padding: "14px 2px", fontSize: 11.5, color: "var(--text-3)", textAlign: "center" }}>Reading the market…</div>}
-          {stories && stories.length === 0 && <div style={{ padding: "14px 2px", fontSize: 11.5, color: "var(--text-3)", textAlign: "center" }}>Nothing clears the bar for this account right now — that's the filter doing its job.</div>}
-          {(stories || []).map((s, i) => {
-            const [lb, col] = BUCKET[s.bucket] || BUCKET.brand;
-            return (
-              <div key={i} className="rowIn" style={{ animationDelay: `${i * 26}ms`, padding: "8px 2px 8px", borderBottom: i < stories.length - 1 ? "0.5px solid var(--border)" : "none" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 8, fontWeight: 700, letterSpacing: 0.8, textTransform: "uppercase", color: "var(--text-3)" }}>
-                  <span style={{ width: 6, height: 6, borderRadius: 99, background: col, flexShrink: 0 }} />{lb}
-                </div>
-                <div style={{ fontSize: 12.5, lineHeight: 1.45, marginTop: 4, color: "var(--text)", fontWeight: 500 }}>{s.line}</div>
-                {s.receipts && <div style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: "var(--text-3)", marginTop: 4 }}>{s.receipts}</div>}
-                {s.pitch && s.pitch !== "the seasonal" && <span style={{ display: "inline-block", marginTop: 5, fontSize: 9.5, fontWeight: 700, color: "#2c5138", background: "#eef4ee", border: "0.5px solid #cfe0d4", borderRadius: 7, padding: "2.5px 8px" }}>Pitch: {s.pitch}</span>}
-                {s.pitch === "the seasonal" && <span style={{ display: "inline-block", marginTop: 5, fontSize: 9.5, fontWeight: 700, color: "#2c5138", background: "#eef4ee", border: "0.5px solid #cfe0d4", borderRadius: 7, padding: "2.5px 8px" }}>Pitch: the seasonal</span>}
+        <div style={{ border: "0.5px solid var(--border-strong)", borderTop: "none", borderRadius: "0 0 14px 14px", background: "var(--surface)", padding: "6px 13px 10px" }}>
+          {!secs && <div style={{ padding: "14px 2px", fontSize: 11.5, color: "var(--text-3)", textAlign: "center" }}>Reading the market…</div>}
+          {secs && secs.length === 0 && <div style={{ padding: "14px 2px", fontSize: 11.5, color: "var(--text-3)", textAlign: "center" }}>Nothing worth flagging on this one right now.</div>}
+          {(secs || []).map((s, si) => (
+            <div key={s.key} style={{ paddingTop: si === 0 ? 4 : 8, marginTop: si === 0 ? 0 : 3, borderTop: si === 0 ? "none" : "0.5px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, fontFamily: "var(--font-mono)", fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, textTransform: "uppercase", color: "var(--text-3)", marginBottom: 4 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 99, background: s.color, flexShrink: 0 }} />{s.label}
               </div>
-            );
-          })}
+              {s.rows.map((row, i) => {
+                n++;
+                return (
+                  <div key={i} className="rowIn" style={{ animationDelay: `${Math.min(n * 22, 240)}ms`, padding: "3.5px 0" }}>
+                    <span style={{ fontSize: 11.5, lineHeight: 1.34, color: "var(--text)", fontWeight: 500 }}>{row.line}</span>
+                    {row.r && <span style={{ fontFamily: "var(--font-mono)", fontSize: 8.5, color: "var(--text-3)" }}> · {row.r}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>
