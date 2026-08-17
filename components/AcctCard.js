@@ -212,7 +212,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
         const [accRes, benRes, itemRes, mktRes, depRes] = await Promise.all([
           supabase.from("account_list").select("*").eq("account_id", id).maybeSingle(),
           supabase.from("account_benchmark").select("*").eq("account_id", id).maybeSingle(),
-          supabase.from("item_grid").select("product_key, item_name, l90, l90_prev, cell_state, last_sale_w, package, parent, style_parent, slot_key, is_new_item").eq("account_id", id),
+          supabase.from("item_grid").select("product_key, item_name, brand, l90, l90_prev, cell_state, last_sale_w, package, parent, style_parent, slot_key, is_new_item").eq("account_id", id),
           supabase.from("item_market").select("product_key, item_name, market_rank, market_l90, slot_key").order("market_rank"),
           supabase.from("depletions_window").select("product_key, window_index, cases").eq("account_id", id).lte("window_index", 20),
         ]);
@@ -462,11 +462,23 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
   const skuPts = skuLine.map((v, i) => `${((i + 0.5) / (skuLine.length || 1) * 100).toFixed(2)},${skuY(v).toFixed(2)}`).join(" ");
   const secDiv = { borderTop: "0.5px solid var(--border)", margin: "20px 0 0", paddingTop: 16 };
   const packSpan = (k) => { const pk = packMo(k.l90, k.package); return <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700 }}>{pk.n.toLocaleString()}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> {pk.unit}/mo</span></span>; };
-  // #1 style mix (IPAs grouped) — this account's volume by style bucket
+  // Rotating-tier liquids (Limited/Collab/Seasonal/House/Seltzer/THC) come and go by
+  // design — two thirds of this brewery's volume rotates. Only CORE items are judged
+  // as trends, and only core brands get named.
+  const TIER_RE = /LIMITED|SEASONAL|COLLAB|HOUSE|SELTZER|THC/i;
+  const isCoreItem = (k) => !(TIER_RE.test(String(k.slot_key || "")) || TIER_RE.test(String(k.style_parent || "")));
+  // #1 account mix — Joe (2026-08-17): speak in real CORE brand names (Booter, Drop Ride…)
+  // and collapse every rotating beer tier into one broad "limited" bucket — never
+  // Collab/Seasonal/style subdivisions. THC keeps its own word (different parent).
   const styleMix = (() => {
-    const agg = {}; for (const it of items) { const v = it.l90 || 0; if (v <= 0) continue; const g = styleGroup(it.style_parent); agg[g] = (agg[g] || 0) + v; }
+    const agg = {}; for (const it of items) {
+      const v = it.l90 || 0; if (v <= 0) continue;
+      const sp = String(it.style_parent || "").toUpperCase();
+      const g = sp === "THC" ? "THC" : isCoreItem(it) ? titleCase(it.brand || "Core") : "limited";
+      agg[g] = (agg[g] || 0) + v;
+    }
     const tot = Object.values(agg).reduce((s, v) => s + v, 0) || 1;
-    return Object.entries(agg).map(([g, v]) => ({ g, pct: Math.round(v / tot * 100), col: STYLE_COL[g] || "#a7ad9f" })).sort((a, b) => b.pct - a.pct);
+    return Object.entries(agg).map(([g, v]) => ({ g, pct: Math.round(v / tot * 100) })).sort((a, b) => b.pct - a.pct);
   })();
   // #3 reorder cadence → a "due"/"overdue" chip per on-shelf SKU (order-months in the last 12 vs
   // 30-day windows since the item's last order — both from its OWN window line; last_sale_w is synthetic)
@@ -487,12 +499,9 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
   const ITAG = { new: ["new", "#6b7267", "#eef0ea"], accelerating: ["surging", "#22633f", "#dcefe1"], decelerating: ["softening", "#9c7420", "#f3ead0"], "at-risk": ["at risk", "#9c7420", "#f3ead0"] };
   // only SKUs the account actually REPEATS carry a status — a rotating one-case-and-done listing has no trend
   // to report, and tagging every one of them "new" buries the handful that matter.
-  // Rotating-tier liquids (Limited/Collab/Seasonal/House/Seltzer/THC) come and go by
-  // design — a fading Limited is retirement, not risk. Only CORE items earn softening /
-  // at-risk talk, and a core that ordered within the last two windows is never "at risk"
-  // (Joe, 2026-08-17: it just ordered a month ago — don't cry wolf).
-  const TIER_RE = /LIMITED|SEASONAL|COLLAB|HOUSE|SELTZER|THC/i;
-  const isCoreItem = (k) => !(TIER_RE.test(String(k.slot_key || "")) || TIER_RE.test(String(k.style_parent || "")));
+  // A fading Limited is retirement, not risk (isCoreItem above). Only CORE items earn
+  // softening / at-risk talk, and a core that ordered within the last two windows is
+  // never "at risk" (Joe, 2026-08-17: it just ordered a month ago — don't cry wolf).
   const itemTag = (k) => {
     const d = dep.byPk[k.product_key]; if (!d) return null;
     if (d.dots.filter(v => v > 0).length < 2) return null;
@@ -524,9 +533,10 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
   const mixBullet = (() => {
     if (!styleMix.length) return null;
     const top = styleMix[0], second = styleMix[1];
-    if (top.pct >= 55) return `${top.g} is dominant here (${top.pct}%).`;
-    if (second && top.pct - second.pct <= 12) return `${top.g} and ${second.g} split the shelf (${top.pct}/${second.pct}%).`;
-    return `${top.g} sells most here (${top.pct}%)${second ? `, ${second.g} ${second.pct}%` : ""}.`;
+    const s = top.pct >= 55 ? `${top.g} is dominant here (${top.pct}%).`
+      : second && top.pct - second.pct <= 12 ? `${top.g} and ${second.g} split the shelf (${top.pct}/${second.pct}%).`
+      : `${top.g} sells most here (${top.pct}%)${second ? `, ${second.g} ${second.pct}%` : ""}.`;
+    return s[0].toUpperCase() + s.slice(1);   // "limited" bucket starting a sentence
   })();
   // Bucket-aware brief (Joe's rules): healthy reads positive; a watch account says INSTANTLY
   // why it's on watch; a dominant family opens the first sentence ("This Limited-dominated
