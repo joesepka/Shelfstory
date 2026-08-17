@@ -868,7 +868,7 @@ function TrendGraph({ cases, accts, ros, pct, skey }) {
       pts = ros.map((x, i) => `${(i / Math.max(1, ros.length - 1) * 100).toFixed(1)},${(37 - ((x - rmn) / ((rmx - rmn) || 1)) * 30).toFixed(1)}`).join(" ");
     }
     return (
-      <div key={pk} style={{ width: "33.3333%", flexShrink: 0, position: "relative" }}>
+      <div key={pk} style={{ width: "100%", position: "relative" }}>
         <div style={{ display: "flex", alignItems: "stretch", gap: 3, height: 96 }}>
           {vals.map((v, i) => (
             <div key={i} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
