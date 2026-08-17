@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { renderDeck } from "./deckSlidesCast";
 import { useEffect, useState } from "react";
@@ -7,19 +7,75 @@ const X = ({ size = 16, strokeWidth = 2.2 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
 );
 
-// Full-screen deck. Download goes through the browser's own print-to-PDF, so the slides stay
-// real vector text (crisp and searchable) instead of being flattened to images.
+// Full-screen deck. PDF export is a REAL file: each slide is re-rendered offscreen at its
+// native 940px (no phone zoom in the way), rasterized, and packed into a downloadable PDF —
+// on phones this runs automatically as soon as the deck opens (Joe's call: browser
+// print-to-PDF mangled the spacing on phones).
 export default function DeckView({ data, onClose }) {
   const html = useMemo(() => (data ? renderDeck(data).join("") : ""), [data]);
-  // phone: shrink the 940px slides to the screen (zoom keeps print untouched via the CSS reset)
+  // phone: shrink the 940px slides to the screen (the offscreen PDF pass never sees this zoom)
   const [zoom, setZoom] = useState(1);
+  const [pdfMsg, setPdfMsg] = useState(null);
+  const building = useRef(false);
+  const autoRan = useRef(false);
   useEffect(() => {
     const m = () => setZoom(Math.min(1, (window.innerWidth - 8) / 956));
     m(); window.addEventListener("resize", m);
     return () => window.removeEventListener("resize", m);
   }, []);
+
+  const fileName = data ? `${String(data.scope.name).replace(/[^\w]+/g, "_")}_Business_Review` : "Business_Review";
+
+  const buildPdf = async () => {
+    if (building.current) return;
+    building.current = true;
+    setPdfMsg("Preparing PDF…");
+    let host = null;
+    try {
+      const [h2cMod, pdfMod] = await Promise.all([import("html2canvas"), import("jspdf")]);
+      const html2canvas = h2cMod.default || h2cMod;
+      const { jsPDF } = pdfMod;
+      // offscreen, unzoomed copy of the slides — the .deckPages style block applies to it too
+      host = document.createElement("div");
+      host.className = "deckPages";
+      host.style.cssText = "position:fixed;left:-99999px;top:0;width:940px;";
+      host.innerHTML = html;
+      document.body.appendChild(host);
+      const imgs = [...host.querySelectorAll("img")];
+      await Promise.all(imgs.map(im => (im.complete ? null : new Promise(res => { im.onload = im.onerror = res; }))));
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      await new Promise(r => setTimeout(r, 120));
+      const slides = [...host.querySelectorAll(".slide")];
+      const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [940, 726], hotfixes: ["px_scaling"], compress: true });
+      for (let i = 0; i < slides.length; i++) {
+        setPdfMsg(`Preparing PDF… ${i + 1}/${slides.length}`);
+        const cv = await html2canvas(slides[i], { scale: 2, backgroundColor: "#ffffff", logging: false });
+        if (i > 0) pdf.addPage([940, 726], "landscape");
+        pdf.addImage(cv.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 940, 726);
+      }
+      pdf.save(`${fileName}.pdf`);
+      setPdfMsg(null);
+    } catch (err) {
+      console.error("pdf export failed", err);
+      setPdfMsg("PDF failed — tap PDF to retry");
+      setTimeout(() => setPdfMsg(null), 2600);
+    }
+    if (host) host.remove();
+    building.current = false;
+  };
+
+  // phones: the PDF starts building itself the moment the deck opens.
+  // No cleanup on purpose — strict-mode's dev double-mount would cancel the timer
+  // and the latch would block the re-run, so the build would never start.
+  useEffect(() => {
+    if (!data || autoRan.current) return;
+    if (typeof window !== "undefined" && window.innerWidth < 956) {
+      autoRan.current = true;
+      setTimeout(buildPdf, 400);
+    }
+  }, [data]);   // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!data) return null;
-  const fileName = `${String(data.scope.name).replace(/[^\w]+/g, "_")}_Business_Review`;
 
   // Portaled to <body> so the print CSS can isolate the deck (page breaks only work in-flow,
   // and hiding body children would otherwise hide the deck's own ancestors).
@@ -64,7 +120,7 @@ export default function DeckView({ data, onClose }) {
           style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 999, border: "none", background: "#333", color: "#fff", cursor: "pointer" }}>
           <X size={16} strokeWidth={2.2} />
         </button>
-        <div style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 700 }}>
+        <div style={{ fontFamily: "var(--font-sans)", fontSize: 14, fontWeight: 700, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {data.scope.name}<span style={{ color: "#9A9A9A", fontWeight: 400 }}> · business review</span>
         </div>
         <div style={{ flex: 1 }} />
@@ -87,9 +143,10 @@ export default function DeckView({ data, onClose }) {
           style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8, border: "none", background: "#C9D8F0", color: "#0A0A0A", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", marginRight: 8 }}>
           PowerPoint
         </button>}
-        <button onClick={() => { const t = document.title; document.title = fileName; window.print(); setTimeout(() => { document.title = t; }, 500); }}
-          style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8, border: "none", background: "#EDB3B0", color: "#0A0A0A", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-          PDF
+        <button onClick={buildPdf}
+          title="Download the deck as a PDF file"
+          style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 8, border: "none", background: "#EDB3B0", color: "#0A0A0A", fontFamily: "var(--font-sans)", fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
+          {pdfMsg || "PDF"}
         </button>
       </div>
       <div className="deckPages deckScroll" style={{ flex: 1, overflowY: "auto", padding: "22px 0 40px", zoom }}

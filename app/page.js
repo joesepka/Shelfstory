@@ -849,8 +849,7 @@ const RAMP_A = ["#d3e7ea", "#c2dce1", "#afd0d6", "#9bc3ca", "#87b6be", "#71a8b2"
 const rampAt = (R, i, n) => R[Math.min(R.length - 1, Math.round(i / Math.max(1, n - 1) * (R.length - 1)))];
 function TrendGraph({ cases, accts, ros, pct, skey }) {
   const [mode, setMode] = useState(0);        // 0 cases · 1 accounts
-  const [anim, setAnim] = useState(0);        // -1 = sliding to the other chart
-  const other = 1 - mode;
+  const [fading, setFading] = useState(false);   // tap → old chart fades out, new one grows in
   const mShort = k => { const t = new Date(SNAPSHOT); t.setMonth(t.getMonth() + k); return t.toLocaleString("en-US", { month: "short" }).toUpperCase(); };
   const N = (cases || []).length || 12;
   const total = Math.round((cases || []).reduce((s2, v) => s2 + (v || 0), 0));
@@ -893,13 +892,12 @@ function TrendGraph({ cases, accts, ros, pct, skey }) {
         <span key={"h" + mode} className="sceneFade" style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, letterSpacing: ".09em", color: "var(--text-3)", fontWeight: 600 }}>{mode === 0 ? "CASES · MONTHLY" : "ACTIVE ACCOUNTS · ROLLING 90"}</span>
         <span key={"v" + mode} className="sceneFade" style={{ marginLeft: "auto", fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 600, color: "var(--text-2)", whiteSpace: "nowrap" }}>{mode === 0 ? `${kf(total)} · 12 mo` : <>{lastA.toLocaleString()} now{lastR != null ? <span style={{ color: "#1f6272" }}> · ros {lastR.toFixed(1)}</span> : null}</>}</span>
       </div>
-      {/* the sliding window: [other | current | other] — a TAP slides the neighbor in
-          (Joe's call: tap beats an awkward swipe for this one section) */}
+      {/* tap → the whole chart fades out, then the other one mounts and grows in
+          fresh (Joe's call: a clean swap, not a slide) */}
       <div className="tap" style={{ overflow: "hidden", marginTop: 8, cursor: "pointer" }}
-        onClick={() => { if (anim === 0) setAnim(-1); }}>
-        <div key={skey + "-" + mode} style={{ display: "flex", width: "300%", transform: `translateX(calc(-33.3333% + ${anim * 33.3333}%))`, transition: "transform .32s cubic-bezier(.25,.7,.3,1)" }}
-          onTransitionEnd={() => { if (anim !== 0) { setMode(other); setAnim(0); } }}>
-          {panel(other, "l")}{panel(mode, "c")}{panel(other, "r")}
+        onClick={() => { if (fading) return; setFading(true); setTimeout(() => { setMode(m => 1 - m); setFading(false); }, 170); }}>
+        <div key={skey + "-" + mode} style={{ opacity: fading ? 0 : 1, transition: "opacity .17s ease" }}>
+          {panel(mode, "c")}
         </div>
       </div>
       <div style={{ display: "flex", gap: 3, marginTop: 4, fontFamily: "var(--font-mono)", fontSize: 6.8, textAlign: "center", color: "var(--text-3)" }}>
@@ -944,6 +942,7 @@ export default function Home() {
   const [openStyles, setOpenStyles] = useState(false);   // See all = expand in place
   const [openSkus, setOpenSkus] = useState(false);
   const [openChains, setOpenChains] = useState(false);
+  const [openAccts, setOpenAccts] = useState(false);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 1900); return () => clearTimeout(t); }, [toast]);
   const { burst, styleFor } = useExplode();
   const { night, setNight } = useTheme();
@@ -1292,6 +1291,9 @@ export default function Home() {
         <div style={{ position: "relative", zIndex: 1 }}>
         {/* the sky header — frozen over both views, a little blue like the splash */}
         <div style={{ position: "sticky", top: 0, zIndex: 45, margin: "0 -20px", padding: "5px 20px 15px", background: night ? "linear-gradient(180deg, #101a24 0%, rgba(16,26,36,0.94) 62%, rgba(15,23,19,0) 100%)" : "linear-gradient(180deg, #cbe5f5 0%, #d9ecf7 50%, rgba(233,244,251,0.9) 76%, rgba(253,253,251,0) 100%)" }}>
+          {/* bleed: solid sky extending well above the header, so any gap that opens at
+              the top during a hard pull-down shows sky — never a white break */}
+          <div aria-hidden="true" style={{ position: "absolute", left: -4, right: -4, top: -160, height: 160, background: night ? "#101a24" : "#cbe5f5", pointerEvents: "none" }} />
           <div aria-hidden="true" style={{ position: "absolute", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}>
             <svg className="cl" viewBox="0 0 320 110" style={{ position: "absolute", top: 4, left: -26, width: 104, opacity: night ? 0.08 : 0.75 }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
             <svg className="cl cl2" viewBox="0 0 320 110" style={{ position: "absolute", top: 22, right: -14, width: 76, opacity: night ? 0.06 : 0.55 }}><path d={CLOUD_PATH} fill={night ? "#9fb0c4" : "#ffffff"} /></svg>
@@ -1371,9 +1373,9 @@ export default function Home() {
         {/* accounts — watch first, then lapsed / surging / the rest; See all opens the book */}
         {view === "ledger" && cur && watchRows && watchRows.length > 0 && (
           <>
-            <SectHead t="Accounts" />
+            <SectHead t="Accounts" more={watchRows.length > 3 ? (openAccts ? "Show less ↑" : "See all ↓") : undefined} onMore={() => setOpenAccts(o => !o)} />
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {watchRows.slice(0, 3).map(r => { const h = String(r.headline || "").toLowerCase().trim(); const cPct = (r.prev90 || 0) > 0 ? Math.round(100 * ((r.cur90 || 0) - r.prev90) / r.prev90) : null; const plcN = plcMap ? ((plcMap[r.account_id] || {}).now || 0) : (r.live_placements || 0); const plcPv = plcMap ? ((plcMap[r.account_id] || {}).prev || 0) : (r.live_prev || 0); const pd = plcN - plcPv; return (
+              {(openAccts ? watchRows : watchRows.slice(0, 3)).map(r => { const h = String(r.headline || "").toLowerCase().trim(); const cPct = (r.prev90 || 0) > 0 ? Math.round(100 * ((r.cur90 || 0) - r.prev90) / r.prev90) : null; const plcN = plcMap ? ((plcMap[r.account_id] || {}).now || 0) : (r.live_placements || 0); const plcPv = plcMap ? ((plcMap[r.account_id] || {}).prev || 0) : (r.live_prev || 0); const pd = plcN - plcPv; return (
                 <div key={r.account_id} className="tap" onClick={() => router.push("/account/" + encodeURIComponent(r.account_id))} style={{ background: "var(--surface)", border: "0.5px solid var(--border)", borderRadius: 12, padding: "7px 12px", display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}>
                   <span style={{ flexShrink: 0, display: "flex" }}><TreeGlyph headline={r.headline} h={30} /></span>
                   <div style={{ minWidth: 0 }}>
