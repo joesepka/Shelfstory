@@ -38,18 +38,23 @@ const STNAME = { IL: "Illinois", OH: "Ohio", MI: "Michigan", MO: "Missouri", IA:
 function median(arr) { if (!arr.length) return 0; const s = [...arr].sort((a, b) => a - b), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
 const round5 = n => Math.round(n / 5) * 5;
 function monthLabel(monthsAgo) { const d = new Date(SNAPSHOT.getFullYear(), SNAPSHOT.getMonth() - monthsAgo, 1); return d.toLocaleString("en-US", { month: "short" }); }
-// Joe's rule (2026-08-16): speak in the ORIGINAL numbers — no case-equivalent math, no pack
-// conversion. A package SKU's depletions ARE cases, so show cases/mo; a keg SKU's depletions
-// ARE kegs, so show halfs / sixtels / quarters per month. One decimal under 10, whole above.
-function packMo(l90, pkg) {
+// Joe's rule (2026-08-17): speak in ACTUAL ORDERS. Depletion numbers arrive as case-
+// equivalents, so keg SKUs must convert to real keg counts before display — one half is
+// 6.889 CE, a sixtel 2.296, a quarter 3.444. Nobody ordered "6.9 halfs"; they ordered 1.
+// Month cells round to whole kegs (whole=true); rates keep one decimal under 10.
+// Package SKUs' depletions are already cases and stay untouched.
+const KEG_CE = (p) => p.includes("SIXTEL") ? 2.296 : (p.includes("QUARTER") || p.includes("QTR")) ? 3.444 : (p.includes("HALF") || p.includes("KEG") || p.includes("BBL")) ? 6.889 : 0;
+function packMo(l90, pkg, whole) {
   const p = String(pkg || "").toUpperCase();
-  const mo = (Number(l90) || 0) / 3;
-  const n = mo >= 10 ? Math.round(mo) : Math.round(mo * 10) / 10;
-  if (p.includes("SIXTEL")) return { n, unit: n === 1 ? "sixtel" : "sixtels" };
-  if (p.includes("HALF")) return { n, unit: n === 1 ? "half" : "halfs" };
-  if (p.includes("QUARTER") || p.includes("QTR")) return { n, unit: n === 1 ? "quarter" : "quarters" };
-  if (p.includes("KEG") || p.includes("BBL")) return { n, unit: n === 1 ? "keg" : "kegs" };
-  return { n, unit: "cs" };
+  const ce = KEG_CE(p);
+  const mo = ((Number(l90) || 0) / 3) / (ce || 1);
+  const n = whole ? Math.max(1, Math.round(mo)) : mo >= 10 ? Math.round(mo) : Math.round(mo * 10) / 10;
+  const unit =
+    p.includes("SIXTEL") ? (n === 1 ? "sixtel" : "sixtels") :
+    p.includes("HALF") ? (n === 1 ? "half" : "halfs") :
+    (p.includes("QUARTER") || p.includes("QTR")) ? (n === 1 ? "quarter" : "quarters") :
+    ce ? (n === 1 ? "keg" : "kegs") : "cs";
+  return { n, unit };
 }
 // Collapse the style_parent field into display buckets — all IPA variants (HAZY IPA, IPA, DIPA…) become one "IPA" (Joe's rule).
 function styleGroup(sp) {
@@ -668,7 +673,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
     const it = items.find(x => x.product_key === cardSku) || lostSkus.find(x => x.product_key === cardSku);
     if (!it) return null;
     const odots = ((dep.byPk[cardSku] && dep.byPk[cardSku].dots) || []).slice(-12);   // last 12 months of actual monthly orders
-    const opacks = odots.map(c => c > 0 ? packMo(c * 3, it.package).n : 0), pMax = Math.max(1, ...opacks);
+    const opacks = odots.map(c => c > 0 ? packMo(c * 3, it.package, true).n : 0), pMax = Math.max(1, ...opacks);
     const ounit = packMo(60, it.package).unit, omlab = Array.from({ length: 12 }, (_, x) => monthLabel(11 - x));   // 60 = dummy for a plural unit label
     const lost = it.cell_state === "lost_recent" || (it.l90 || 0) <= 0;
     const pk = packMo(lost ? (it.l90_prev || 0) : (it.l90 || 0), it.package);
