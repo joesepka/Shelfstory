@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ShelfStory">
+  <!-- Tab icons render at 16px. The header LogoMark's hairline book turns to mush that small,
+       so this is the same idea drawn for the size: a solid brand tile (reads on both light and
+       dark tab bars), a simplified two-page book, and the climbing line with its leaf — the
+       part that makes the mark ours. Lives at app/icon.svg so Next serves it and injects the
+       <link> with the basePath already applied; a bare /favicon.ico can't work under
+       /blindcorner/desktop. -->
+  <rect width="64" height="64" rx="14" fill="#3F6E4A"/>
+  <g stroke="#DCEBE0" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round" fill="none">
+    <path d="M32 47 q-8.5 -3.6 -18 -2.2 v-19 q9.5 -1.6 18 2.2 z"/>
+    <path d="M32 47 q8.5 -3.6 18 -2.2 v-19 q-9.5 -1.6 -18 2.2 z"/>
+  </g>
+  <polyline points="19,36 26.5,32.5 33,27 41,19" fill="none" stroke="#8FD3A6" stroke-width="4"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M41 19 q-2.4 -7 -9.4 -7 q1.2 7 9.4 7 z" fill="#8FD3A6"/>
+  <path d="M41 19 q5.8 -4.6 12.8 -3.4 q-3.4 7 -12.8 3.4 z" fill="#8FD3A6"/>
+</svg>
