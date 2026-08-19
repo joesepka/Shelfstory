@@ -1599,7 +1599,7 @@ const SL = [
 const COPIES = DEFAULT_VARIANTS.concat(variants || []).map(v => {
   const b = SL.find(s => s.id === v.base);
   if (!b) return null;                                        // a copy of a slide that no longer exists is just dropped
-  return { id: v.id, name: v.name || (v.dflt ? b.name : b.name + " copy"), base: b.id, dflt: !!v.dflt, ord: v.ord, build: b.build, rule: b.rule, met: b.met };
+  return { id: v.id, name: v.name || (v.dflt ? b.name : b.name + " copy"), base: b.id, dflt: !!v.dflt, ord: v.ord, made: v.made || null, build: b.build, rule: b.rule, met: b.met };
 }).filter(Boolean);
 
 return SL.concat(COPIES).map(d => {
@@ -1609,7 +1609,8 @@ return SL.concat(COPIES).map(d => {
   if (d.met) { try { met = !!d.met(d.id); } catch { met = false; } }
   // `base` is which slide's controls the editor should offer; `custom` is whether this one
   // was made by a person (deleting it really deletes) or is code (deleting it retires).
-  return { id: d.id, name: d.name, base: d.base || d.id, custom: !!d.base && !d.dflt, design: designOf(d.base || d.id, d.id), ord: (typeof d.ord === "number" ? d.ord : designOrd(d.base || d.id, d.id)), rule: d.rule || null, met, html, ok: !!html };
+  return { id: d.id, name: d.name, base: d.base || d.id, custom: !!d.base && !d.dflt, design: designOf(d.base || d.id, d.id), ord: (typeof d.ord === "number" ? d.ord : designOrd(d.base || d.id, d.id)),
+      made: d.made || null, rule: d.rule || null, met, html, ok: !!html };
 });
 
 }
