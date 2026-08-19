@@ -1019,6 +1019,19 @@ function sBubble(sid){
 const ytdSlice = (arr, n) => (arr || []).slice(Math.max(0, 24 - n));
 const acctYtd  = (id, n) => ytdSlice(D.acctMo && D.acctMo[id], n).reduce((a, b) => a + (+b || 0), 0);
 const repOf    = (a) => clean(a.rep || "Unassigned");
+/* ONE COLOUR PER TERRITORY, EVERYWHERE (Joe, 2026-08-19: "green for region 1, purple for
+   region 2 ... and then repeat for the next series of slides too"). A territory keeps its
+   colour across the whole deck, so the North bar on the month chart and the North account grid
+   are recognisably the same thing. Anything unnamed falls back to slate rather than borrowing
+   a territory's colour. */
+const REGION_COL = {
+  Central: ["#2E7D52", "#CFE4D8"],   // green
+  North:   ["#6B4E9E", "#DCD2EC"],   // purple
+  South:   ["#C07A2B", "#F0DEC4"],   // orange
+  House:   ["#5B6B78", "#D5DCE1"],   // slate — the taproom, not a selling territory
+};
+const regionCol = (k, i) => REGION_COL[String(k).split(" ")[0]] ||
+  [["#4E7CA1", "#D3E0EA"], ["#8A6A12", "#EBDFC2"], ["#9A5A6B", "#EDD6DC"]][i % 3];
 /* NEW, ON THIS SLIDE ONLY (Joe, 2026-08-19). Everywhere else in the app "new" means the
    ShelfStory rule -- first depletion in the trailing 90 days with nothing in the 52 weeks
    before it (lib/acctHealth.js). The grid asks a tighter question: who turned up THIS WEEK.
@@ -1157,8 +1170,7 @@ function sRegionMo(sid){
   }
   const totals = ax.months.map((_, i) => regions.reduce((t, r) => t + r.v[i], 0));
   const grand = totals.reduce((a, b) => a + b, 0);
-  const R = rampOf(RT.chart || "teal");
-  const cols = regions.map((_, i) => regions.length <= 1 ? R[2] : mix(R[2], R[0], i / (regions.length - 1)));
+  const cols = regions.map((r, i) => regionCol(r.k, i)[0]);
 
   const W = 940, H = 400, PL = 50, PR = 10, PT = 26, PB = 40, pw = W - PL - PR, ph = H - PT - PB;
   const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v))), r = v / p;
@@ -1234,11 +1246,11 @@ function sAcctGrid(sid){
      and a genuine outlier just tops out. */
   const nz = list.flatMap(r => r.v).filter(v => v > 0).sort((a, b) => a - b);
   const mx = Math.max(nz.length ? nz[Math.floor(nz.length * 0.85)] : 1, 1);
-  const R = rampOf(AT.chart || "teal");
+  const HEAT = want ? regionCol(want, 0)[0] : rampOf(AT.chart || "teal")[1];
   // a cell is shaded by how big that month is against the busiest single month on the page —
   // it reads as a heat grid without needing a legend
   const cell = (v) => v <= 0 ? '<td style="text-align:center;font-size:9.4px;color:#D8DBD4;padding:6.5px 0">·</td>'
-    : `<td style="text-align:right;font-size:9.4px;padding:6.5px 0;font-weight:${v >= mx * 0.5 ? 700 : 500};background:${mix("#FFFFFF", R[1], Math.min(0.52, 0.06 + v / mx * 0.46))};color:#2B2B2B">${fmt(v)}</td>`;
+    : `<td style="text-align:right;font-size:9.4px;padding:6.5px 0;font-weight:${v >= mx * 0.5 ? 600 : 400};background:${mix("#FFFFFF", HEAT, Math.min(0.46, 0.05 + v / mx * 0.41))};color:#2B2B2B">${fmt(v)}</td>`;
 
   return wrap(`${head("ACCOUNTS BY MONTH", D.scope.name+(want ? " · "+want : "")+" · year to date through "+SNAP_LABEL)}
    <div style="display:flex;align-items:baseline;gap:14px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:11px;padding:9px 0">
