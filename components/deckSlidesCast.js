@@ -2,7 +2,7 @@
 // renderDeck(D, logoSrc) returns the slides in order, skipping any with no real data.
 /* eslint-disable */
 import { SNAP_LABEL } from "../lib/snapshot.js";
-import { cutOf } from "../lib/deckData.js";
+import { cutOf, stackSeries, CUT_DIMS } from "../lib/deckData.js";
 // THE SHELF SHIPS WITH ONE SLIDE PER DESIGN (Joe, 2026-08-18: "This is a library. You pick and
 // add to decks — they all just exist."). There is no "in use" cover; there are three covers.
 // A default variant is an ordinary variant — same builder, own settings entry — defined in code
@@ -30,7 +30,7 @@ const D = D0;
 const SET = Object.assign({}, DEFAULT_VARIANT_SETTINGS, settings || {});
 SETTINGS_SEEN = SET;
 const packOf = (sid) => (setOf(sid).pack === "pkg" ? "pkg" : "draft");
-const setOf = (id) => Object.assign({ voice: "neutral", bullets: 4, title: "Overview", layout: "text-left", chart: "green", chart2: "rose", bar: "normal", words: "bullets", design: "editorial", titleSize: "m", brow: "Business Review", pack: "draft", parts: null, stats: null, graphs: null }, SET[id] || {});
+const setOf = (id) => Object.assign({ voice: "neutral", bullets: 4, title: "Overview", layout: "text-left", chart: "green", chart2: "rose", bar: "normal", words: "bullets", design: "editorial", titleSize: "m", brow: "Business Review", pack: "draft", split: "package", span: "12", mode: "stack", bands: "4", labels: "on", parts: null, stats: null, graphs: null }, SET[id] || {});
 
 /* ---------- named blocks ------------------------------------------------------
    A block is one region of a slide: a stable id, its own renderer, its own settings.
@@ -771,6 +771,85 @@ function sUniverse(sid){
   return wrap((USHAPES[UDES] || USHAPES.utilitarian)());
 }
 
+/* ---------- 5b · volume by month, stacked ------------------------------------------------
+   Recreated from a stacked-column chart Joe sent (2026-08-19). The SHAPE is the point, not the
+   source's specifics: months across, one column per month, the column split into bands, the
+   number printed inside each band. What it splits BY, how many months, how many bands, and
+   whether the columns stack / sit side by side / normalise to 100% are all settings — so one
+   builder covers the whole family and nobody has to describe a slide to a model. Deterministic
+   from data and settings, start to finish.                                                  */
+function sStacked(sid){
+  const ST = setOf(sid || "stack");
+  const dim  = ["package","style","brand"].indexOf(ST.split) >= 0 ? ST.split : "package";
+  const span = +ST.span || 12, cap = +ST.bands || 4;
+  const mode = ["stack","group","share"].indexOf(ST.mode) >= 0 ? ST.mode : "stack";
+  const showN = ST.labels !== "off";
+  const S2 = stackSeries(D, dim, cap, span);
+  if (!S2 || !S2.bands.length) return "";
+  const dimName = (CUT_DIMS.find(c => c[0] === dim) || ["","Split"])[1];
+
+  const R = rampOf(ST.chart || "teal");
+  const colAt = (i,n) => n <= 1 ? R[2] : mix(R[2], R[0], i/(n-1));
+  const cols = S2.bands.map((_,i) => colAt(i, S2.bands.length));
+
+  const W=880,H=474,PL=54,PR=10,PT=18,PB=46;
+  const pw=W-PL-PR, ph=H-PT-PB;
+  const nice = v => { const p=Math.pow(10,Math.floor(Math.log10(v))), r=v/p;
+    const m = r<=1?1:r<=1.2?1.2:r<=1.5?1.5:r<=2?2:r<=2.5?2.5:r<=3?3:r<=4?4:r<=5?5:r<=6?6:r<=8?8:10;
+    return m*p; };
+  // side-by-side bars are measured against the biggest SINGLE band, not the column total —
+  // scaling them to the stack squashed every bar into the bottom third (Joe, 2026-08-19).
+  const peak = mode==="group" ? Math.max(...S2.bands.map(b => Math.max(...b.v)), 1) : S2.max;
+  const top = mode==="share" ? 100 : nice(peak);
+  const y = v => PT + ph - (v/top)*ph;
+  const step = pw/S2.months.length;
+  const bw = Math.min(step*0.62, 58);
+
+  let g=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">`;
+  for (let i=0;i<=4;i++){ const v=top*i/4, yy=y(v);
+    g+=`<line x1="${PL}" y1="${yy.toFixed(1)}" x2="${W-PR}" y2="${yy.toFixed(1)}" stroke="${i?'#EDEFEA':'#D8DBD4'}"/>`;
+    g+=`<text x="${PL-8}" y="${(yy+3).toFixed(1)}" text-anchor="end" font-family="Arial" font-size="8.4" fill="#9A9A9A">${mode==="share"?Math.round(v)+"%":fmt(v)}</text>`; }
+
+  S2.months.forEach((mo,i)=>{
+    const cx = PL + i*step + step/2, colTot = S2.totals[i] || 0;
+    const vals = S2.bands.map(b => mode==="share" ? (colTot ? b.v[i]/colTot*100 : 0) : b.v[i]);
+    if (mode==="group"){
+      const gw = bw/S2.bands.length;
+      vals.forEach((v,bi)=>{ const h=(v/top)*ph; if(h<=0) return;
+        const x = cx-bw/2+bi*gw;
+        g+=`<rect x="${x.toFixed(1)}" y="${(PT+ph-h).toFixed(1)}" width="${Math.max(1.5,gw-1.5).toFixed(1)}" height="${h.toFixed(1)}" fill="${cols[bi]}"/>`; });
+    } else {
+      let acc=0;
+      vals.forEach((v,bi)=>{ const h=(v/top)*ph; if(h<=0) return;
+        const yy = PT+ph-acc-h;
+        g+=`<rect x="${(cx-bw/2).toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${cols[bi]}"/>`;
+        // the number only goes inside when the band is actually tall enough to hold it
+        if (showN && h>=13) g+=`<text x="${cx.toFixed(1)}" y="${(yy+h/2+3.2).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.6" font-weight="bold" fill="${bi<Math.ceil(S2.bands.length/2)?'#fff':'#2B2B2B'}">${mode==="share"?Math.round(v)+"%":fmt(v)}</text>`;
+        acc+=h; });
+      if (showN && mode==="stack" && colTot>0)
+        g+=`<text x="${cx.toFixed(1)}" y="${(PT+ph-acc-6).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.8" font-weight="bold" fill="#6E7468">${fmt(colTot)}</text>`;
+    }
+    g+=`<text x="${cx.toFixed(1)}" y="${(PT+ph+15)}" text-anchor="middle" font-family="Arial" font-size="9.4" font-weight="bold" fill="#2B2B2B">${mo}</text>`;
+  });
+  g+=`<line x1="${PL}" y1="${(PT+ph).toFixed(1)}" x2="${W-PR}" y2="${(PT+ph).toFixed(1)}" stroke="#B9BEB2"/></svg>`;
+
+  const legend = `<div style="display:flex;justify-content:center;flex-wrap:wrap;gap:16px;margin-top:9px">
+    ${S2.bands.map((b,i)=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:9px;color:#2B2B2B">
+      <span style="width:9px;height:9px;border-radius:2px;background:${cols[i]}"></span>${b.k}
+      <span style="color:var(--grey2)">${fmt(b.tot)}</span></span>`).join("")}</div>`;
+
+  const grand = S2.bands.reduce((t,b)=>t+b.tot,0);
+  const band = `<div style="display:flex;align-items:baseline;gap:14px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:11px;padding:9px 0">
+     <span class="lbl">Cases by month · split by ${dimName.toLowerCase()}</span>
+     <span class="fig" style="font-size:19px">${fmt(grand)}</span>
+     <span style="font-size:8.6px;color:var(--grey2)">cases across the last ${S2.span} months · ${S2.bands.length} band${S2.bands.length===1?"":"s"}${mode==="share"?" · shown as share of each month":""}</span></div>`;
+
+  return wrap(`${head("VOLUME BY MONTH", D.scope.name+" · trailing "+S2.span+" months · "+D.scope.sub)}
+   ${band}
+   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;padding-top:8px">${g}${legend}</div>
+   ${foot(SRC+" Monthly cases come from each product's own order line, summed into its "+dimName.toLowerCase()+" — no volume is apportioned. Bands beyond the chosen count roll into Other so the columns still total the book.")}`);
+}
+
 /* ---------- 6 · movers ---------- */
 function sMovers(sid){
   if(!D.upList.length && !D.dnList.length) return "";
@@ -1363,6 +1442,9 @@ const SL = [
     rule: "Only when this side of the book is at least 5% of total sales",
     met: (sid) => { const g = packOf(sid), tot = (D.draft.tot || 0) + (D.pkg.tot || 0);
       return D[g].tot >= tot * 0.05 && !!D[g].rows.length; } },
+  { id: "stack",    name: "Volume by month",  build: sStacked,
+    rule: "Only when monthly product history is available for this scope",
+    met: () => !!D.itemWin },
   { id: "universe", name: "Account universe", build: sUniverse },
   { id: "movers",   name: "Account movement", build: sMovers },
   { id: "lapsed",   name: "Lapsed accounts",  build: sLapsed },
@@ -1520,6 +1602,16 @@ export const ROW_NAMES = {
 export const SLIDE_CONTROLS = {
   cover: { design: true, brow: true, titleSize: true, parts: COVER_PARTS },
   items: { pack: true, design: ITEM_DESIGNS },
+  /* ONE GENERIC `segs` LIST, NOT FIVE BESPOKE CONTROLS. The editor names every control key
+     explicitly, so each new knob used to cost an editor block. `segs` renders any [{k,label,
+     options}] as chip rows, which means a new slide's settings are now free.              */
+  stack: { chart: "Bar colours", segs: [
+    { k: "split",  label: "SPLIT BY",  options: [["package","Draft / package"],["style","Style"],["brand","Brand"]] },
+    { k: "span",   label: "MONTHS",    options: [["6","6"],["9","9"],["12","12"]] },
+    { k: "mode",   label: "COLUMNS",   options: [["stack","Stacked"],["group","Side by side"],["share","100%"]] },
+    { k: "bands",  label: "SEGMENTS",  options: [["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]] },
+    { k: "labels", label: "NUMBERS",   options: [["on","On"],["off","Off"]] },
+  ] },
   universe: { design: ITEM_DESIGNS },
   brand: { design: ITEM_DESIGNS },
   movers: { design: ITEM_DESIGNS },
