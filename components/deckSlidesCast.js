@@ -1,8 +1,8 @@
 // AUTO-PORTED from the approved deck mockups. Each renderer returns one slide's HTML;
 // renderDeck(D, logoSrc) returns the slides in order, skipping any with no real data.
 /* eslint-disable */
-import { SNAP_LABEL } from "../lib/snapshot.js";
-import { cutOf, stackSeries, CUT_DIMS } from "../lib/deckData.js";
+import { SNAP_LABEL, monthAxis } from "../lib/snapshot.js";
+import { cutOf, stackSeries, CUT_DIMS, clean } from "../lib/deckData.js";
 // THE SHELF SHIPS WITH ONE SLIDE PER DESIGN (Joe, 2026-08-18: "This is a library. You pick and
 // add to decks — they all just exist."). There is no "in use" cover; there are three covers.
 // A default variant is an ordinary variant — same builder, own settings entry — defined in code
@@ -30,7 +30,7 @@ const D = D0;
 const SET = Object.assign({}, DEFAULT_VARIANT_SETTINGS, settings || {});
 SETTINGS_SEEN = SET;
 const packOf = (sid) => (setOf(sid).pack === "pkg" ? "pkg" : "draft");
-const setOf = (id) => Object.assign({ voice: "neutral", bullets: 4, title: "Overview", layout: "text-left", chart: "green", chart2: "rose", bar: "normal", words: "bullets", design: "editorial", titleSize: "m", brow: "Business Review", pack: "draft", split: "package", span: "12", mode: "stack", bands: "4", labels: "on", sayAt: "below", say: "b3", tone: "informative", gsize: "expanded", measure: "accounts", parts: null, stats: null, graphs: null }, SET[id] || {});
+const setOf = (id) => Object.assign({ voice: "neutral", bullets: 4, title: "Overview", layout: "text-left", chart: "green", chart2: "rose", bar: "normal", words: "bullets", design: "editorial", titleSize: "m", brow: "Business Review", pack: "draft", split: "package", span: "12", mode: "stack", bands: "4", labels: "on", sayAt: "below", say: "b3", tone: "informative", gsize: "expanded", measure: "accounts", region: "all", parts: null, stats: null, graphs: null }, SET[id] || {});
 
 /* ---------- named blocks ------------------------------------------------------
    A block is one region of a slide: a stable id, its own renderer, its own settings.
@@ -65,7 +65,10 @@ const M = D.tfMeta || { dflt:true, stat:"90-day cases", col:"90D", winShort:"90 
   zeroCmp:"no prior-quarter volume at all", hadNone:"had no volume at all a quarter ago" };
 // ROS is ALWAYS the current-90-day read, whatever the timeframe — rows carry l90 for it
 const rosBase = r => (r.l90 != null ? r.l90 : r.cur);
-const SRC="Source: distributor depletion reporting through the snapshot date. "+(M.dflt?"Cases are 90-day rolling totals against the immediately preceding 90 days unless stated as 52-week.":"Volume figures are "+M.winShort+" totals against "+M.cmpLong+"; distribution counts (placements, accounts carrying) and rate of sale always read the latest 90 days. Figures stated as 52-week are unchanged.")+" Health is read from each account's own monthly order line: new on its first order in 52 weeks, lapsed after 90 days without one, surging or softening only when confirmed across consecutive months against its own baseline.";
+/* ONE SOURCE LINE, EVERYWHERE (Joe, 2026-08-19: "just keep sources on each slide simple for
+   now"). Every slide already appends its own sentence after this when it has something worth
+   saying about its own method; this is the part that is true of all of them. */
+const SRC="All data are generated from rolling 30 day depletions thru "+SNAP_LABEL+", going back 24 months.";
 
 /* ---------- shared chrome ---------- */
 const head=(title,sub)=>`
@@ -1004,6 +1007,237 @@ function sBubble(sid){
    ${foot(SRC+" Circles are scaled by AREA, not radius, so a figure twice the size draws a circle twice the area — the visual comparison matches the arithmetic.")}`);
 }
 
+/* ---------- 5d · the three Joe specced 2026-08-19 ----------------------------------------
+   Shared account-side helpers. acctMo[id] is 24 months per ACCOUNT, newest last, so the YTD
+   window is simply the last `ytdN` of them.
+
+   ON "NEW ACCOUNTS": Joe asked for accounts that did not exist in the PREVIOUS REPORT SNAPSHOT.
+   Only one snapshot is retained, so that is not computable — there is no yesterday to diff
+   against. The honest, computable neighbour is an account that bought in this window and not in
+   the one before, which is what these slides show and label. Real snapshot-over-snapshot
+   arrivals need a stored history of loads; noted in ROADMAP.md.                             */
+const ytdSlice = (arr, n) => (arr || []).slice(Math.max(0, 24 - n));
+const acctYtd  = (id, n) => ytdSlice(D.acctMo && D.acctMo[id], n).reduce((a, b) => a + (+b || 0), 0);
+const repOf    = (a) => clean(a.rep || "Unassigned");
+
+// one bundle of numbers for any set of accounts — every row on the grid is this
+function acctStats(rows, n) {
+  let ytd = 0, cur = 0, prev = 0, act = 0, actP = 0, fresh = 0;
+  for (const a of rows) {
+    ytd += acctYtd(a.id, n);
+    const c = +a.cur || 0, p = +a.prev || 0;
+    cur += c; prev += p;
+    if (c > 0) act++;
+    if (p > 0) actP++;
+    if (c > 0 && p <= 0) fresh++;
+  }
+  return { ytd, cur, prev, pct: prev > 0 ? Math.round((cur - prev) / prev * 100) : null,
+    act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null,
+    fresh, ros: act ? +(cur / act / 3).toFixed(1) : 0 };
+}
+
+/* ---------- A · the grid report ---------- */
+function sGrid(sid){
+  const GT = setOf(sid || "grid");
+  const rows = D.acctRows || [];
+  if (!rows.length || !D.acctMo) return "";
+  const n = D.ytdN || 8;
+  const dlt = (p) => p == null ? '<span style="color:var(--grey2)">—</span>'
+    : `<span style="font-weight:700;color:${p > 0 ? "#2E7D52" : p < 0 ? "#B5534A" : "#9A9A9A"}">${arrow(p)}${Math.abs(p)}%</span>`;
+  const cells = (st) => `
+     <td class="fig" style="text-align:right;font-size:11px">${fmt(st.ytd)}</td>
+     <td class="fig" style="text-align:right;font-size:11px">${fmt(st.cur)}</td>
+     <td style="text-align:right;font-size:9px;color:var(--grey2)">${fmt(st.prev)}</td>
+     <td style="text-align:right;font-size:9px">${dlt(st.pct)}</td>
+     <td class="fig" style="text-align:right;font-size:11px">${fmt(st.act)}</td>
+     <td style="text-align:right;font-size:9px;color:var(--grey2)">${fmt(st.actP)}</td>
+     <td style="text-align:right;font-size:9px">${dlt(st.actPct)}</td>
+     <td style="text-align:right;font-size:10px;font-weight:700;color:${st.fresh ? "#2E7D52" : "#B9BEB2"}">${st.fresh || "—"}</td>
+     <td style="text-align:right;font-size:10px">${st.ros.toFixed(1)}</td>`;
+  const line = (label, st, bold) => `<tr style="border-bottom:0.5px solid #F0F1EC">
+     <td style="padding:3.5px 0;font-size:10.2px;font-weight:${bold ? 700 : 500};max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</td>${cells(st)}</tr>`;
+  const band = (t, sub) => `<tr><td colspan="10" style="padding:9px 0 3px">
+     <span class="lbl" style="font-size:8.4px">${t}</span>${sub ? `<span style="font-size:8px;color:var(--grey2);margin-left:7px">${sub}</span>` : ""}</td></tr>`;
+
+  const byRep = {}; for (const a of rows) (byRep[repOf(a)] || (byRep[repOf(a)] = [])).push(a);
+  const reps = Object.keys(byRep).sort((x, y) => acctStats(byRep[y], n).ytd - acctStats(byRep[x], n).ytd);
+  const byCity = {}; for (const a of rows) { const c = clean(a.city || "—"); if (c && c !== "—") (byCity[c] || (byCity[c] = [])).push(a); }
+  const cities = Object.keys(byCity).map(c => ({ c, st: acctStats(byCity[c], n) })).sort((x, y) => y.st.ytd - x.st.ytd).slice(0, 10);
+
+  // items are product-shaped, so their YTD comes from itemWin and "accounts" means accounts carrying
+  const items = [];
+  if (D.itemWin) {
+    const m = {};
+    for (const r of (D.rows || [])) { const k = clean(r.brand || r.item); if (!k) continue;
+      const e = m[k] || (m[k] = { k, pks: new Set(), cur: 0, prev: 0, acc: new Set(), accP: new Set() });
+      e.cur += +r.l90 || 0; e.prev += +r.prev || 0;
+      if (r.pk) e.pks.add(r.pk);
+      if ((+r.l90 || 0) > 0) e.acc.add(r.account_id);
+      if ((+r.prev || 0) > 0) e.accP.add(r.account_id); }
+    for (const e of Object.values(m)) {
+      let ytd = 0; for (const pk of e.pks) ytd += ytdSlice(D.itemWin[pk], n).reduce((a, b) => a + (+b || 0), 0);
+      const act = e.acc.size, actP = e.accP.size;
+      let fresh = 0; for (const id of e.acc) if (!e.accP.has(id)) fresh++;
+      items.push({ k: e.k, st: { ytd, cur: e.cur, prev: e.prev, pct: e.prev > 0 ? Math.round((e.cur - e.prev) / e.prev * 100) : null,
+        act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null, fresh, ros: act ? +(e.cur / act / 3).toFixed(1) : 0 } });
+    }
+    items.sort((a, b) => b.st.ytd - a.st.ytd);
+  }
+  const room = 26 - 4 - reps.length - cities.length;   // whatever rows are left after the fixed sections
+  const shown = items.slice(0, Math.max(4, room));
+
+  return wrap(`${head("THE GRID", D.scope.name+" · year to date through "+SNAP_LABEL+" · "+D.scope.sub)}
+   <div style="flex:1;min-height:0;padding-top:9px;overflow:hidden">
+     <table style="width:100%;border-collapse:collapse">
+       <thead><tr style="border-bottom:1.5px solid var(--ink)">
+         <th style="text-align:left;padding-bottom:5px" class="lbl"></th>
+         <th style="text-align:right" class="lbl">YTD</th>
+         <th style="text-align:right" class="lbl">90D</th>
+         <th style="text-align:right" class="lbl">prior</th>
+         <th style="text-align:right" class="lbl">chg</th>
+         <th style="text-align:right" class="lbl">accts</th>
+         <th style="text-align:right" class="lbl">prior</th>
+         <th style="text-align:right" class="lbl">chg</th>
+         <th style="text-align:right" class="lbl">new</th>
+         <th style="text-align:right" class="lbl">ROS</th>
+       </tr></thead>
+       <tbody>
+         ${band("Total brand")}
+         ${line(D.scope.name, acctStats(rows, n), true)}
+         ${band("Territories")}
+         ${reps.map(r => line(r, acctStats(byRep[r], n))).join("")}
+         ${band("Top cities", cities.length + " of " + Object.keys(byCity).length)}
+         ${cities.map(c => line(c.c, c.st)).join("")}
+         ${band("Brands by year to date", shown.length + " of " + items.length)}
+         ${shown.map(i => line(i.k, i.st)).join("")}
+       </tbody>
+     </table>
+   </div>
+   ${foot(SRC+" YTD is the "+n+" calendar months of the current year through the snapshot. New = accounts that bought in the last 90 days and not in the 90 before; snapshot-over-snapshot arrivals need a stored load history, which is not kept. ROS is 90-day cases per active account per month.")}`);
+}
+
+/* ---------- B · months by territory ---------- */
+function sRegionMo(sid){
+  const RT = setOf(sid || "regionmo");
+  const rows = D.acctRows || [];
+  if (!rows.length || !D.acctMo) return "";
+  const n = D.ytdN || 8;
+  const ax = monthAxis(n);
+  const byRep = {}; for (const a of rows) (byRep[repOf(a)] || (byRep[repOf(a)] = [])).push(a);
+  let regions = Object.keys(byRep).map(k => {
+    const v = new Array(n).fill(0);
+    for (const a of byRep[k]) ytdSlice(D.acctMo[a.id], n).forEach((x, i) => { v[i] += +x || 0; });
+    return { k, v, tot: v.reduce((x, y) => x + y, 0) };
+  }).filter(r => r.tot > 0).sort((a, b) => b.tot - a.tot);
+  if (!regions.length) return "";
+  if (regions.length > 4) {                       // keep the legend readable; nothing is dropped
+    const rest = regions.slice(4), o = new Array(n).fill(0);
+    for (const r of rest) r.v.forEach((x, i) => { o[i] += x; });
+    regions = regions.slice(0, 4).concat([{ k: "Other · " + rest.length, v: o, tot: o.reduce((x, y) => x + y, 0) }]);
+  }
+  const totals = ax.months.map((_, i) => regions.reduce((t, r) => t + r.v[i], 0));
+  const grand = totals.reduce((a, b) => a + b, 0);
+  const R = rampOf(RT.chart || "teal");
+  const cols = regions.map((_, i) => regions.length <= 1 ? R[2] : mix(R[2], R[0], i / (regions.length - 1)));
+
+  const W = 660, H = 470, PL = 46, PR = 8, PT = 26, PB = 40, pw = W - PL - PR, ph = H - PT - PB;
+  const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v))), r = v / p;
+    return (r <= 1 ? 1 : r <= 1.5 ? 1.5 : r <= 2 ? 2 : r <= 3 ? 3 : r <= 4 ? 4 : r <= 5 ? 5 : r <= 8 ? 8 : 10) * p; };
+  // the bars are per-region, so the axis belongs to the tallest BAR — scaling it to the monthly
+  // total squashed every bar into the bottom third. The total is a label above the group.
+  const top = nice(Math.max(...regions.flatMap(r => r.v), 1));
+  const step = pw / n, gw = Math.min(step * 0.74, 70), bw = gw / regions.length;
+  let g = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">`;
+  for (let i = 0; i <= 4; i++) { const y = PT + ph - (top * i / 4 / top) * ph;
+    g += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="${i ? "#EDEFEA" : "#D8DBD4"}"/>`;
+    g += `<text x="${PL - 7}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="Arial" font-size="8" fill="#9A9A9A">${fmt(top * i / 4)}</text>`; }
+  ax.months.forEach((mo, i) => {
+    const cx = PL + i * step + step / 2;
+    regions.forEach((r, ri) => { const h = (r.v[i] / top) * ph; if (h <= 0) return;
+      const x = cx - gw / 2 + ri * bw;
+      g += `<rect x="${x.toFixed(1)}" y="${(PT + ph - h).toFixed(1)}" width="${Math.max(1.5, bw - 1.5).toFixed(1)}" height="${h.toFixed(1)}" fill="${cols[ri]}"/>`;
+      if (h >= 26) g += `<text x="${(x + (bw - 1.5) / 2).toFixed(1)}" y="${(PT + ph - h + 9).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="6.6" font-weight="bold" fill="#fff">${fmt(r.v[i])}</text>`; });
+    const tall = Math.max(...regions.map(r => (r.v[i] / top) * ph), 0);
+    g += `<text x="${cx.toFixed(1)}" y="${(PT + ph - tall - 6).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.6" font-weight="bold" fill="#6E7468">${fmt(totals[i])}</text>`;
+    g += `<text x="${cx.toFixed(1)}" y="${(PT + ph + 15)}" text-anchor="middle" font-family="Arial" font-size="9" font-weight="bold" fill="#2B2B2B">${mo}${ax.yr[i] ? " " + ax.yr[i] : ""}</text>`;
+  });
+  g += `<line x1="${PL}" y1="${(PT + ph).toFixed(1)}" x2="${W - PR}" y2="${(PT + ph).toFixed(1)}" stroke="#B9BEB2"/></svg>`;
+
+  const summary = `<div style="display:flex;flex-direction:column;gap:9px">
+     <div class="lbl">Year to date</div>
+     ${regions.map((r, i) => `<div style="display:flex;align-items:baseline;gap:8px;border-bottom:0.5px solid #F0F1EC;padding-bottom:7px">
+        <span style="width:9px;height:9px;border-radius:2px;background:${cols[i]};flex-shrink:0"></span>
+        <span style="flex:1;min-width:0;font-size:10.6px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.k}</span>
+        <span class="fig" style="font-size:13px">${fmt(r.tot)}</span>
+        <span style="font-size:8.4px;color:var(--grey2);width:30px;text-align:right">${grand ? Math.round(r.tot / grand * 100) : 0}%</span></div>`).join("")}
+     <div style="display:flex;align-items:baseline;gap:8px;border-top:1.5px solid var(--ink);padding-top:8px">
+        <span style="flex:1;font-size:10.6px;font-weight:700">Total</span>
+        <span class="fig" style="font-size:17px">${fmt(grand)}</span></div>
+     <div style="font-size:8.4px;color:var(--grey2);line-height:1.45;margin-top:2px">Cases shipped in the ${n} calendar months of ${new Date(SNAP_LABEL).getFullYear() || ""} through the snapshot, by the territory each account belongs to.</div>
+   </div>`;
+
+  return wrap(`${head("BY TERRITORY, BY MONTH", D.scope.name+" · year to date through "+SNAP_LABEL+" · "+D.scope.sub)}
+   <div style="display:flex;align-items:baseline;gap:14px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:11px;padding:9px 0">
+     <span class="lbl">Cases by month · ${regions.length} territories</span>
+     <span class="fig" style="font-size:19px">${fmt(grand)}</span>
+     <span style="font-size:8.6px;color:var(--grey2)">year to date · ${n} months</span></div>
+   <div style="flex:1;display:flex;gap:26px;min-height:0;padding-top:10px;align-items:center">
+     <div style="flex:1;min-width:0">${g}</div>
+     <div style="width:1px;align-self:stretch;background:var(--ruleLt)"></div>
+     <div style="width:29%;min-width:0">${summary}</div>
+   </div>
+   ${foot(SRC+" Territory is the sales rep assigned to each account. Monthly cases come from each account's own order line, so nothing is apportioned.")}`);
+}
+
+/* ---------- C · accounts x month ---------- */
+function sAcctGrid(sid){
+  const AT = setOf(sid || "acctgrid");
+  const all = D.acctRows || [];
+  if (!all.length || !D.acctMo) return "";
+  const n = D.ytdN || 8;
+  const ax = monthAxis(n);
+  const want = AT.region && AT.region !== "all" ? String(AT.region) : null;
+  const rows = want ? all.filter(a => repOf(a) === want) : all;
+  if (!rows.length) return "";
+  const list = rows.map(a => ({ a, v: ytdSlice(D.acctMo[a.id], n).map(x => +x || 0) }))
+    .map(r => ({ ...r, tot: r.v.reduce((x, y) => x + y, 0) }))
+    .filter(r => r.tot > 0).sort((a, b) => b.tot - a.tot).slice(0, 20);
+  if (!list.length) return "";
+  const grand = list.reduce((t, r) => t + r.tot, 0);
+  /* One house account can run 5x everyone else, and shading against it left every other cell
+     white. The scale is the 85th percentile of non-zero months, so the grid has real contrast
+     and a genuine outlier just tops out. */
+  const nz = list.flatMap(r => r.v).filter(v => v > 0).sort((a, b) => a - b);
+  const mx = Math.max(nz.length ? nz[Math.floor(nz.length * 0.85)] : 1, 1);
+  const R = rampOf(AT.chart || "teal");
+  // a cell is shaded by how big that month is against the busiest single month on the page —
+  // it reads as a heat grid without needing a legend
+  const cell = (v) => v <= 0 ? '<td style="text-align:right;font-size:9.4px;color:#D8DBD4;padding:6.5px 0">·</td>'
+    : `<td style="text-align:right;font-size:9.4px;padding:6.5px 0;font-weight:${v >= mx * 0.5 ? 700 : 500};background:${mix("#FFFFFF", R[1], Math.min(0.85, 0.10 + v / mx * 0.75))};color:${v >= mx * 0.55 ? "#fff" : "#2B2B2B"}">${fmt(v)}</td>`;
+
+  return wrap(`${head("ACCOUNTS BY MONTH", D.scope.name+(want ? " · "+want : "")+" · year to date through "+SNAP_LABEL)}
+   <div style="display:flex;align-items:baseline;gap:14px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:11px;padding:9px 0">
+     <span class="lbl">${want || "Every territory"} · top ${list.length} accounts</span>
+     <span class="fig" style="font-size:19px">${fmt(grand)}</span>
+     <span style="font-size:8.6px;color:var(--grey2)">cases year to date · ${rows.length} accounts in scope</span></div>
+   <div style="flex:1;min-height:0;padding-top:9px;overflow:hidden">
+     <table style="width:100%;border-collapse:collapse">
+       <thead><tr style="border-bottom:1.5px solid var(--ink)">
+         <th style="text-align:left;padding-bottom:5px" class="lbl">Account</th>
+         ${ax.months.map((m, i) => `<th style="text-align:right;padding-bottom:5px" class="lbl">${m}${ax.yr[i] ? " " + ax.yr[i] : ""}</th>`).join("")}
+         <th style="text-align:right;padding-bottom:5px" class="lbl">YTD</th>
+       </tr></thead>
+       <tbody>
+         ${list.map(r => `<tr style="border-bottom:0.5px solid #F4F5F1">
+            <td style="padding:6.5px 8px 6.5px 0;font-size:10.4px;font-weight:600;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${clean(r.a.name || r.a.id)}</td>
+            ${r.v.map(cell).join("")}
+            <td class="fig" style="text-align:right;font-size:11px;padding-left:8px">${fmt(r.tot)}</td></tr>`).join("")}
+       </tbody>
+     </table>
+   </div>
+   ${foot(SRC+" Each row is one account's own monthly order line — nothing is apportioned. Cells are shaded against the busiest single month on this page. Territory is the sales rep assigned to the account.")}`);
+}
+
 /* ---------- 6 · movers ---------- */
 function sMovers(sid){
   if(!D.upList.length && !D.dnList.length) return "";
@@ -1597,6 +1831,15 @@ const SL = [
     met: (sid) => { const g = packOf(sid), tot = (D.draft.tot || 0) + (D.pkg.tot || 0);
       return D[g].tot >= tot * 0.05 && !!D[g].rows.length; } },
   { id: "bubble",   name: "Then and now",     build: sBubble },
+  { id: "grid",     name: "The grid",         build: sGrid,
+    rule: "Only when the deck carries account-level monthly history",
+    met: () => !!(D.acctMo && (D.acctRows || []).length) },
+  { id: "regionmo", name: "Territory months", build: sRegionMo,
+    rule: "Only when the deck carries account-level monthly history",
+    met: () => !!(D.acctMo && (D.acctRows || []).length) },
+  { id: "acctgrid", name: "Accounts by month", build: sAcctGrid,
+    rule: "Only when the deck carries account-level monthly history",
+    met: () => !!(D.acctMo && (D.acctRows || []).length) },
   { id: "stack",    name: "Volume by month",  build: sStacked,
     rule: "Only when monthly product history is available for this scope",
     met: () => !!D.itemWin },
@@ -1759,7 +2002,7 @@ for (const base of Object.keys(DESIGN_LIST)) {
 
    An override is not a new kind of thing — it is a variant that exists only while that deck
    renders, which is why it costs no new builder and no new shelf tile.                      */
-export const DECK_OVERRIDABLE = ["pack", "cut", "measure", "split", "span"];
+export const DECK_OVERRIDABLE = ["pack", "cut", "measure", "split", "span", "region"];
 
 const normalizeOrder = (order) => (order || []).map((e, i) => {
   if (typeof e === "string") return { id: e, key: e, over: null };
@@ -1814,6 +2057,11 @@ export const SLIDE_CONTROLS = {
     { k: "bands",  label: "SEGMENTS",  dflt: "4", options: [["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]] },
     { k: "labels", label: "NUMBERS",   dflt: "on", options: [["on","On"],["off","Off"]] },
   ].concat(SAY_SEGS) },
+  grid:     { chart: "Accent" },
+  regionmo: { chart: "Bar colours" },
+  acctgrid: { chart: "Heat colour", segs: [
+    { k: "region", label: "TERRITORY", dflt: "all", options: [["all","Every territory"],["Central","Central"],["North","North"],["South","South"]] },
+  ] },
   universe: { design: ITEM_DESIGNS, chart: "Chart colour" },
   brand: { design: ITEM_DESIGNS, chart: "Bar colours" },
   movers: { design: ITEM_DESIGNS, chart: "Bar colours" },
