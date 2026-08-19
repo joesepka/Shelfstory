@@ -1751,6 +1751,24 @@ for (const base of Object.keys(DESIGN_LIST)) {
    now takes Package from `items~d1` — which is already the Package cut, at design 2. See the
    note on STANDARD_DECK below: this is the one place the deck drifts from what Joe specced. */
 
+/* DECK-LEVEL OVERRIDES (Joe, 2026-08-19). A deck entry may change WHAT a slide reads — the side
+   of the book, the scope, the measure, the window — and never how it LOOKS. Design, colour and
+   the text settings belong to the template, so a deck cannot quietly restyle a slide behind the
+   Library's back; edit it in the Library and every deck follows. "Duplicate in the deck and
+   customise the other one" is exactly this: the same slide id twice, with a different `over`.
+
+   An override is not a new kind of thing — it is a variant that exists only while that deck
+   renders, which is why it costs no new builder and no new shelf tile.                      */
+export const DECK_OVERRIDABLE = ["pack", "cut", "measure", "split", "span"];
+
+const normalizeOrder = (order) => (order || []).map((e, i) => {
+  if (typeof e === "string") return { id: e, key: e, over: null };
+  const over = {};
+  for (const k of DECK_OVERRIDABLE) if (e.over && e.over[k] !== undefined) over[k] = e.over[k];
+  const any = Object.keys(over).length > 0;
+  return { id: e.id, key: any ? `${e.id}#${i}` : e.id, over: any ? over : null };
+});
+
 /* THE STANDARD DECK (Joe, 2026-08-19) — booked until he says otherwise. Positions are the ones
    shown in the Library row, so "brand story 2" is literally the second tile in that row. Nothing
    outside this list is exported; the other slides stay on the shelf to be picked by hand. */
@@ -1758,10 +1776,9 @@ export const STANDARD_DECK = [
   "cover",        // 3 · editorial
   "overview",     // 3 · editorial
   "brand~d2",     // 2 · modern
-  "items",        // 1 · utilitarian, Draft
-  // Joe specced design 1 for BOTH sides; the shelf is capped at three designs per set, so the
-  // only Package slide that exists is design 2. Flagged, not silently reinterpreted.
-  "items~d1",     // 2 · modern, Package
+  "items",                                  // 1 · utilitarian, Draft
+  // the same slide, the other side of the book — no fourth shelf tile needed for it
+  { id: "items", over: { pack: "pkg" } },   // 1 · utilitarian, Package
   "universe~d2",  // 3 · bold
   "movers",       // 1 · utilitarian
   "lapsed~d1",    // 2 · modern
@@ -1810,11 +1827,22 @@ export function selectDeckSlides(all, order) {
   const by = {}; for (const s of all) by[s.id] = s;
   // A deck with no explicit order is the STANDARD deck. It used to mean "every slide", which
   // quietly turned the export into all 24 shelf tiles once each type grew three designs.
-  const ids = (order && order.length) ? order : STANDARD_DECK;
+  // renderDeck hands over plain keys; a caller reaching straight for STANDARD_DECK gets the
+  // bare ids, which is the right fallback — it just loses the per-entry overrides.
+  const ids = ((order && order.length) ? order : STANDARD_DECK).map(e => (typeof e === "string" ? e : e.id));
   return ids.map(id => by[id]).filter(s => s && s.ok && s.met);
 }
 
 // Back-compat: the deck view and the pptx path still just want HTML, in order.
 export function renderDeck(D, logoSrc, brandName, settings, order, variants) {
-  return selectDeckSlides(renderDeckSlides(D, logoSrc, brandName, settings, variants), order).map(s => s.html);
+  const ord = normalizeOrder(order && order.length ? order : STANDARD_DECK);
+  // an entry that overrides anything becomes a variant for the length of this render only
+  const xVars = [], xSet = Object.assign({}, settings || {});
+  for (const e of ord) {
+    if (!e.over) continue;
+    xVars.push({ id: e.key, base: String(e.id).split("~")[0], dflt: true });
+    xSet[e.key] = Object.assign({}, DEFAULT_VARIANT_SETTINGS[e.id] || {}, xSet[e.id] || {}, e.over);
+  }
+  const all = renderDeckSlides(D, logoSrc, brandName, xSet, (variants || []).concat(xVars));
+  return selectDeckSlides(all, ord.map(e => e.key)).map(s => s.html);
 }
