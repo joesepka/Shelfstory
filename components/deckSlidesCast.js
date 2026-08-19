@@ -1019,18 +1019,26 @@ function sBubble(sid){
 const ytdSlice = (arr, n) => (arr || []).slice(Math.max(0, 24 - n));
 const acctYtd  = (id, n) => ytdSlice(D.acctMo && D.acctMo[id], n).reduce((a, b) => a + (+b || 0), 0);
 const repOf    = (a) => clean(a.rep || "Unassigned");
-/* NEW, THE SHELFSTORY WAY (lib/acctHealth.js): "first depletion in the trailing 90 days with
-   NOTHING in the 52 weeks before it". Not "bought this quarter and not last" — an account that
-   goes quiet for a quarter and comes back is not new, and calling it new would inflate the
-   number every rep is judged on. acctMo is 24 months newest-last, so the trailing 90 is the
-   last three and the 52 weeks before it are the twelve before those.
+/* NEW, ON THIS SLIDE ONLY (Joe, 2026-08-19). Everywhere else in the app "new" means the
+   ShelfStory rule -- first depletion in the trailing 90 days with nothing in the 52 weeks
+   before it (lib/acctHealth.js). The grid asks a tighter question: who turned up THIS WEEK.
 
-   NOT the same as "appeared since the last sendout", which is what Joe actually wants: that
-   needs a stored copy of the previous load to diff against, and only one snapshot is kept. */
-const isNewAcct = (id) => { const m = (D.acctMo && D.acctMo[id]) || null; if (!m) return false;
-  const S3 = m.slice(-3).reduce((a, b) => a + (+b || 0), 0);
-  const S52 = m.slice(-15, -3).reduce((a, b) => a + (+b || 0), 0);
-  return S3 > 0 && S52 <= 0; };
+   WHAT THE DATA CAN AND CANNOT SAY. There is no first-order date anywhere; account_list carries
+   LAST invoice date. So this is: no volume at all before the current window, AND a last invoice
+   inside the seven days ending at the snapshot. For an account with no history, its last invoice
+   IS its first -- which makes this exact for genuine arrivals, and silent about an account that
+   first ordered a fortnight ago and again this week. Separating those needs an order-level date,
+   or the previous sendout kept for a diff. Neither exists yet. */
+const WEEK_MS = 7 * 24 * 3600 * 1000;
+const isNewThisWeek = (a) => {
+  if (!a || !a.lastInv || !D.snapIso) return false;
+  const snap = new Date(D.snapIso + "T00:00:00"), inv = new Date(String(a.lastInv).slice(0, 10) + "T00:00:00");
+  if (isNaN(inv)) return false;
+  const inWeek = (snap - inv) >= 0 && (snap - inv) < WEEK_MS;
+  const m = (D.acctMo && D.acctMo[a.id]) || null;
+  const noHistory = !m || m.slice(0, 23).reduce((x, y) => x + (+y || 0), 0) <= 0;
+  return inWeek && noHistory;
+};
 
 // one bundle of numbers for any set of accounts — every row on the grid is this
 function acctStats(rows, n) {
@@ -1041,7 +1049,7 @@ function acctStats(rows, n) {
     cur += c; prev += p;
     if (c > 0) act++;
     if (p > 0) actP++;
-    if (isNewAcct(a.id)) fresh++;
+    if (isNewThisWeek(a)) fresh++;
   }
   return { ytd, cur, prev, pct: prev > 0 ? Math.round((cur - prev) / prev * 100) : null,
     act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null,
@@ -1125,7 +1133,7 @@ function sGrid(sid){
        </tbody>
      </table>
    </div>
-   ${foot(SRC+" YTD is the "+n+" calendar months of the current year through the snapshot. New = an account first order in the last 90 days with nothing in the 52 weeks before it, the same rule the app uses. On brand rows it means new to that brand. Accounts that appeared since the previous sendout would need a stored copy of that load, which is not kept. ROS is 90-day cases per active account per month.")}`);
+   ${foot(SRC+" YTD is the "+n+" calendar months of the current year through the snapshot. New = an account with no prior order history whose invoice falls in the seven days ending on the snapshot date. This is tighter than the app's standard new and applies to this page only; on brand rows it means new to that brand. There is no first-order date in the source, so an account that first ordered earlier and reordered this week is not counted. ROS is 90-day cases per active account per month.")}`);
 }
 
 /* ---------- B · months by territory ---------- */
