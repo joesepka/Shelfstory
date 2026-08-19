@@ -1019,6 +1019,18 @@ function sBubble(sid){
 const ytdSlice = (arr, n) => (arr || []).slice(Math.max(0, 24 - n));
 const acctYtd  = (id, n) => ytdSlice(D.acctMo && D.acctMo[id], n).reduce((a, b) => a + (+b || 0), 0);
 const repOf    = (a) => clean(a.rep || "Unassigned");
+/* NEW, THE SHELFSTORY WAY (lib/acctHealth.js): "first depletion in the trailing 90 days with
+   NOTHING in the 52 weeks before it". Not "bought this quarter and not last" — an account that
+   goes quiet for a quarter and comes back is not new, and calling it new would inflate the
+   number every rep is judged on. acctMo is 24 months newest-last, so the trailing 90 is the
+   last three and the 52 weeks before it are the twelve before those.
+
+   NOT the same as "appeared since the last sendout", which is what Joe actually wants: that
+   needs a stored copy of the previous load to diff against, and only one snapshot is kept. */
+const isNewAcct = (id) => { const m = (D.acctMo && D.acctMo[id]) || null; if (!m) return false;
+  const S3 = m.slice(-3).reduce((a, b) => a + (+b || 0), 0);
+  const S52 = m.slice(-15, -3).reduce((a, b) => a + (+b || 0), 0);
+  return S3 > 0 && S52 <= 0; };
 
 // one bundle of numbers for any set of accounts — every row on the grid is this
 function acctStats(rows, n) {
@@ -1029,7 +1041,7 @@ function acctStats(rows, n) {
     cur += c; prev += p;
     if (c > 0) act++;
     if (p > 0) actP++;
-    if (c > 0 && p <= 0) fresh++;
+    if (isNewAcct(a.id)) fresh++;
   }
   return { ytd, cur, prev, pct: prev > 0 ? Math.round((cur - prev) / prev * 100) : null,
     act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null,
@@ -1077,7 +1089,7 @@ function sGrid(sid){
     for (const e of Object.values(m)) {
       let ytd = 0; for (const pk of e.pks) ytd += ytdSlice(D.itemWin[pk], n).reduce((a, b) => a + (+b || 0), 0);
       const act = e.acc.size, actP = e.accP.size;
-      let fresh = 0; for (const id of e.acc) if (!e.accP.has(id)) fresh++;
+      let fresh = 0; for (const id of e.acc) if (!e.accP.has(id)) fresh++;   // new TO THIS BRAND
       items.push({ k: e.k, st: { ytd, cur: e.cur, prev: e.prev, pct: e.prev > 0 ? Math.round((e.cur - e.prev) / e.prev * 100) : null,
         act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null, fresh, ros: act ? +(e.cur / act / 3).toFixed(1) : 0 } });
     }
@@ -1113,7 +1125,7 @@ function sGrid(sid){
        </tbody>
      </table>
    </div>
-   ${foot(SRC+" YTD is the "+n+" calendar months of the current year through the snapshot. New = accounts that bought in the last 90 days and not in the 90 before; snapshot-over-snapshot arrivals need a stored load history, which is not kept. ROS is 90-day cases per active account per month.")}`);
+   ${foot(SRC+" YTD is the "+n+" calendar months of the current year through the snapshot. New = an account first order in the last 90 days with nothing in the 52 weeks before it, the same rule the app uses. On brand rows it means new to that brand. Accounts that appeared since the previous sendout would need a stored copy of that load, which is not kept. ROS is 90-day cases per active account per month.")}`);
 }
 
 /* ---------- B · months by territory ---------- */
@@ -1140,40 +1152,46 @@ function sRegionMo(sid){
   const R = rampOf(RT.chart || "teal");
   const cols = regions.map((_, i) => regions.length <= 1 ? R[2] : mix(R[2], R[0], i / (regions.length - 1)));
 
-  const W = 660, H = 470, PL = 46, PR = 8, PT = 26, PB = 40, pw = W - PL - PR, ph = H - PT - PB;
+  const W = 940, H = 400, PL = 50, PR = 10, PT = 26, PB = 40, pw = W - PL - PR, ph = H - PT - PB;
   const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v))), r = v / p;
     return (r <= 1 ? 1 : r <= 1.5 ? 1.5 : r <= 2 ? 2 : r <= 3 ? 3 : r <= 4 ? 4 : r <= 5 ? 5 : r <= 8 ? 8 : 10) * p; };
-  // the bars are per-region, so the axis belongs to the tallest BAR — scaling it to the monthly
-  // total squashed every bar into the bottom third. The total is a label above the group.
-  const top = nice(Math.max(...regions.flatMap(r => r.v), 1));
-  const step = pw / n, gw = Math.min(step * 0.74, 70), bw = gw / regions.length;
+  // stacked now (Joe, 2026-08-19), so the column IS the month total and the axis belongs to it
+  const top = nice(Math.max(...totals, 1));
+  const step = pw / n, gw = Math.min(step * 0.56, 74);
   let g = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">`;
   for (let i = 0; i <= 4; i++) { const y = PT + ph - (top * i / 4 / top) * ph;
     g += `<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W - PR}" y2="${y.toFixed(1)}" stroke="${i ? "#EDEFEA" : "#D8DBD4"}"/>`;
     g += `<text x="${PL - 7}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="Arial" font-size="8" fill="#9A9A9A">${fmt(top * i / 4)}</text>`; }
   ax.months.forEach((mo, i) => {
     const cx = PL + i * step + step / 2;
+    let acc = 0;
     regions.forEach((r, ri) => { const h = (r.v[i] / top) * ph; if (h <= 0) return;
-      const x = cx - gw / 2 + ri * bw;
-      g += `<rect x="${x.toFixed(1)}" y="${(PT + ph - h).toFixed(1)}" width="${Math.max(1.5, bw - 1.5).toFixed(1)}" height="${h.toFixed(1)}" fill="${cols[ri]}"/>`;
-      if (h >= 26) g += `<text x="${(x + (bw - 1.5) / 2).toFixed(1)}" y="${(PT + ph - h + 9).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="6.6" font-weight="bold" fill="#fff">${fmt(r.v[i])}</text>`; });
-    const tall = Math.max(...regions.map(r => (r.v[i] / top) * ph), 0);
-    g += `<text x="${cx.toFixed(1)}" y="${(PT + ph - tall - 6).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.6" font-weight="bold" fill="#6E7468">${fmt(totals[i])}</text>`;
-    g += `<text x="${cx.toFixed(1)}" y="${(PT + ph + 15)}" text-anchor="middle" font-family="Arial" font-size="9" font-weight="bold" fill="#2B2B2B">${mo}${ax.yr[i] ? " " + ax.yr[i] : ""}</text>`;
+      const y = PT + ph - acc - h;
+      g += `<rect x="${(cx - gw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${gw.toFixed(1)}" height="${h.toFixed(1)}" fill="${cols[ri]}"/>`;
+      if (h >= 13) g += `<text x="${cx.toFixed(1)}" y="${(y + h / 2 + 3.2).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.4" font-weight="bold" fill="${ri < Math.ceil(regions.length / 2) ? "#fff" : "#2B2B2B"}">${fmt(r.v[i])}</text>`;
+      acc += h; });
+    g += `<text x="${cx.toFixed(1)}" y="${(PT + ph - acc - 6).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="9.4" font-weight="bold" fill="#3A3F36">${fmt(totals[i])}</text>`;
+    g += `<text x="${cx.toFixed(1)}" y="${(PT + ph + 15)}" text-anchor="middle" font-family="Arial" font-size="9.4" font-weight="bold" fill="#2B2B2B">${mo}${ax.yr[i] ? " " + ax.yr[i] : ""}</text>`;
   });
   g += `<line x1="${PL}" y1="${(PT + ph).toFixed(1)}" x2="${W - PR}" y2="${(PT + ph).toFixed(1)}" stroke="#B9BEB2"/></svg>`;
 
-  const summary = `<div style="display:flex;flex-direction:column;gap:9px">
-     <div class="lbl">Year to date</div>
-     ${regions.map((r, i) => `<div style="display:flex;align-items:baseline;gap:8px;border-bottom:0.5px solid #F0F1EC;padding-bottom:7px">
-        <span style="width:9px;height:9px;border-radius:2px;background:${cols[i]};flex-shrink:0"></span>
-        <span style="flex:1;min-width:0;font-size:10.6px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.k}</span>
-        <span class="fig" style="font-size:13px">${fmt(r.tot)}</span>
-        <span style="font-size:8.4px;color:var(--grey2);width:30px;text-align:right">${grand ? Math.round(r.tot / grand * 100) : 0}%</span></div>`).join("")}
-     <div style="display:flex;align-items:baseline;gap:8px;border-top:1.5px solid var(--ink);padding-top:8px">
-        <span style="flex:1;font-size:10.6px;font-weight:700">Total</span>
-        <span class="fig" style="font-size:17px">${fmt(grand)}</span></div>
-     <div style="font-size:8.4px;color:var(--grey2);line-height:1.45;margin-top:2px">Cases shipped in the ${n} calendar months of ${new Date(SNAP_LABEL).getFullYear() || ""} through the snapshot, by the territory each account belongs to.</div>
+  /* The year-to-date read sits UNDER the chart as squares now, so the plot gets the whole width
+     of the slide rather than two thirds of it (Joe, 2026-08-19). */
+  const summary = `<div style="display:flex;gap:12px;margin-top:14px">
+     ${regions.map((r, i) => `<div style="flex:1;min-width:0;border:1px solid var(--ruleLt);border-radius:8px;padding:9px 11px 10px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="width:9px;height:9px;border-radius:2px;background:${cols[i]};flex-shrink:0"></span>
+          <span style="flex:1;min-width:0;font-size:9.6px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.k}</span></div>
+        <div style="display:flex;align-items:baseline;gap:7px;margin-top:5px">
+          <span class="fig" style="font-size:19px">${fmt(r.tot)}</span>
+          <span style="font-size:8.6px;color:var(--grey2)">${grand ? Math.round(r.tot / grand * 100) : 0}% of YTD</span></div>
+      </div>`).join("")}
+     <div style="flex:1;min-width:0;border:1.5px solid var(--ink);border-radius:8px;padding:9px 11px 10px">
+        <div style="font-size:9.6px;font-weight:700">Total</div>
+        <div style="display:flex;align-items:baseline;gap:7px;margin-top:5px">
+          <span class="fig" style="font-size:19px">${fmt(grand)}</span>
+          <span style="font-size:8.6px;color:var(--grey2)">${n} months</span></div>
+      </div>
    </div>`;
 
   return wrap(`${head("BY TERRITORY, BY MONTH", D.scope.name+" · year to date through "+SNAP_LABEL+" · "+D.scope.sub)}
@@ -1181,10 +1199,9 @@ function sRegionMo(sid){
      <span class="lbl">Cases by month · ${regions.length} territories</span>
      <span class="fig" style="font-size:19px">${fmt(grand)}</span>
      <span style="font-size:8.6px;color:var(--grey2)">year to date · ${n} months</span></div>
-   <div style="flex:1;display:flex;gap:26px;min-height:0;padding-top:10px;align-items:center">
-     <div style="flex:1;min-width:0">${g}</div>
-     <div style="width:1px;align-self:stretch;background:var(--ruleLt)"></div>
-     <div style="width:29%;min-width:0">${summary}</div>
+   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;padding-top:10px">
+     ${g}
+     ${summary}
    </div>
    ${foot(SRC+" Territory is the sales rep assigned to each account. Monthly cases come from each account's own order line, so nothing is apportioned.")}`);
 }
@@ -1212,8 +1229,8 @@ function sAcctGrid(sid){
   const R = rampOf(AT.chart || "teal");
   // a cell is shaded by how big that month is against the busiest single month on the page —
   // it reads as a heat grid without needing a legend
-  const cell = (v) => v <= 0 ? '<td style="text-align:right;font-size:9.4px;color:#D8DBD4;padding:6.5px 0">·</td>'
-    : `<td style="text-align:right;font-size:9.4px;padding:6.5px 0;font-weight:${v >= mx * 0.5 ? 700 : 500};background:${mix("#FFFFFF", R[1], Math.min(0.85, 0.10 + v / mx * 0.75))};color:${v >= mx * 0.55 ? "#fff" : "#2B2B2B"}">${fmt(v)}</td>`;
+  const cell = (v) => v <= 0 ? '<td style="text-align:center;font-size:9.4px;color:#D8DBD4;padding:6.5px 0">·</td>'
+    : `<td style="text-align:right;font-size:9.4px;padding:6.5px 0;font-weight:${v >= mx * 0.5 ? 700 : 500};background:${mix("#FFFFFF", R[1], Math.min(0.52, 0.06 + v / mx * 0.46))};color:#2B2B2B">${fmt(v)}</td>`;
 
   return wrap(`${head("ACCOUNTS BY MONTH", D.scope.name+(want ? " · "+want : "")+" · year to date through "+SNAP_LABEL)}
    <div style="display:flex;align-items:baseline;gap:14px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:11px;padding:9px 0">
@@ -1221,10 +1238,12 @@ function sAcctGrid(sid){
      <span class="fig" style="font-size:19px">${fmt(grand)}</span>
      <span style="font-size:8.6px;color:var(--grey2)">cases year to date · ${rows.length} accounts in scope</span></div>
    <div style="flex:1;min-height:0;padding-top:9px;overflow:hidden">
-     <table style="width:100%;border-collapse:collapse">
+     <!-- fixed layout, so a longer header like JAN '26 cannot widen its column past the rest -->
+     <table style="width:100%;border-collapse:collapse;table-layout:fixed">
+       <colgroup><col style="width:29%"/>${ax.months.map(() => `<col style="width:${(61 / n).toFixed(3)}%"/>`).join("")}<col style="width:10%"/></colgroup>
        <thead><tr style="border-bottom:1.5px solid var(--ink)">
          <th style="text-align:left;padding-bottom:5px" class="lbl">Account</th>
-         ${ax.months.map((m, i) => `<th style="text-align:right;padding-bottom:5px" class="lbl">${m}${ax.yr[i] ? " " + ax.yr[i] : ""}</th>`).join("")}
+         ${ax.months.map((m, i) => `<th style="text-align:center;padding-bottom:5px" class="lbl">${m}${ax.yr[i] ? " " + ax.yr[i] : ""}</th>`).join("")}
          <th style="text-align:right;padding-bottom:5px" class="lbl">YTD</th>
        </tr></thead>
        <tbody>
@@ -1235,7 +1254,7 @@ function sAcctGrid(sid){
        </tbody>
      </table>
    </div>
-   ${foot(SRC+" Each row is one account's own monthly order line — nothing is apportioned. Cells are shaded against the busiest single month on this page. Territory is the sales rep assigned to the account.")}`);
+   ${foot(SRC+" Each row is one account's own monthly order line — nothing is apportioned. Cells are shaded against a typical busy month rather than the single busiest, so one outsized account does not flatten the rest. Territory is the sales rep assigned to the account.")}`);
 }
 
 /* ---------- 6 · movers ---------- */
