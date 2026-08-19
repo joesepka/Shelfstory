@@ -1025,11 +1025,21 @@ const repOf    = (a) => clean(a.rep || "Unassigned");
    are recognisably the same thing. Anything unnamed falls back to slate rather than borrowing
    a territory's colour. */
 const REGION_COL = {
-  Central: ["#2E7D52", "#CFE4D8"],   // green
-  North:   ["#6B4E9E", "#DCD2EC"],   // purple
-  South:   ["#C07A2B", "#F0DEC4"],   // orange
-  House:   ["#5B6B78", "#D5DCE1"],   // slate — the taproom, not a selling territory
+  Central: ["#4CA97A", "#D8EDE2"],   // green
+  North:   ["#8E7BD1", "#E4DEF6"],   // purple
+  South:   ["#E29A4B", "#F7E6CE"],   // amber
+  House:   ["#8794A1", "#DFE4E9"],   // slate -- the taproom, not a selling territory
 };
+/* A DESIGNER PASS (Joe, 2026-08-19: "a little lighter ... some look muddy"). The first set sat
+   at one mid value and one middling saturation, so stacked together they greyed each other out.
+   These are lifted and cleaned -- the purple is lavender rather than aubergine, the orange amber
+   rather than brown -- and held at roughly one lightness so no segment shouts over the others. */
+// white on a light fill is unreadable; pick the label colour from the fill, not from where the
+// segment happens to sit in the stack
+const readableOn = (hex) => { const h = String(hex).replace("#", "");
+  const c = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16) / 255)
+    .map(v => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)));
+  return (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) > 0.42 ? "#20241F" : "#fff"; };
 const regionCol = (k, i) => REGION_COL[String(k).split(" ")[0]] ||
   [["#4E7CA1", "#D3E0EA"], ["#8A6A12", "#EBDFC2"], ["#9A5A6B", "#EDD6DC"]][i % 3];
 /* NEW, ON THIS SLIDE ONLY (Joe, 2026-08-19). Everywhere else in the app "new" means the
@@ -1188,7 +1198,7 @@ function sRegionMo(sid){
     regions.forEach((r, ri) => { const h = (r.v[i] / top) * ph; if (h <= 0) return;
       const y = PT + ph - acc - h;
       g += `<rect x="${(cx - gw / 2).toFixed(1)}" y="${y.toFixed(1)}" width="${gw.toFixed(1)}" height="${h.toFixed(1)}" fill="${cols[ri]}"/>`;
-      if (h >= 13) g += `<text x="${cx.toFixed(1)}" y="${(y + h / 2 + 3.2).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.4" font-weight="bold" fill="${ri < Math.ceil(regions.length / 2) ? "#fff" : "#2B2B2B"}">${fmt(r.v[i])}</text>`;
+      if (h >= 13) g += `<text x="${cx.toFixed(1)}" y="${(y + h / 2 + 3.2).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.4" font-weight="bold" fill="${readableOn(cols[ri])}">${fmt(r.v[i])}</text>`;
       acc += h; });
     g += `<text x="${cx.toFixed(1)}" y="${(PT + ph - acc - 6).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="9.4" font-weight="bold" fill="#3A3F36">${fmt(totals[i])}</text>`;
     g += `<text x="${cx.toFixed(1)}" y="${(PT + ph + 15)}" text-anchor="middle" font-family="Arial" font-size="9.4" font-weight="bold" fill="#2B2B2B">${mo}${ax.yr[i] ? " " + ax.yr[i] : ""}</text>`;
