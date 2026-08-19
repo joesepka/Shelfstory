@@ -78,12 +78,15 @@ const foot=(t)=>`<div style="border-top:1px solid var(--ruleLt);padding-top:6px;
 // lines = [{info, sell}] written by the slide; `accent` colours the bullet numerals.
 const sayBlock=(ST,lines,accent)=>{const form=ST.say||"b3";
   if(form==="none"||!lines||!lines.length) return "";
-  const key=ST.tone==="selling"?"sell":"info";
+  // ONE VOICE for now (Joe, 2026-08-19: "just do a simple informative voice always across
+  // the board until we get more complicated"). The `sell` phrasings stay written in each
+  // slide, unused, so turning the choice back on later is a one-line change here.
+  const key="info";
   const pick=lines.map(l=>l[key]||l.info||l.sell).filter(Boolean);
   if(!pick.length) return "";
   if(form==="para") return `<div style="font-size:11.4px;line-height:1.55;color:#2B2B2B">${pick.join(" ")}</div>`;
   const n=form==="b1"?1:form==="b2"?2:3;
-  return `<div class="lbl" style="margin-bottom:9px">What's going on</div>`+
+  return `<div class="lbl" style="margin-bottom:9px">Key insights</div>`+
     pick.slice(0,n).map((b,i)=>`<div style="display:flex;gap:9px;margin-bottom:11px">
       <span class="fig" style="font-size:12px;color:${accent||"var(--green)"};width:13px;flex-shrink:0">${i+1}</span>
       <span style="font-size:10.8px;line-height:1.5;color:#2B2B2B">${b}</span></div>`).join("");};
@@ -409,7 +412,7 @@ function sOverview(sid){
   const prose = words === "prose" ? (OV.voice==="selling" ? proseSelling : proseNeutral) : "";
   const blkText = (!bullets.length && !prose) ? "" :
     block("text",`width:${DESIGN!=="editorial"||stacked?"100%":"31%"};display:flex;flex-direction:column;justify-content:${DESIGN==="editorial"?"center":"flex-start"}`,
-      `<div class="lbl" style="margin-bottom:${stacked?6:12}px">What's going on</div>`
+      `<div class="lbl" style="margin-bottom:${stacked?6:12}px">Key insights</div>`
       + (prose
         ? `<div style="font-size:${stacked?12.5:15}px;line-height:1.42;color:#2B2B2B">${prose}</div>`
         : `<div style="${stacked?"display:flex;gap:22px":""}">
@@ -573,7 +576,7 @@ function sItems(seg,label,sid){
              <div style="height:${h}px;background:#F7F8F5;border-radius:0 0 2px 2px;overflow:hidden;margin-top:1px"><div style="height:100%;width:${Math.max(1.5,r.prev/mxV*100)}%;background:${cB||"var(--lite)"}"></div></div>
            </div></div>`;}).join('')}`; };
 
-  const words = (size) => `<div class="lbl" style="margin-bottom:8px">What's going on</div>
+  const words = (size) => `<div class="lbl" style="margin-bottom:8px">Key insights</div>
          ${bullets.map((b,i)=>`<div style="display:flex;gap:9px;margin-bottom:9px">
            <span class="fig" style="font-size:11px;color:var(--pink2);width:12px;flex-shrink:0">${i+1}</span>
            <span style="font-size:${size}px;line-height:1.46;color:#2B2B2B">${b}</span></div>`).join('')}`;
@@ -942,13 +945,24 @@ function sBubble(sid){
      to the layout rather than a fixed box — at 430 tall the third bullet ran into the footer. */
   const beside = BT.sayAt==="left" || BT.sayAt==="right";
   const hasText = (BT.say||"b3") !== "none";
-  const W = beside ? 620 : 880, H = beside ? 430 : (hasText ? 320 : 430);
-  const RMAX = beside ? 138 : (hasText ? 108 : 150);
+  const W = beside ? 620 : 880, H = beside ? 470 : (hasText ? 330 : 460);
   const big = Math.max(now, was), small = Math.min(now, was);
-  const rBig = RMAX, rSml = big > 0 ? Math.max(24, RMAX * Math.sqrt(small / big)) : 24;
+
+  /* SOLVED TO FILL, NOT GUESSED (Joe, 2026-08-19: the graph "gets cut off if you do certain
+     text orientations ... always try to resize so it fills a lot of the space"). A fixed radius
+     broke whenever the two figures were CLOSE — at 8 vs 8.6 the small circle is 93% of the big
+     one, the pair needs nearly four radii of width, and it ran off the left edge. So the radius
+     is solved from the space instead: the largest r that fits both the width and the height. */
+  const ratio = big > 0 ? Math.sqrt(small / big) : 0.3;
+  const GAPC = 30, DELTA_W = pct != null ? 104 : 12, PADX = 12;
+  const availW = W - PADX*2 - DELTA_W, availH = H - 52;
+  const rBig = Math.max(30, Math.min((availW - GAPC) / (2 * (1 + ratio)), availH / 2));
+  const rSml = Math.max(14, rBig * ratio);
   const nowIsBig = now >= was;
-  const cyB = H / 2, cxB = W * 0.56;
-  const cxS = cxB - rBig - rSml - 46, cyS = cyB + (rBig - rSml) * 0.55;
+  const pairW = 2*rSml + GAPC + 2*rBig;
+  const x0 = PADX + Math.max(0, (availW - pairW) / 2);
+  const cxS = x0 + rSml, cxB = x0 + 2*rSml + GAPC + rBig;
+  const cyB = H/2 - 6, cyS = cyB + (rBig - rSml) * 0.5;
 
   const circle = (cx, cy, r, val, lab, fill) => `
     <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}"/>
@@ -1511,7 +1525,7 @@ function sBrandStory(sid){
      <div style="width:58%;min-width:0">${styleBars(15,styleH,"var(--teal)","var(--tealLt)")}</div>
      <div style="width:1px;background:var(--ruleLt)"></div>
      <div style="flex:1;min-width:0;display:flex;flex-direction:column;padding-top:2px">
-       <div class="lbl" style="margin-bottom:11px">What's going on</div>
+       <div class="lbl" style="margin-bottom:11px">Key insights</div>
        ${bsBul.map((b,i)=>`<div style="display:flex;gap:9px;margin-bottom:13px">
          <span class="fig" style="font-size:12px;color:var(--teal);width:13px;flex-shrink:0">${i+1}</span>
          <span style="font-size:10.6px;line-height:1.5;color:#2B2B2B">${b}</span></div>`).join('')}
@@ -1673,20 +1687,17 @@ export const OVERVIEW_STATS  = [["cases", "Cases"], ["accounts", "Active account
    handling again:
      sayAt   above · below · left · right
      say     paragraph · 1, 2 or 3 bullets · none
-     tone    informative · selling
      gsize   expanded (full width) · centered (pulled in, for a calmer page)
    The COPY still belongs to the slide — only the slide knows its own numbers. A slide hands
    over [{info, sell}] and this picks the voice and shapes it. Nothing is generated: both
    phrasings are written, the setting chooses between them.                                */
 export const SAY_AT   = [["above","Above"],["below","Below"],["left","Left"],["right","Right"]];
 export const SAY_FORM = [["para","Paragraph"],["b1","1 bullet"],["b2","2 bullets"],["b3","3 bullets"],["none","None"]];
-export const SAY_TONE = [["informative","Informative"],["selling","Selling"]];
 export const GRAPH_SIZE = [["expanded","Expanded"],["centered","Centered"]];
 export const SAY_SEGS = [
-  { k: "sayAt", label: "TEXT SITS",  options: SAY_AT },
-  { k: "say",   label: "TEXT IS",    options: SAY_FORM },
-  { k: "tone",  label: "VOICE",      options: SAY_TONE },
-  { k: "gsize", label: "GRAPH SIZE", options: GRAPH_SIZE },
+  { k: "sayAt", label: "TEXT PLACEMENT", dflt: "below", options: SAY_AT },
+  { k: "say",   label: "TEXT IS",         dflt: "b3", options: SAY_FORM },
+  { k: "gsize", label: "GRAPH SIZE",     dflt: "expanded", options: GRAPH_SIZE },
 ];
 
 export const OVERVIEW_GRAPHS = [["cases", "Cases per month"], ["accounts", "Active accounts"]];
@@ -1768,15 +1779,17 @@ export const SLIDE_CONTROLS = {
   /* ONE GENERIC `segs` LIST, NOT FIVE BESPOKE CONTROLS. The editor names every control key
      explicitly, so each new knob used to cost an editor block. `segs` renders any [{k,label,
      options}] as chip rows, which means a new slide's settings are now free.              */
-  bubble: { chart: "Circle colour", segs: [
-    { k: "measure", label: "SHOWS", options: [["accounts","Accounts"],["placements","Placements"],["cases","Cases"],["ros","Rate of sale"]] },
+  /* THE ORDER JOE SET: Shows · Scope (+ its value) · Time frame · Text placement · Text is ·
+     Graph size. `cut` renders the scope pair, so it sits where scope belongs in the list. */
+  bubble: { chart: "Circle colour", cut: true, cutAfter: "measure", segs: [
+    { k: "measure", label: "SHOWS", dflt: "accounts", options: [["cases","Cases"],["accounts","Accounts"],["placements","Placements"],["ros","Rate of sale"]] },
   ].concat(SAY_SEGS) },
-  stack: { chart: "Bar colours", segs: [
-    { k: "split",  label: "SPLIT BY",  options: [["package","Draft / package"],["style","Style"],["brand","Brand"]] },
-    { k: "span",   label: "MONTHS",    options: [["3","3"],["6","6"],["12","12"],["18","18"]] },
-    { k: "mode",   label: "COLUMNS",   options: [["stack","Stacked"],["share","100%"]] },
-    { k: "bands",  label: "SEGMENTS",  options: [["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]] },
-    { k: "labels", label: "NUMBERS",   options: [["on","On"],["off","Off"]] },
+  stack: { chart: "Bar colours", cut: true, cutAfter: "split", segs: [
+    { k: "split",  label: "SPLIT BY",  dflt: "package", options: [["package","Draft / package"],["style","Style"],["brand","Brand"]] },
+    { k: "span",   label: "TIME FRAME", dflt: "12", options: [["3","3"],["6","6"],["12","12"],["18","18"]] },
+    { k: "mode",   label: "COLUMNS",   dflt: "stack", options: [["stack","Stacked"],["share","100%"]] },
+    { k: "bands",  label: "SEGMENTS",  dflt: "4", options: [["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]] },
+    { k: "labels", label: "NUMBERS",   dflt: "on", options: [["on","On"],["off","Off"]] },
   ].concat(SAY_SEGS) },
   universe: { design: ITEM_DESIGNS },
   brand: { design: ITEM_DESIGNS },
