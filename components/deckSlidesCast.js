@@ -1746,11 +1746,10 @@ for (const base of Object.keys(DESIGN_LIST)) {
   });
 }
 
-/* The standard deck shows BOTH sides of the book at design 1, so the Package cut at that design
-   has to exist as its own slide — a deck may only ever reference slides that are on the shelf
-   (Joe, 2026-08-18: "this is a library. You pick and add to decks, they all just exist"). */
-DEFAULT_VARIANTS.push({ id: "items~pkg", base: "items", dflt: true, name: "Item ranking · Package", ord: 9 });
-DEFAULT_VARIANT_SETTINGS["items~pkg"] = { design: "utilitarian", pack: "pkg" };
+/* THREE PER SET (Joe, 2026-08-19: "only three standard slides per set for now"). The extra
+   Package-at-design-1 tile is gone. The standard deck still needs both sides of the book, so it
+   now takes Package from `items~d1` — which is already the Package cut, at design 2. See the
+   note on STANDARD_DECK below: this is the one place the deck drifts from what Joe specced. */
 
 /* THE STANDARD DECK (Joe, 2026-08-19) — booked until he says otherwise. Positions are the ones
    shown in the Library row, so "brand story 2" is literally the second tile in that row. Nothing
@@ -1760,7 +1759,9 @@ export const STANDARD_DECK = [
   "overview",     // 3 · editorial
   "brand~d2",     // 2 · modern
   "items",        // 1 · utilitarian, Draft
-  "items~pkg",    // 1 · utilitarian, Package
+  // Joe specced design 1 for BOTH sides; the shelf is capped at three designs per set, so the
+  // only Package slide that exists is design 2. Flagged, not silently reinterpreted.
+  "items~d1",     // 2 · modern, Package
   "universe~d2",  // 3 · bold
   "movers",       // 1 · utilitarian
   "lapsed~d1",    // 2 · modern
@@ -1770,12 +1771,17 @@ export const STANDARD_DECK = [
 export const ROW_NAMES = {
   cover: "Covers",
   overview: "Growth step",
+  brand: "Brand story",
+  items: "Ranks",
+  universe: "Account universe",
+  movers: "Account movement",
+  lapsed: "Lapsed accounts",
   recap: "Recap slides",
   recap: "Recap slides",
 };
 export const SLIDE_CONTROLS = {
   cover: { design: true, brow: true, titleSize: true, parts: COVER_PARTS },
-  items: { pack: true, design: ITEM_DESIGNS },
+  items: { pack: true, design: ITEM_DESIGNS, chart: "Bar colours" },
   /* ONE GENERIC `segs` LIST, NOT FIVE BESPOKE CONTROLS. The editor names every control key
      explicitly, so each new knob used to cost an editor block. `segs` renders any [{k,label,
      options}] as chip rows, which means a new slide's settings are now free.              */
@@ -1791,11 +1797,11 @@ export const SLIDE_CONTROLS = {
     { k: "bands",  label: "SEGMENTS",  dflt: "4", options: [["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]] },
     { k: "labels", label: "NUMBERS",   dflt: "on", options: [["on","On"],["off","Off"]] },
   ].concat(SAY_SEGS) },
-  universe: { design: ITEM_DESIGNS },
-  brand: { design: ITEM_DESIGNS },
-  movers: { design: ITEM_DESIGNS },
-  lapsed: { design: ITEM_DESIGNS },
-  recap: { design: ITEM_DESIGNS },
+  universe: { design: ITEM_DESIGNS, chart: "Chart colour" },
+  brand: { design: ITEM_DESIGNS, chart: "Bar colours" },
+  movers: { design: ITEM_DESIGNS, chart: "Bar colours" },
+  lapsed: { design: ITEM_DESIGNS, chart: "Bar colours" },
+  recap: { design: ITEM_DESIGNS, chart: "Chart colour" },
   overview: { voice: true, words: true, cut: true, bullets: [1, 2, 3, 4], title: "Overview", layout: true, bar: true,
               stats: OVERVIEW_STATS, graphs: OVERVIEW_GRAPHS, chart: "Graph 1 color", chart2: "Graph 2 color" },
 };
