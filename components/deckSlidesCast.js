@@ -30,7 +30,7 @@ const D = D0;
 const SET = Object.assign({}, DEFAULT_VARIANT_SETTINGS, settings || {});
 SETTINGS_SEEN = SET;
 const packOf = (sid) => (setOf(sid).pack === "pkg" ? "pkg" : "draft");
-const setOf = (id) => Object.assign({ voice: "neutral", bullets: 4, title: "Overview", layout: "text-left", chart: "green", chart2: "rose", bar: "normal", words: "bullets", design: "editorial", titleSize: "m", brow: "Business Review", pack: "draft", split: "package", span: "12", mode: "stack", bands: "4", labels: "on", parts: null, stats: null, graphs: null }, SET[id] || {});
+const setOf = (id) => Object.assign({ voice: "neutral", bullets: 4, title: "Overview", layout: "text-left", chart: "green", chart2: "rose", bar: "normal", words: "bullets", design: "editorial", titleSize: "m", brow: "Business Review", pack: "draft", split: "package", span: "12", mode: "stack", bands: "4", labels: "on", sayAt: "below", say: "b3", tone: "informative", gsize: "expanded", measure: "accounts", parts: null, stats: null, graphs: null }, SET[id] || {});
 
 /* ---------- named blocks ------------------------------------------------------
    A block is one region of a slide: a stable id, its own renderer, its own settings.
@@ -75,6 +75,37 @@ const head=(title,sub)=>`
   ${logo(56)}</div>`;
 const foot=(t)=>`<div style="border-top:1px solid var(--ruleLt);padding-top:6px;margin-top:8px">
   <div style="font-size:7.4px;line-height:1.5;color:var(--grey2)">${t||SRC}</div></div>`;
+// lines = [{info, sell}] written by the slide; `accent` colours the bullet numerals.
+const sayBlock=(ST,lines,accent)=>{const form=ST.say||"b3";
+  if(form==="none"||!lines||!lines.length) return "";
+  const key=ST.tone==="selling"?"sell":"info";
+  const pick=lines.map(l=>l[key]||l.info||l.sell).filter(Boolean);
+  if(!pick.length) return "";
+  if(form==="para") return `<div style="font-size:11.4px;line-height:1.55;color:#2B2B2B">${pick.join(" ")}</div>`;
+  const n=form==="b1"?1:form==="b2"?2:3;
+  return `<div class="lbl" style="margin-bottom:9px">What's going on</div>`+
+    pick.slice(0,n).map((b,i)=>`<div style="display:flex;gap:9px;margin-bottom:11px">
+      <span class="fig" style="font-size:12px;color:${accent||"var(--green)"};width:13px;flex-shrink:0">${i+1}</span>
+      <span style="font-size:10.8px;line-height:1.5;color:#2B2B2B">${b}</span></div>`).join("");};
+
+/* Where the words sit decides the whole body layout, so it is composed once here rather than
+   in each slide. `centered` only narrows the graph when the text is ABOVE or BELOW it — beside
+   a text column the graph is already narrow, and shrinking it twice just wastes the page.  */
+const sayLayout=(ST,graph,text)=>{
+  const at=["above","below","left","right"].indexOf(ST.sayAt)>=0?ST.sayAt:"below";
+  const side=at==="left"||at==="right", has=!!text;
+  if(side&&has) return `<div style="flex:1;display:flex;gap:26px;min-height:0;align-items:center;padding-top:8px">
+     ${at==="left"?`<div style="width:31%;min-width:0">${text}</div><div style="width:1px;align-self:stretch;background:var(--ruleLt)"></div>`:""}
+     <div style="flex:1;min-width:0">${graph}</div>
+     ${at==="right"?`<div style="width:1px;align-self:stretch;background:var(--ruleLt)"></div><div style="width:31%;min-width:0">${text}</div>`:""}
+   </div>`;
+  const w = ST.gsize==="centered" ? "78%" : "100%";
+  return `<div style="flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;gap:14px;padding-top:8px">
+     ${at==="above"&&has?text:""}
+     <div style="width:${w};margin:0 auto">${graph}</div>
+     ${at!=="above"&&has?text:""}
+   </div>`;};
+
 const wrap=b=>`<div class="slide"><div style="padding:28px 44px 16px;height:100%;display:flex;flex-direction:column">${b}</div>
  <div style="position:absolute;right:14px;bottom:8px;font-size:6px;font-weight:700;letter-spacing:1.4px;color:#CFCFCF">SHELFSTORY</div></div>`;
 
@@ -108,8 +139,25 @@ function barChart(o){
 // bars ramp pale->full left to right, so the newest month always reads strongest.
 const ramp = rampOf;
 // ?? not || — a hue of 0 is red, not "unset", and || would quietly turn it green
-const casesChart=(D,h,rk,bs)=>{const R=ramp(rk??'green');return barChart({vals:D.hist.slice(-12).map(v=>Math.round(v)),labels:D.months,yr:D.yr,c:[R[0],R[1]],lab:R[2],fmt:kf,h,bar:bs});};
-const acctChart =(D,h,rk,bs)=>{const R=ramp(rk??'rose');return barChart({vals:D.accSeries,labels:D.months,yr:D.yr,c:[R[0],R[1]],lab:R[2],line:D.rosSeries,h,bar:bs});};
+/* MONTHS OR QUARTERS (Joe, 2026-08-19). Twelve columns is a lot of detail for a board slide,
+   so the same series can bucket into four. Cases SUM across a quarter; active accounts and
+   rate of sale are rates, so they AVERAGE — summing them would invent accounts that were the
+   same account three months running. Labels name the months covered rather than saying "Q1",
+   because these are trailing quarters off the snapshot, not calendar ones.                 */
+const byQuarter=(vals,labels,how)=>{const v=[],l=[];
+  for(let i=0;i<vals.length;i+=3){const g=vals.slice(i,i+3); if(!g.length) continue;
+    const sum=g.reduce((a,b)=>a+(+b||0),0);
+    v.push(how==='avg' ? sum/g.length : sum);
+    l.push(labels[i]+'–'+labels[Math.min(i+2,labels.length-1)]);}
+  return {v,l};};
+const casesChart=(D,h,rk,bs,q)=>{const R=ramp(rk??'green');
+  const src=D.hist.slice(-12).map(v=>Math.round(v));
+  const Q=q?byQuarter(src,D.months,'sum'):null;
+  return barChart({vals:Q?Q.v.map(Math.round):src,labels:Q?Q.l:D.months,yr:Q?null:D.yr,c:[R[0],R[1]],lab:R[2],fmt:kf,h,bar:bs});};
+const acctChart =(D,h,rk,bs,q)=>{const R=ramp(rk??'rose');
+  const Q=q?byQuarter(D.accSeries,D.months,'avg'):null;
+  const QR=q&&D.rosSeries?byQuarter(D.rosSeries,D.months,'avg'):null;
+  return barChart({vals:Q?Q.v.map(Math.round):D.accSeries,labels:Q?Q.l:D.months,yr:Q?null:D.yr,c:[R[0],R[1]],lab:R[2],line:QR?QR.v:D.rosSeries,h,bar:bs});};
 const gHead=(t,sub,legend)=>'<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:1px;padding-right:'+(PR/CW*100).toFixed(2)+'%">'
   +'<span class="lbl">'+t+' <span style="color:#C4C4C4;font-weight:400;letter-spacing:0;text-transform:none">'+sub+'</span></span>'
   +(legend?'<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:2.5px;background:var(--up)"></span><span style="font-size:8px;font-weight:700;color:var(--up)">cases / acct / mo</span></span>':'')+'</div>';
@@ -782,7 +830,7 @@ function sStacked(sid){
   const ST = setOf(sid || "stack");
   const dim  = ["package","style","brand"].indexOf(ST.split) >= 0 ? ST.split : "package";
   const span = +ST.span || 12, cap = +ST.bands || 4;
-  const mode = ["stack","group","share"].indexOf(ST.mode) >= 0 ? ST.mode : "stack";
+  const mode = ST.mode === "share" ? "share" : "stack";
   const showN = ST.labels !== "off";
   const S2 = stackSeries(D, dim, cap, span);
   if (!S2 || !S2.bands.length) return "";
@@ -792,15 +840,16 @@ function sStacked(sid){
   const colAt = (i,n) => n <= 1 ? R[2] : mix(R[2], R[0], i/(n-1));
   const cols = S2.bands.map((_,i) => colAt(i, S2.bands.length));
 
-  const W=880,H=474,PL=54,PR=10,PT=18,PB=46;
+  /* The plot takes its aspect from where the words sit. Beside a text column the graph gets
+     roughly two thirds of the width, so a 880x474 viewBox would render two thirds as TALL as
+     well and float in a sea of white — a narrower box fills the same height. */
+  const beside = ST.sayAt==="left" || ST.sayAt==="right";
+  const W = beside ? 560 : 880, H = 474, PL=54, PR=10, PT=18, PB=46;
   const pw=W-PL-PR, ph=H-PT-PB;
   const nice = v => { const p=Math.pow(10,Math.floor(Math.log10(v))), r=v/p;
     const m = r<=1?1:r<=1.2?1.2:r<=1.5?1.5:r<=2?2:r<=2.5?2.5:r<=3?3:r<=4?4:r<=5?5:r<=6?6:r<=8?8:10;
     return m*p; };
-  // side-by-side bars are measured against the biggest SINGLE band, not the column total —
-  // scaling them to the stack squashed every bar into the bottom third (Joe, 2026-08-19).
-  const peak = mode==="group" ? Math.max(...S2.bands.map(b => Math.max(...b.v)), 1) : S2.max;
-  const top = mode==="share" ? 100 : nice(peak);
+  const top = mode==="share" ? 100 : nice(S2.max);
   const y = v => PT + ph - (v/top)*ph;
   const step = pw/S2.months.length;
   const bw = Math.min(step*0.62, 58);
@@ -813,12 +862,7 @@ function sStacked(sid){
   S2.months.forEach((mo,i)=>{
     const cx = PL + i*step + step/2, colTot = S2.totals[i] || 0;
     const vals = S2.bands.map(b => mode==="share" ? (colTot ? b.v[i]/colTot*100 : 0) : b.v[i]);
-    if (mode==="group"){
-      const gw = bw/S2.bands.length;
-      vals.forEach((v,bi)=>{ const h=(v/top)*ph; if(h<=0) return;
-        const x = cx-bw/2+bi*gw;
-        g+=`<rect x="${x.toFixed(1)}" y="${(PT+ph-h).toFixed(1)}" width="${Math.max(1.5,gw-1.5).toFixed(1)}" height="${h.toFixed(1)}" fill="${cols[bi]}"/>`; });
-    } else {
+    {
       let acc=0;
       vals.forEach((v,bi)=>{ const h=(v/top)*ph; if(h<=0) return;
         const yy = PT+ph-acc-h;
@@ -826,7 +870,7 @@ function sStacked(sid){
         // the number only goes inside when the band is actually tall enough to hold it
         if (showN && h>=13) g+=`<text x="${cx.toFixed(1)}" y="${(yy+h/2+3.2).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.6" font-weight="bold" fill="${bi<Math.ceil(S2.bands.length/2)?'#fff':'#2B2B2B'}">${mode==="share"?Math.round(v)+"%":fmt(v)}</text>`;
         acc+=h; });
-      if (showN && mode==="stack" && colTot>0)
+      if (showN && mode!=="share" && colTot>0)
         g+=`<text x="${cx.toFixed(1)}" y="${(PT+ph-acc-6).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="8.8" font-weight="bold" fill="#6E7468">${fmt(colTot)}</text>`;
     }
     g+=`<text x="${cx.toFixed(1)}" y="${(PT+ph+15)}" text-anchor="middle" font-family="Arial" font-size="9.4" font-weight="bold" fill="#2B2B2B">${mo}</text>`;
@@ -844,10 +888,106 @@ function sStacked(sid){
      <span class="fig" style="font-size:19px">${fmt(grand)}</span>
      <span style="font-size:8.6px;color:var(--grey2)">cases across the last ${S2.span} months · ${S2.bands.length} band${S2.bands.length===1?"":"s"}${mode==="share"?" · shown as share of each month":""}</span></div>`;
 
+  /* Both voices are written here, from the same numbers — the setting picks one. Selling
+     leans on what it means; informative states what it is. */
+  const b0 = S2.bands[0], last = S2.totals[S2.totals.length-1], first = S2.totals[0];
+  const mvPct = first > 0 ? Math.round((last-first)/first*100) : null;
+  const share = grand > 0 ? Math.round(b0.tot/grand*100) : 0;
+  const lines = [
+    { info: `<b>${b0.k}</b> is the largest ${dimName.toLowerCase()} at <b>${fmt(b0.tot)} cases</b> — ${share}% of the ${fmt(grand)} moved over ${S2.span} months.`,
+      sell: `<b>${b0.k}</b> is carrying this book — <b>${share}% of everything</b> that moved in ${S2.span} months. That is where the shelf is already working for you.` },
+    mvPct==null ? null : { info: `The most recent month ran <b>${fmt(last)} cases</b> against <b>${fmt(first)}</b> ${S2.span} months earlier, ${mvPct>=0?"up":"down"} <b>${Math.abs(mvPct)}%</b>.`,
+      sell: mvPct>=0 ? `The line is <b>rising</b> — ${fmt(last)} cases last month against ${fmt(first)} at the start, <b>up ${Math.abs(mvPct)}%</b>. The momentum is real, not a single big order.`
+                     : `Volume has slipped to <b>${fmt(last)} cases</b> from ${fmt(first)}, <b>down ${Math.abs(mvPct)}%</b>. Worth deciding where the next push goes before it settles.` },
+    { info: `${S2.bands.length} band${S2.bands.length===1?"":"s"} shown${S2.bands.some(b=>b.other)?", with the remainder grouped as Other":""}; every case in the scope is in a column.`,
+      sell: `The top ${S2.bands.filter(b=>!b.other).length} account${S2.bands.filter(b=>!b.other).length===1?"s":""} for <b>${Math.round(S2.bands.filter(b=>!b.other).reduce((t,b)=>t+b.tot,0)/grand*100)}%</b> of the volume — a short list to work, not a long one.` },
+  ].filter(Boolean);
+
   return wrap(`${head("VOLUME BY MONTH", D.scope.name+" · trailing "+S2.span+" months · "+D.scope.sub)}
    ${band}
-   <div style="flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0;padding-top:8px">${g}${legend}</div>
+   ${sayLayout(ST, g+legend, sayBlock(ST, lines, "var(--teal)"))}
    ${foot(SRC+" Monthly cases come from each product's own order line, summed into its "+dimName.toLowerCase()+" — no volume is apportioned. Bands beyond the chosen count roll into Other so the columns still total the book.")}`);
+}
+
+/* ---------- 5c · then vs now, as two circles -----------------------------------------------
+   Recreated from a proportional-bubble chart Joe sent (2026-08-19): a small circle, a large
+   one, connector lines between them, the figure inside each, and the change called out beside
+   the big one. Faithful to the reference — no extra chart forms bolted on.
+
+   THE ONE THING THAT MATTERS HERE: circles are sized by AREA, not by radius. Radius-scaling a
+   2x number draws a circle four times the size and overstates every comparison on the slide.
+   r = k*sqrt(v) is the whole reason this is honest.                                        */
+function sBubble(sid){
+  const BT = setOf(sid || "bubble");
+  const MEASURES = {
+    accounts:   { lab: "Accounts",    now: D.accts,  was: D.acctsP, note: "ordering in the window" },
+    placements: { lab: "Placements",  now: D.plN,    was: D.plP,    note: "account-and-SKU pairs on shelf" },
+    cases:      { lab: "Cases",       now: D.cur90,  was: D.prev90, note: "cases in the window" },
+    ros:        { lab: "Cases / acct / mo", now: D.ros, was: D.rosPrev, note: "rate of sale" },
+  };
+  const key = MEASURES[BT.measure] ? BT.measure : "accounts";
+  const M2 = MEASURES[key];
+  const now = +M2.now || 0, was = +M2.was || 0;
+  if (!now && !was) return "";
+  const pct = was > 0 ? Math.round((now - was) / was * 100) : null;
+  const up = pct == null ? true : pct >= 0;
+  const dec = key === "ros";
+  const num = v => dec ? (Math.round(v * 10) / 10).toLocaleString() : fmt(v);
+
+  const R = rampOf(BT.chart || "teal");
+  const FILL = R[2], FILL2 = mix(R[2], R[0], 0.55);
+
+  // area-true radii, with the larger circle pinned to the space available
+  /* Text below the circles leaves far less height than text beside them, so the plot is sized
+     to the layout rather than a fixed box — at 430 tall the third bullet ran into the footer. */
+  const beside = BT.sayAt==="left" || BT.sayAt==="right";
+  const hasText = (BT.say||"b3") !== "none";
+  const W = beside ? 620 : 880, H = beside ? 430 : (hasText ? 320 : 430);
+  const RMAX = beside ? 138 : (hasText ? 108 : 150);
+  const big = Math.max(now, was), small = Math.min(now, was);
+  const rBig = RMAX, rSml = big > 0 ? Math.max(24, RMAX * Math.sqrt(small / big)) : 24;
+  const nowIsBig = now >= was;
+  const cyB = H / 2, cxB = W * 0.56;
+  const cxS = cxB - rBig - rSml - 46, cyS = cyB + (rBig - rSml) * 0.55;
+
+  const circle = (cx, cy, r, val, lab, fill) => `
+    <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${fill}"/>
+    <text x="${cx.toFixed(1)}" y="${(cy + r * 0.06).toFixed(1)}" text-anchor="middle" font-family="Arial" font-weight="bold" font-size="${Math.max(15, r * 0.52).toFixed(0)}" fill="#fff">${val}</text>
+    <text x="${cx.toFixed(1)}" y="${(cy + r * 0.42).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="${Math.max(8.5, r * 0.13).toFixed(1)}" fill="#fff" opacity=".92">${lab}</text>`;
+
+  let g = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">`;
+  // the two connectors that make it read as one thing growing, not two separate circles
+  g += `<line x1="${(cxS + rSml * 0.72).toFixed(1)}" y1="${(cyS - rSml * 0.7).toFixed(1)}" x2="${(cxB - rBig * 0.72).toFixed(1)}" y2="${(cyB - rBig * 0.7).toFixed(1)}" stroke="${FILL}" stroke-width="1" opacity=".55"/>`;
+  g += `<line x1="${(cxS + rSml * 0.72).toFixed(1)}" y1="${(cyS + rSml * 0.7).toFixed(1)}" x2="${(cxB - rBig * 0.72).toFixed(1)}" y2="${(cyB + rBig * 0.7).toFixed(1)}" stroke="#8b9186" stroke-width="1" opacity=".55"/>`;
+  g += circle(cxS, cyS, rSml, num(nowIsBig ? was : now), M2.lab, FILL2);
+  g += circle(cxB, cyB, rBig, num(nowIsBig ? now : was), M2.lab, FILL);
+  if (pct != null) {
+    const dx = cxB + rBig + 22, dy = cyB - rBig * 0.62;
+    g += `<text x="${dx}" y="${dy}" font-family="Arial" font-weight="bold" font-size="30" fill="${up ? "#2E7D52" : "#B5534A"}">${up ? "+" : "−"}${Math.abs(pct)}%</text>`;
+    g += `<text x="${dx}" y="${dy + 20}" font-family="Arial" font-size="11.5" fill="#6E7468">vs ${M.cmpShort}</text>`;
+  }
+  g += `<text x="${cxS.toFixed(1)}" y="${(cyS + rSml + 20).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="9.6" fill="#9A9A9A">${M.cmpShort}</text>`;
+  g += `<text x="${cxB.toFixed(1)}" y="${(cyB + rBig + 22).toFixed(1)}" text-anchor="middle" font-family="Arial" font-size="10.4" font-weight="bold" fill="#6E7468">${M.winShort}</text>`;
+  g += `</svg>`;
+
+  const lines = [
+    { info: `<b>${M2.lab}</b> ran <b>${num(now)}</b> in ${M.winNoun}, against <b>${num(was)}</b> ${M.cmpNoun}${pct != null ? ` — ${up ? "up" : "down"} <b>${Math.abs(pct)}%</b>` : ""}.`,
+      sell: pct == null ? `<b>${num(now)} ${M2.lab.toLowerCase()}</b> in ${M.winNoun}.`
+        : up ? `${M2.lab} went from <b>${num(was)}</b> to <b>${num(now)}</b> — <b>up ${Math.abs(pct)}%</b> in one window. That is the shape of the trend, not a rounding difference.`
+             : `${M2.lab} slipped from <b>${num(was)}</b> to <b>${num(now)}</b>, <b>down ${Math.abs(pct)}%</b>. Worth naming before it compounds.` },
+    { info: `The circles are sized by area, so the smaller one is a true ${big > 0 ? Math.round(small / big * 100) : 0}% of the larger.`,
+      sell: `The gap you can see is the gap in the book — the circles are area-true, so nothing here is drawn bigger than it is.` },
+    { info: `Measured across ${D.scope.name} · ${M2.note}.`,
+      sell: `Across ${D.scope.name}, every account in scope — ${M2.note}.` },
+  ];
+
+  return wrap(`${head("THEN AND NOW", D.scope.name+" · "+M.winShort+" against "+M.cmpShort+" · "+D.scope.sub)}
+   <div style="display:flex;align-items:baseline;gap:14px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:11px;padding:9px 0">
+     <span class="lbl">${M2.lab} · ${M.winShort} against ${M.cmpShort}</span>
+     <span class="fig" style="font-size:19px">${num(now)}</span>
+     <span style="font-size:8.6px;color:var(--grey2)">from ${num(was)}${pct!=null?` · ${up?"up":"down"} ${Math.abs(pct)}%`:""} · ${M2.note}</span></div>
+   ${sayLayout(BT, g, sayBlock(BT, lines, "var(--teal)"))}
+   ${foot(SRC+" Circles are scaled by AREA, not radius, so a figure twice the size draws a circle twice the area — the visual comparison matches the arithmetic.")}`);
 }
 
 /* ---------- 6 · movers ---------- */
@@ -1442,6 +1582,7 @@ const SL = [
     rule: "Only when this side of the book is at least 5% of total sales",
     met: (sid) => { const g = packOf(sid), tot = (D.draft.tot || 0) + (D.pkg.tot || 0);
       return D[g].tot >= tot * 0.05 && !!D[g].rows.length; } },
+  { id: "bubble",   name: "Then and now",     build: sBubble },
   { id: "stack",    name: "Volume by month",  build: sStacked,
     rule: "Only when monthly product history is available for this scope",
     met: () => !!D.itemWin },
@@ -1526,6 +1667,27 @@ export const BLOCK_CONTROL = { stats: "stats", graph1: "chart", graph2: "chart2"
 // offers, and what a saved list is checked against — the id is the contract, the label is
 // only what a human reads. Adding a metric here is all a graph picker needs.
 export const OVERVIEW_STATS  = [["cases", "Cases"], ["accounts", "Active accounts"], ["placements", "Placements"], ["ros", "Rate of sale"]];
+/* THE STANDARD FOR EVERY GRAPH SLIDE (Joe, 2026-08-19: "for all graphs, lets have this
+   standard"). Four settings, one renderer, so a graph slide never invents its own text
+   handling again:
+     sayAt   above · below · left · right
+     say     paragraph · 1, 2 or 3 bullets · none
+     tone    informative · selling
+     gsize   expanded (full width) · centered (pulled in, for a calmer page)
+   The COPY still belongs to the slide — only the slide knows its own numbers. A slide hands
+   over [{info, sell}] and this picks the voice and shapes it. Nothing is generated: both
+   phrasings are written, the setting chooses between them.                                */
+export const SAY_AT   = [["above","Above"],["below","Below"],["left","Left"],["right","Right"]];
+export const SAY_FORM = [["para","Paragraph"],["b1","1 bullet"],["b2","2 bullets"],["b3","3 bullets"],["none","None"]];
+export const SAY_TONE = [["informative","Informative"],["selling","Selling"]];
+export const GRAPH_SIZE = [["expanded","Expanded"],["centered","Centered"]];
+export const SAY_SEGS = [
+  { k: "sayAt", label: "TEXT SITS",  options: SAY_AT },
+  { k: "say",   label: "TEXT IS",    options: SAY_FORM },
+  { k: "tone",  label: "VOICE",      options: SAY_TONE },
+  { k: "gsize", label: "GRAPH SIZE", options: GRAPH_SIZE },
+];
+
 export const OVERVIEW_GRAPHS = [["cases", "Cases per month"], ["accounts", "Active accounts"]];
 // What each slide lets you change. Capability is DECLARED here — the editor reads this and
 // draws the controls, so extending a slide is a line in this table, not new machinery.
@@ -1605,13 +1767,16 @@ export const SLIDE_CONTROLS = {
   /* ONE GENERIC `segs` LIST, NOT FIVE BESPOKE CONTROLS. The editor names every control key
      explicitly, so each new knob used to cost an editor block. `segs` renders any [{k,label,
      options}] as chip rows, which means a new slide's settings are now free.              */
+  bubble: { chart: "Circle colour", segs: [
+    { k: "measure", label: "SHOWS", options: [["accounts","Accounts"],["placements","Placements"],["cases","Cases"],["ros","Rate of sale"]] },
+  ].concat(SAY_SEGS) },
   stack: { chart: "Bar colours", segs: [
     { k: "split",  label: "SPLIT BY",  options: [["package","Draft / package"],["style","Style"],["brand","Brand"]] },
-    { k: "span",   label: "MONTHS",    options: [["6","6"],["9","9"],["12","12"]] },
-    { k: "mode",   label: "COLUMNS",   options: [["stack","Stacked"],["group","Side by side"],["share","100%"]] },
+    { k: "span",   label: "MONTHS",    options: [["3","3"],["6","6"],["12","12"],["18","18"]] },
+    { k: "mode",   label: "COLUMNS",   options: [["stack","Stacked"],["share","100%"]] },
     { k: "bands",  label: "SEGMENTS",  options: [["2","2"],["3","3"],["4","4"],["5","5"],["6","6"]] },
     { k: "labels", label: "NUMBERS",   options: [["on","On"],["off","Off"]] },
-  ] },
+  ].concat(SAY_SEGS) },
   universe: { design: ITEM_DESIGNS },
   brand: { design: ITEM_DESIGNS },
   movers: { design: ITEM_DESIGNS },
