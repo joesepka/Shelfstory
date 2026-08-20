@@ -1,3 +1,5 @@
+const BP = process.env.NEXT_PUBLIC_BASE_PATH || "/blindcorner/mobile";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // phone-on-wifi dev preview: Next blocks cross-origin dev resources by default,
@@ -7,10 +9,12 @@ const nextConfig = {
   // which owns the domain). Old root links bounce to the new home.
   // ONE BUILD = ONE CLIENT PATH (Joe, 2026-08-20). A second client is a second Vercel project
   // with its own env vars, not a fork. lib/basePath.js reads the same variable.
-  basePath: process.env.NEXT_PUBLIC_BASE_PATH || "/blindcorner/mobile",
+  basePath: BP,
   async redirects() {
     return [
-      { source: "/", destination: "/blindcorner/mobile", basePath: false, permanent: false },
+      // The bare root goes to wherever THIS build lives. It was hardcoded to
+      // /blindcorner/mobile, so a second client's mobile root 404'd (Joe, 2026-08-20).
+      { source: "/", destination: BP, basePath: false, permanent: false },
       { source: "/blindcorner", destination: "/blindcorner/mobile", basePath: false, permanent: false },
     ];
   },
