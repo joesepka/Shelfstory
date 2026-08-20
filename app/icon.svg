@@ -1,14 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ShelfStory">
-  <!-- The bare mark, no tile — same open book with the line climbing out of it that the header
-       LogoMark draws. Strokes are thickened from the in-app version because this renders at
-       16px in a browser tab; the app's hairlines disappear at that size. Lives at app/icon.svg
-       so Next serves it with the basePath applied. -->
-  <g fill="none" stroke="#3F6E4A" stroke-width="4.4" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M32 51 q-10 -4.5 -23 -2.5 v-26 q13 -2 23 2.5 z"/>
-    <path d="M32 51 q10 -4.5 23 -2.5 v-26 q-13 -2 -23 2.5 z"/>
-  </g>
-  <polyline points="17.5,38 26,34 33.5,28 42,19" fill="none" stroke="#5E9277" stroke-width="4.8"
-            stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M42 19 q-2.6 -7.6 -10.2 -7.6 q1.3 7.6 10.2 7.6 z" fill="#5E9277"/>
-  <path d="M42 19 q6.3 -5 13.9 -3.7 q-3.7 7.6 -13.9 3.7 z" fill="#5E9277"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 48">
+  <path d="M32 40 q-9 -4 -22 -2 v-22 q13 -2 22 2 z" fill="none" stroke="#3F6E4A" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M32 40 q9 -4 22 -2 v-22 q-13 -2 -22 2 z" fill="none" stroke="#3F6E4A" stroke-width="3" stroke-linejoin="round"/>
+  <polyline points="16,31 24,28 31,23 39,16" fill="none" stroke="#5E9277" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M39 16 q-2 -6 -8 -6 q1 6 8 6 z" fill="#5E9277"/>
+  <path d="M39 16 q5 -4 11 -3 q-3 6 -11 3 z" fill="#5E9277"/>
 </svg>

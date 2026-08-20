@@ -29,7 +29,10 @@ const D = D0;
 // null means "all of them", so settings saved before blocks existed still render whole.
 const SET = Object.assign({}, DEFAULT_VARIANT_SETTINGS, settings || {});
 SETTINGS_SEEN = SET;
-const packOf = (sid) => (setOf(sid).pack === "pkg" ? "pkg" : "draft");
+/* `pack` IS "WHICH SLICE OF THE BOOK DOES THIS RANK", not just draft-vs-package (Joe,
+   2026-08-19). Adding cities as a third value rather than a fourth slide keeps one builder,
+   one set of three designs, and lets a deck entry override it like any other data setting. */
+const packOf = (sid) => { const p = setOf(sid).pack; return p === "pkg" ? "pkg" : p === "city" ? "cities" : "draft"; };
 const setOf = (id) => Object.assign({ voice: "neutral", bullets: 4, title: "Overview", layout: "text-left", chart: "green", chart2: "rose", bar: "normal", words: "bullets", design: "editorial", titleSize: "m", brow: "Business Review", pack: "draft", split: "package", span: "12", mode: "stack", bands: "4", labels: "on", sayAt: "below", say: "b3", tone: "informative", gsize: "expanded", measure: "accounts", region: "all", parts: null, stats: null, graphs: null }, SET[id] || {});
 
 /* ---------- named blocks ------------------------------------------------------
@@ -504,7 +507,13 @@ function sOverview(sid){
 
 /* ---------- 3/4 · items ---------- */
 function sItems(seg,label,sid){
-  const s=D[seg]; if(!s.rows.length) return "";
+  const s=D[seg]; if(!s||!s.rows.length) return "";
+  /* RANKING SOMETHING THAT ISN'T A BRAND (Joe, 2026-08-19: "show it top cities. so we can show
+     variation with ranks"). Same slide, same three designs, same maths -- only the thing being
+     ranked changes, so the noun is a variable rather than a second builder. Every sentence that
+     said "brand" now asks which book it is reading. */
+  const CITY = seg === "cities";
+  const N1 = CITY ? "city" : "brand", NN = CITY ? "cities" : "brands";
   const mxV=Math.max(...s.rows.map(r=>Math.max(r.cur,r.prev)),1);
   const top6=s.rows.slice(0,6).map(r=>({...r,ros:r.acc?+(rosBase(r)/r.acc/3).toFixed(1):0}));
   const rmx=Math.max(...top6.map(r=>r.ros),1)*1.18;
@@ -526,7 +535,12 @@ function sItems(seg,label,sid){
     return x+'</svg>';})();
   const MIXC={"Hazy Ipa":"#E5A29D","Ipa":"#52A97B","Lager / Ale":"#C9A227","Seltzer":"#6D93D4"};
   const newN=s.rows.filter(r=>r.prev===0).length, newC=s.rows.filter(r=>r.prev===0).reduce((a,r)=>a+r.cur,0);
-  const bullets=[
+  const bullets=CITY?[
+    `<b>${s.rows[0].n} is the largest city in the book.</b> ${fmt(s.rows[0].cur)} cases — ${Math.round(s.rows[0].cur/s.tot*100)}% of volume — across ${s.rows[0].acc} account${s.rows[0].acc===1?'':'s'} at ${(rosBase(s.rows[0])/(s.rows[0].acc||1)/3).toFixed(1)} cases per account per month.`,
+    newN?`<b>${newN} of the top ten had no volume in ${M.cmpLong}</b>, adding ${fmt(newC)} cases.`
+        :`<b>Every city in the top ten also carried volume in ${M.cmpLong}</b> — no new entries on the leaderboard.`,
+    `<b>The book totals ${fmt(s.tot)} cases</b>, ${s.pct>=0?'up':'down'} ${Math.abs(s.pct)}% against ${fmt(s.totP)} in ${M.cmpLong}, across ${s.all} ${s.all===1?'city':'cities'} with volume.`,
+  ]:[
     `<b>${s.rows[0].n} leads the ${label.toLowerCase()} book.</b> ${fmt(s.rows[0].cur)} cases — ${Math.round(s.rows[0].cur/s.tot*100)}% of ${label.toLowerCase()} volume — across ${s.rows[0].acc} account${s.rows[0].acc===1?'':'s'} at ${(rosBase(s.rows[0])/(s.rows[0].acc||1)/3).toFixed(1)} cases per account per month.`,
     newN?`<b>${newN} of the top ten ${newN===1?'is':'are'} ${M.newPhrase}</b>, adding ${fmt(newC)} cases with ${M.zeroCmp}.`
         :`<b>The top ten are all established brands</b> — no new arrivals reached the leaderboard this quarter.`,
@@ -539,18 +553,18 @@ function sItems(seg,label,sid){
        bold    the finding first and at size, with the ranking demoted to evidence          */
   const IT = setOf(sid || "items");
   const DES = IT.design || "utilitarian";
-  const foot2 = foot(SRC+" Brands aggregate every "+label.toLowerCase()+" format they sell in. Accounts = accounts that ordered the brand in the window.");
-  const HEAD = head(label.toUpperCase()+" OVERVIEW",D.scope.name+" · "+PERIOD+" · "+s.all+" "+label.toLowerCase()+" brands with volume");
+  const foot2 = foot(SRC+(CITY?" A city aggregates every account in it. Accounts = accounts in that city that ordered in the window.":" Brands aggregate every "+label.toLowerCase()+" format they sell in. Accounts = accounts that ordered the brand in the window."));
+  const HEAD = head(label.toUpperCase()+" OVERVIEW",D.scope.name+" · "+PERIOD+" · "+s.all+" "+(CITY?NN:label.toLowerCase()+" "+NN)+" with volume");
 
   const band = `<div style="display:flex;align-items:baseline;gap:12px;border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin-top:11px;padding:9px 0">
-     <span class="lbl">Total ${label.toLowerCase()} cases · ${M.winShort}</span>
+     <span class="lbl">Total ${CITY?"":label.toLowerCase()+" "}cases · ${M.winShort}</span>
      <span class="fig" style="font-size:23px">${fmt(s.tot)}</span>
      <span class="dlt ${sgn(s.pct)}">${arrow(s.pct)} ${Math.abs(s.pct)}%</span>
      <span style="font-size:8.5px;color:var(--grey2)">vs ${fmt(s.totP)} ${M.cmpShort}</span></div>`;
 
-  const table = `<div class="lbl" style="margin-bottom:7px">Top ${s.rows.length} brand${s.rows.length===1?'':'s'} by ${M.stat}</div>
+  const table = `<div class="lbl" style="margin-bottom:7px">Top ${s.rows.length} ${s.rows.length===1?N1:NN} by ${M.stat}</div>
        <table style="width:100%;border-collapse:collapse">
-         <tr><th class="lbl" style="text-align:left;padding-bottom:5px">Brand</th><th class="lbl" style="text-align:right">${M.col}</th>
+         <tr><th class="lbl" style="text-align:left;padding-bottom:5px">${CITY?"City":"Brand"}</th><th class="lbl" style="text-align:right">${M.col}</th>
          <th class="lbl" style="text-align:right">Prior</th><th class="lbl" style="text-align:right">Chg</th>
          <th class="lbl" style="text-align:right">Accts</th><th class="lbl" style="text-align:right">Cs/ac</th></tr>
          ${s.rows.map((r,i)=>{const cp=r.prev>0?Math.round((r.cur-r.prev)/r.prev*100):null,ros=r.acc?rosBase(r)/r.acc/3:0;
@@ -565,7 +579,7 @@ function sItems(seg,label,sid){
 
   // the same ranking as a picture: this window solid, the prior ghosted beneath it
   const barFit = (n) => Math.max(7, Math.min(17, Math.round((548/Math.max(1,Math.min(n,s.rows.length)) - 22)/2)));
-  const bars = (n,h0,cA,cB) => { const h = h0==='fit' ? barFit(n) : h0; return `<div class="lbl" style="margin-bottom:9px">Top ${Math.min(n,s.rows.length)} brand${s.rows.length===1?'':'s'} · ${M.col} against ${M.cmpShort}</div>
+  const bars = (n,h0,cA,cB) => { const h = h0==='fit' ? barFit(n) : h0; return `<div class="lbl" style="margin-bottom:9px">Top ${Math.min(n,s.rows.length)} ${s.rows.length===1?N1:NN} · ${M.col} against ${M.cmpShort}</div>
        ${s.rows.slice(0,n).map((r,i)=>{const cp=r.prev>0?Math.round((r.cur-r.prev)/r.prev*100):null;
          return `<div style="margin-bottom:${h>7?9:6}px">
            <div style="display:flex;align-items:baseline;gap:7px;white-space:nowrap">
@@ -618,11 +632,11 @@ function sItems(seg,label,sid){
    ${band}
    <div style="flex:1;display:flex;gap:26px;padding-top:14px;min-height:0">
      <div style="width:44%;display:flex;flex-direction:column;min-width:0">
-       <div class="lbl">Leading the ${label.toLowerCase()} book</div>
+       <div class="lbl">${CITY?"Largest city in the book":"Leading the "+label.toLowerCase()+" book"}</div>
        <div class="fig" style="font-size:32px;line-height:1.04;margin-top:5px">${s.rows[0].n}</div>
        <div style="display:flex;align-items:baseline;gap:9px;margin-top:8px">
          <span class="fig" style="font-size:29px">${fmt(s.rows[0].cur)}</span>
-         <span style="font-size:11px;color:var(--grey)">cases · ${Math.round(s.rows[0].cur/s.tot*100)}% of ${label.toLowerCase()}</span>
+         <span style="font-size:11px;color:var(--grey)">cases · ${Math.round(s.rows[0].cur/s.tot*100)}% of ${CITY?"volume":label.toLowerCase()}</span>
        </div>
        <div style="height:3px;width:96px;background:var(--pink);margin:13px 0 12px"></div>
        <div style="font-size:11.4px;line-height:1.5;color:#2B2B2B">${bullets[0]}</div>
@@ -1875,10 +1889,19 @@ const SL = [
      are the same slide reading a different side of the book. So it's one slide with a filter,
      and a deck that wants both duplicates it and sets the other side on the copy. That's the
      general shape for anything that's "the same page, filtered": a setting, plus Duplicate. */
-  { id: "items",    name: "Item ranking",    build: (sid) => { const g = packOf(sid); return sItems(g, g === "pkg" ? "Package" : "Draft", sid); },
+  { id: "items",    name: "Item ranking",
+    build: (sid) => { const g = packOf(sid); return sItems(g, g === "pkg" ? "Package" : g === "cities" ? "City" : "Draft", sid); },
+    // what this tile is reading, so three tiles named "Rank" are told apart on the shelf
+    tag: (sid) => { const g = packOf(sid); return g === "cities" ? "Cities" : g === "pkg" ? "Package" : "Draft"; },
     rule: "Only when this side of the book is at least 5% of total sales",
-    met: (sid) => { const g = packOf(sid), tot = (D.draft.tot || 0) + (D.pkg.tot || 0);
-      return D[g].tot >= tot * 0.05 && !!D[g].rows.length; } },
+    met: (sid) => { const g = packOf(sid);
+      if (!D[g] || !D[g].rows.length) return false;
+      /* The 5% rule guards the two SIDES of the book -- draft or package can genuinely be too
+         small to spend a slide on. Cities are the whole book cut a different way, so there is
+         no side to fall below anything and the rule does not apply (Joe, 2026-08-19). */
+      if (g === "cities") return true;
+      const tot = (D.draft.tot || 0) + (D.pkg.tot || 0);
+      return D[g].tot >= tot * 0.05; } },
   { id: "bubble",   name: "Then and now",     build: sBubble },
   { id: "grid",     name: "The grid",         build: sGrid,
     rule: "Only when the deck carries account-level monthly history",
@@ -1905,7 +1928,7 @@ const SL = [
 const COPIES = DEFAULT_VARIANTS.concat(variants || []).map(v => {
   const b = SL.find(s => s.id === v.base);
   if (!b) return null;                                        // a copy of a slide that no longer exists is just dropped
-  return { id: v.id, name: v.name || (v.dflt ? b.name : b.name + " copy"), base: b.id, dflt: !!v.dflt, ord: v.ord, made: v.made || null, build: b.build, rule: b.rule, met: b.met };
+  return { id: v.id, name: v.name || (v.dflt ? b.name : b.name + " copy"), base: b.id, dflt: !!v.dflt, ord: v.ord, made: v.made || null, build: b.build, rule: b.rule, met: b.met, tag: b.tag };
 }).filter(Boolean);
 
 return SL.concat(COPIES).map(d => {
@@ -1915,8 +1938,10 @@ return SL.concat(COPIES).map(d => {
   if (d.met) { try { met = !!d.met(d.id); } catch { met = false; } }
   // `base` is which slide's controls the editor should offer; `custom` is whether this one
   // was made by a person (deleting it really deletes) or is code (deleting it retires).
+  let tag = null;
+  if (d.tag) { try { tag = d.tag(d.id); } catch { tag = null; } }
   return { id: d.id, name: d.name, base: d.base || d.id, custom: !!d.base && !d.dflt, design: designOf(d.base || d.id, d.id), ord: (typeof d.ord === "number" ? d.ord : designOrd(d.base || d.id, d.id)),
-      made: d.made || null, rule: d.rule || null, met, html, ok: !!html };
+      made: d.made || null, rule: d.rule || null, tag, met, html, ok: !!html };
 });
 
 }
@@ -2025,7 +2050,7 @@ const BASE_DESIGN  = { cover: "editorial", overview: "editorial", items: "utilit
    three on the Package side of the book rather than Draft, and the three growth steps draw in
    three different ramps — Joe, 2026-08-19: "again just visual differentiation. great for
    demos." Anything seeded here is still only a SETTING; the slide is the same builder. */
-const SEED = { "items:modern": { pack: "pkg" },
+const SEED = { "items:modern": { pack: "city" },
                "overview:boardroom": { chart: "slate", chart2: "teal" },
                "overview:modern":    { chart: "amber", chart2: "amber" } };
 export const designListOf = (base) => DESIGN_LIST[base] || DESIGN_KEYS;
@@ -2038,10 +2063,11 @@ for (const base of Object.keys(DESIGN_LIST)) {
   });
 }
 
-/* THREE PER SET (Joe, 2026-08-19: "only three standard slides per set for now"). The extra
-   Package-at-design-1 tile is gone. The standard deck still needs both sides of the book, so it
-   now takes Package from `items~d1` — which is already the Package cut, at design 2. See the
-   note on STANDARD_DECK below: this is the one place the deck drifts from what Joe specced. */
+/* THREE PER SET (Joe, 2026-08-19: "only three standard slides per set for now"), and the three
+   are no longer three registers of the same ranking: design 2 ranks CITIES ("so we can show
+   variation with ranks"). The standard deck still exports both sides of the book -- it gets
+   Package from a deck-level override on `items`, not from a shelf tile, which is why moving
+   design 2 off Package costs the deck nothing. */
 
 /* DECK-LEVEL OVERRIDES (Joe, 2026-08-19). A deck entry may change WHAT a slide reads — the side
    of the book, the scope, the measure, the window — and never how it LOOKS. Design, colour and
