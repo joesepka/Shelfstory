@@ -3,6 +3,7 @@
 /* eslint-disable */
 import { SNAP_LABEL, monthAxis } from "../lib/snapshot.js";
 import { cutOf, stackSeries, CUT_DIMS, clean } from "../lib/deckData.js";
+import { BASE } from "../lib/basePath";
 // THE SHELF SHIPS WITH ONE SLIDE PER DESIGN (Joe, 2026-08-18: "This is a library. You pick and
 // add to decks — they all just exist."). There is no "in use" cover; there are three covers.
 // A default variant is an ordinary variant — same builder, own settings entry — defined in code
@@ -51,7 +52,7 @@ const onlyOn = (chosen, catalogue) => {
   const known = catalogue.map(c => c[0]);
   return Array.isArray(chosen) ? chosen.filter(id => known.indexOf(id) >= 0) : known;
 };
-  const LOGO = logoSrc || "/blindcorner/desktop/brand/blindcorner/logo.png";
+  const LOGO = logoSrc || `${BASE}/brand/blindcorner/logo.png`;
 const BRAND_NAME = brandName || "Blind Corner Brewery";
 const fmt=n=>Math.round(n).toLocaleString();
 const kf=v=>v>=1000?(v/1000).toFixed(1)+'k':String(Math.round(v));

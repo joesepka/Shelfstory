@@ -5,7 +5,9 @@ const nextConfig = {
   allowedDevOrigins: ["192.168.4.21", "localhost", "127.0.0.1"],
   // Lives at shelfstory.io/blindcorner/mobile (proxied through the desktop project,
   // which owns the domain). Old root links bounce to the new home.
-  basePath: "/blindcorner/mobile",
+  // ONE BUILD = ONE CLIENT PATH (Joe, 2026-08-20). A second client is a second Vercel project
+  // with its own env vars, not a fork. lib/basePath.js reads the same variable.
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || "/blindcorner/mobile",
   async redirects() {
     return [
       { source: "/", destination: "/blindcorner/mobile", basePath: false, permanent: false },
