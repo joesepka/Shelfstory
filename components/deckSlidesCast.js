@@ -52,7 +52,7 @@ const onlyOn = (chosen, catalogue) => {
   const known = catalogue.map(c => c[0]);
   return Array.isArray(chosen) ? chosen.filter(id => known.indexOf(id) >= 0) : known;
 };
-  const LOGO = logoSrc || `${BASE}/brand/blindcorner/logo.png`;
+  const LOGO = logoSrc || (BRANDS[defaultBrandKey] || {}).logo || null;   // never another client's mark
 const BRAND_NAME = brandName || "Blind Corner Brewery";
 const fmt=n=>Math.round(n).toLocaleString();
 const kf=v=>v>=1000?(v/1000).toFixed(1)+'k':String(Math.round(v));

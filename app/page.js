@@ -13,7 +13,7 @@ import { withHealth } from "../lib/health";
 import { SNAPSHOT, SNAP_LABEL } from "../lib/snapshot";
 import ThemeChooser from "../components/ThemeChooser";
 import LogoMark from "../components/LogoMark";
-import { profile, rules } from "../lib/profile";
+import { profile, rules, isBreweryShape, parentLabelOf } from "../lib/profile";
 
 const T = {
   bg: "var(--bg)", ink: "var(--text)", muted: "var(--text-3)", line: "var(--border)", primary: "var(--accent)",
@@ -929,7 +929,7 @@ export default function Home() {
   const [labelParam, setLabelParam] = useState(() => getLabel());   // resolved BEFORE the first fetch — no all-labels flash (getLabel defaults to BLIND CORNER)
   const [plcMap, setPlcMap] = useState(null);   // account_id -> {now,prev} label-scoped placement counts; null = use whole-account columns
   const plcCache = useRef({});                  // per-label cache so flipping labels doesn't refetch
-  const brewery = profile.name === "brewery";
+  const brewery = isBreweryShape;
   // while home is mounted, the page's overscroll zone is sky — pulling down past the
   // top shows blue (night: night sky), not a white bar breaking the header illusion
   useEffect(() => { document.documentElement.classList.add("skyTop"); return () => document.documentElement.classList.remove("skyTop"); }, []);
@@ -945,7 +945,7 @@ export default function Home() {
   const [newItems, setNewItems] = useState(null);     // master additions inside 90 days (new_items table)
   const [toast, setToast] = useState(null);           // "drill coming soon" note
   const [q, setQ] = useState("");                     // find-an-account search text
-  const [view, setView] = useState(profile.name === "brewery" ? "grid" : "ledger");   // front door: territory squares, then the ledger
+  const [view, setView] = useState(isBreweryShape ? "grid" : "ledger");   // front door: territory squares, then the ledger
   const [openStyles, setOpenStyles] = useState(false);   // See all = expand in place
   const [openSkus, setOpenSkus] = useState(false);
   const [openChains, setOpenChains] = useState(false);
@@ -1315,7 +1315,7 @@ export default function Home() {
           <div className="riseIn" style={{ position: "relative", zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, height: 28 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
               <div style={{ minWidth: 0, lineHeight: 1.18 }}>
-                <div style={{ fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>Updated {DATA_UPDATED}{brewery ? ` · ${labelParam === "" ? "All labels" : labelParam === "TORCH" ? "Torch" : "Blind Corner"}` : ""}</div>
+                <div style={{ fontSize: 10, color: "var(--text-3)", whiteSpace: "nowrap" }}>Updated {DATA_UPDATED}{brewery ? ` · ${labelParam === "" ? "All labels" : parentLabelOf(labelParam)}` : ""}</div>
               </div>
             </div>
             <div style={{ flexShrink: 0 }}><HeaderLogo /></div>
@@ -1537,7 +1537,7 @@ export default function Home() {
             <span style={{ position: "relative", display: "inline-flex" }}>
               <button onClick={() => setLabelPop(o => !o)} aria-label="Choose label" style={{ border: "none", background: "transparent", color: "var(--text-3)", fontSize: 11.5, fontWeight: 600, fontFamily: "inherit", cursor: "pointer", opacity: 0.7, display: "inline-flex", alignItems: "center", gap: 5, padding: "6px 8px", whiteSpace: "nowrap" }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.6 13.4 12 22 2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none" /></svg>
-                {labelParam === "" ? "All labels" : labelParam === "TORCH" ? "Torch" : "Blind Corner"}
+                {labelParam === "" ? "All labels" : parentLabelOf(labelParam)}
               </button>
               {labelPop && <>
                 <span onClick={() => setLabelPop(false)} style={{ position: "fixed", inset: 0, zIndex: 70 }} />
