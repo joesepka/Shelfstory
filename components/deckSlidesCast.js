@@ -62,7 +62,7 @@ const mix=(a,b,t)=>{const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),
   const A=p(a),B=p(b);return 'rgb('+A.map((v,i)=>Math.round(v+(B[i]-v)*t)).join(',')+')';};
 const PERIOD = D.dataThru || `90 days ended ${SNAP_LABEL}`;
 // timeframe labels — the fallback IS today's wording, so default decks never change
-const M = D.tfMeta || { dflt:true, stat:"90-day cases", col:"90D", winShort:"90 days", winNoun:"last 90 days",
+const M = D.tfMeta || { dflt:true, cur:[21,24], cmpWin:[18,21], stat:"90-day cases", col:"90D", winShort:"90 days", winNoun:"last 90 days",
   cmpShort:"prior 90", cmpLong:"the prior 90 days", cmpNoun:"prior 90 days", rank:"ranked on the quarter",
   grew:"grew this quarter", over:"over the quarter", newPhrase:"new this quarter",
   zeroCmp:"no prior-quarter volume at all", hadNone:"had no volume at all a quarter ago" };
@@ -1030,6 +1030,11 @@ function sBubble(sid){
    against. The honest, computable neighbour is an account that bought in this window and not in
    the one before, which is what these slides show and label. Real snapshot-over-snapshot
    arrivals need a stored history of loads; noted in ROADMAP.md.                             */
+/* HOW MANY MONTHS THE CHOSEN WINDOW IS (Joe, 2026-08-20: the grid said L90D whatever the
+   timeframe). Rate of sale divided by a hardcoded 3, which was silently wrong the moment the
+   deck could be built on anything other than a quarter. */
+const winMonths = () => Math.max(1, (M.cur && M.cur[1] - M.cur[0]) || 3);
+const WSUM = (arr, w) => (arr || []).slice(...(w || [21, 24])).reduce((a, b) => a + (+b || 0), 0);
 const ytdSlice = (arr, n) => (arr || []).slice(Math.max(0, 24 - n));
 const acctYtd  = (id, n) => ytdSlice(D.acctMo && D.acctMo[id], n).reduce((a, b) => a + (+b || 0), 0);
 const repOf    = (a) => clean(a.rep || "Unassigned");
@@ -1082,7 +1087,11 @@ function acctStats(rows, n) {
   let ytd = 0, cur = 0, prev = 0, act = 0, actP = 0, fresh = 0;
   for (const a of rows) {
     ytd += acctYtd(a.id, n);
-    const c = +a.cur || 0, p = +a.prev || 0;
+    /* a.cur / a.prev are the pipeline's fixed 90-day columns. acctMo is 24 windows per account,
+       so slicing it is the only way these columns can follow the deck's timeframe -- and it
+       falls back to the fixed pair when a row has no monthly line. */
+    const mo = D.acctMo && D.acctMo[a.id];
+    const c = mo ? WSUM(mo, M.cur) : (+a.cur || 0), p = mo ? WSUM(mo, M.cmpWin) : (+a.prev || 0);
     cur += c; prev += p;
     if (c > 0) act++;
     if (p > 0) actP++;
@@ -1090,7 +1099,7 @@ function acctStats(rows, n) {
   }
   return { ytd, cur, prev, pct: prev > 0 ? Math.round((cur - prev) / prev * 100) : null,
     act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null,
-    fresh, ros: act ? +(cur / act / 3).toFixed(1) : 0 };
+    fresh, ros: act ? +(cur / act / winMonths()).toFixed(1) : 0 };
 }
 
 /* ---------- A · the grid report ---------- */
@@ -1127,16 +1136,23 @@ function sGrid(sid){
     const m = {};
     for (const r of (D.rows || [])) { const k = clean(r.brand || r.item); if (!k) continue;
       const e = m[k] || (m[k] = { k, pks: new Set(), cur: 0, prev: 0, acc: new Set(), accP: new Set() });
-      e.cur += +r.l90 || 0; e.prev += +r.prev || 0;
       if (r.pk) e.pks.add(r.pk);
       if ((+r.l90 || 0) > 0) e.acc.add(r.account_id);
       if ((+r.prev || 0) > 0) e.accP.add(r.account_id); }
     for (const e of Object.values(m)) {
-      let ytd = 0; for (const pk of e.pks) ytd += ytdSlice(D.itemWin[pk], n).reduce((a, b) => a + (+b || 0), 0);
+      /* cases come from itemWin -- 24 windows per PRODUCT -- so the two case columns follow the
+         timeframe. The ACCOUNT counts below still read the fixed 90-day l90/prev, which is the
+         same division of labour brandCut uses: distribution and rate-of-sale inputs stay 90-day
+         because that is the window they are defined on. */
+      let ytd = 0, cur = 0, prev = 0;
+      for (const pk of e.pks) { const w = D.itemWin[pk]; if (!w) continue;
+        ytd += ytdSlice(w, n).reduce((a, b) => a + (+b || 0), 0);
+        cur += WSUM(w, M.cur); prev += WSUM(w, M.cmpWin); }
+      e.cur = cur; e.prev = prev;
       const act = e.acc.size, actP = e.accP.size;
       let fresh = 0; for (const id of e.acc) if (!e.accP.has(id)) fresh++;   // new TO THIS BRAND
       items.push({ k: e.k, st: { ytd, cur: e.cur, prev: e.prev, pct: e.prev > 0 ? Math.round((e.cur - e.prev) / e.prev * 100) : null,
-        act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null, fresh, ros: act ? +(e.cur / act / 3).toFixed(1) : 0 } });
+        act, actP, actPct: actP > 0 ? Math.round((act - actP) / actP * 100) : null, fresh, ros: act ? +(e.cur / act / winMonths()).toFixed(1) : 0 } });
     }
     items.sort((a, b) => b.st.ytd - a.st.ytd);
   }
@@ -1149,7 +1165,7 @@ function sGrid(sid){
        <thead><tr style="border-bottom:1.5px solid var(--ink)">
          <th style="text-align:left;padding-bottom:5px" class="lbl"></th>
          <th style="text-align:right" class="lbl">YTD</th>
-         <th style="text-align:right" class="lbl">90D</th>
+         <th style="text-align:right" class="lbl">${M.col}</th>
          <th style="text-align:right" class="lbl">prior</th>
          <th style="text-align:right" class="lbl">chg</th>
          <th style="text-align:right" class="lbl">accts</th>
