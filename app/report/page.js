@@ -4,6 +4,7 @@
 // PowerPoint / PDF exports. This is the universal report format (Joe, 2026-08-16).
 // Scoped to the territory + label the app is currently on (lib/scope).
 import { useEffect, useMemo, useState } from "react";
+import { parentLabelOf, parents, brandKeyOf } from "../../lib/profile";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { withHealth } from "../../lib/health";
@@ -56,7 +57,7 @@ export default function ReportPage() {
     })();
   }, []);   // eslint-disable-line
 
-  const labelWord = label === "" ? "Blind Corner + Torch" : label === "TORCH" ? "Torch" : "Blind Corner";
+  const labelWord = label === "" ? parents.map(p => p[1]).join(" + ") : parentLabelOf(label);
   const scopes = useMemo(() => {
     if (!base) return null;
     const allIds = [...new Set(base.accts.map(a => a.id))];
@@ -89,7 +90,7 @@ export default function ReportPage() {
     })();
   };
 
-  if (deck) return <DeckViewCast data={deck} brand={(label || "") === "TORCH" ? "torch" : "blindcorner"} onClose={() => setDeck(null)} />;
+  if (deck) return <DeckViewCast data={deck} brand={brandKeyOf(label)} onClose={() => setDeck(null)} />;
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
       {!base && !err && <div style={{ padding: 30, fontSize: 13, color: "var(--text-3)" }}>Reading your book…</div>}

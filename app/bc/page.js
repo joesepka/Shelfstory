@@ -149,7 +149,7 @@ export default function BreweryMobile() {
           <button key={p} onClick={() => { setParent(p); setStyle(null); }}
             style={{ flex: 1, border: "none", fontFamily: "inherit", fontSize: 13, fontWeight: 600, padding: "8px 0", borderRadius: 8, cursor: "pointer",
               background: p === P ? "var(--surface)" : "transparent", color: p === P ? "var(--text)" : "var(--text-3)", boxShadow: p === P ? "var(--shadow-sm)" : "none" }}>
-            {p === "BLIND CORNER" ? "Blind Corner" : p === "TORCH" ? "Torch / Base" : titleCase(p)}</button>
+            {p === "BLIND CORNER" ? "Blind Corner" : p === "TORCH" ? "Torch / Base" : titleCase(p)}</button>   // profile-literal-ok — Blind-Corner-only scratch route, not a tenant surface
         ))}
       </div>
 

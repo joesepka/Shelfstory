@@ -9,6 +9,7 @@
 // where the book says 276 / 7.2k, and turned a Lisle that is DOWN 15% on Blind Corner
 // into "up 17%". account_parent carries city/channel/placements per label.
 import { useState, useRef } from "react";
+import { rules, ALT_PARENT } from "../lib/profile";
 import { supabase } from "../lib/supabase";
 import LogoMark from "./LogoMark";
 
@@ -49,14 +50,15 @@ export default function SellStory({ d, parents = null }) {
     try {
       const { acc, items = [], cohort = [], wsReal = [], zipTrend = {}, zipScope = null, mktAll = [], onP } = d;
       const uTitle = s => String(s || "").toLowerCase().replace(/(?<![\p{L}\p{N}'])\p{L}/gu, c => c.toUpperCase());
-      const pretty = s => uTitle(s).replace(/\bIpa\b/g, "IPA").replace(/\bDipa\b/g, "DIPA").replace(/\bTipa\b/g, "TIPA").replace(/\bThc\b/g, "THC").replace(/\bSl\b/g, "SL");
+      const pretty = s => uTitle(s).replace(/\bIpa\b/g, "IPA").replace(/\bDipa\b/g, "DIPA").replace(/\bTipa\b/g, "TIPA").replace(/\bThc\b/g, "THC").replace(/\bSl\b/g, "SL");   // profile-literal-ok — style taxonomy, display grouping only — see rules.altParentStyles follow-up
       const carried = new Set(items.map(i => i.product_key));
       const liveSlots = new Set(items.filter(x => (x.l90 || 0) > 0).map(x => x.slot_key).filter(Boolean));
       const cityWord = acc.city ? titleCase(acc.city) : null;
       const stName = STATE_NAME[acc.state] || acc.state;
       const myPlc = acc.live_placements || 0;
       const myRos = myPlc > 0 ? (acc.cur90 || 0) / myPlc / 3 : 0;
-      const isBinnys = /BINNY/i.test(String(acc.chain || ""));
+      const chainUp = String(acc.chain || "").toUpperCase();
+  const isKeyChain = (rules.keyChains || []).some(c => chainUp.includes(String(c).toUpperCase()));
       const labels = (parents && parents.length) ? parents.map(p => String(p).toUpperCase()) : null;   // null = all labels
       const brandWord = labels && labels.length === 1 ? titleCase(labels[0]) : "The book";
       const ct = String(acc.channel_type || "").toUpperCase();
@@ -93,7 +95,7 @@ export default function SellStory({ d, parents = null }) {
         const [mk, niRes, sbRes] = await Promise.all([
           pullMarket(),
           supabase.from("new_items").select("item_name, package, parent, style_group, l90"),
-          isBinnys ? supabase.from("account_list").select("account_id, cur90").eq("chain", acc.chain) : Promise.resolve({ data: null }),
+          isKeyChain ? supabase.from("account_list").select("account_id, cur90").eq("chain", acc.chain) : Promise.resolve({ data: null }),
         ]);
         mkRows = mk;
         newItems = (niRes.data || []).filter(n => !labels || labels.includes(String(n.parent || "").toUpperCase()));
@@ -101,7 +103,8 @@ export default function SellStory({ d, parents = null }) {
         if (sibs.length >= 3) {
           const ids = sibs.map(a => a.account_id).slice(0, 150);
           const { data: si } = await supabase.from("item_grid").select("account_id, product_key, item_name, l90, package, slot_key, parent, style_parent").in("account_id", ids);
-          sibItems = (si || []).filter(r => { const torch = String(r.parent || "").toUpperCase() === "TORCH" || String(r.style_parent || "").toUpperCase().includes("THC"); return !labels ? true : (labels.includes("TORCH") ? true : !torch); });
+          sibItems = (si || []).filter(r => { const alt = String(r.parent || "").toUpperCase() === ALT_PARENT
+        || (rules.altParentStyles || []).some(t => String(r.style_parent || "").toUpperCase().includes(String(t).toUpperCase())); return !labels ? true : (labels.includes(ALT_PARENT) ? true : !alt); });
         }
       } catch { }
 
@@ -166,7 +169,7 @@ export default function SellStory({ d, parents = null }) {
         if (mPlc >= 1) peers.push({ line: `Best ${peerWord} near ${cityWord || "here"}: ${mPlc} ${handleWord}${mPlc === 1 ? "" : "s"}, ${fmt(m90)} ${uw}/qtr.`, r: `top ¼ of ${pool.length}` });
         if (mRos > 0) peers.push({ line: `They turn ~${r1(mRos)} ${uw}/${handleWord}/mo.`, r: `rate of sale` });
       }
-      if (isBinnys && sibs.length >= 3 && sibItems.length) {
+      if (isKeyChain && sibs.length >= 3 && sibItems.length) {
         const byPk = {};
         for (const r of sibItems) { if ((r.l90 || 0) > 0) { const g = byPk[r.product_key] || (byPk[r.product_key] = { name: r.item_name, pkg: r.package, slot: r.slot_key, vels: [] }); g.vels.push((r.l90 || 0) / 3); } }
         const need = Math.max(2, Math.ceil(sibs.length / 3));
@@ -175,7 +178,7 @@ export default function SellStory({ d, parents = null }) {
           .map(([pk, g]) => { const m = mktAll.find(x => x.product_key === pk); return { nm: draftName(pretty(m ? m.item_name : g.name)), n: g.vels.length }; })
           .filter(g => g.n >= need && !named.has(g.nm))
           .sort((a, b) => b.n - a.n)[0];
-        if (gap) peers.push({ line: `${gap.n} other Binny's carry ${gap.nm}.`, r: `${gap.n} of ${sibs.length} stores · not here` });
+        if (gap) peers.push({ line: `${gap.n} other ${titleCase(acc.chain || "")} carry ${gap.nm}.`, r: `${gap.n} of ${sibs.length} stores · not here` });
       }
       if (myRos >= 0.6 && myPlc >= 2) {
         const annual = Math.round((myRos * 12) / 5) * 5;

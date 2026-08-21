@@ -1,5 +1,8 @@
 "use client";
 import { useMemo, useRef } from "react";
+import { BASE } from "../lib/basePath";
+import { BRANDS } from "../lib/brand";
+import { defaultBrandKey } from "../lib/profile";
 import { createPortal } from "react-dom";
 import { renderDeck } from "./deckSlidesCast";
 import { useEffect, useState } from "react";
@@ -11,9 +14,13 @@ const X = ({ size = 16, strokeWidth = 2.2 }) => (
 // native 940px (no phone zoom in the way), rasterized, and packed into a downloadable PDF —
 // on phones this runs automatically as soon as the deck opens (Joe's call: browser
 // print-to-PDF mangled the spacing on phones).
-export default function DeckView({ data, onClose, brand = "blindcorner" }) {
-  const LOGO = `/blindcorner/mobile/brand/${brand}/logo.png`;
-  const html = useMemo(() => (data ? renderDeck(data, LOGO, brand === "torch" ? "Torch" : "Blind Corner Brewery").join("") : ""), [data, LOGO]);
+export default function DeckView({ data, onClose, brand }) {
+  /* All three of these were Blind Corner constants: the asset path, the fallback brand key
+     and the display name. On any other client that is a 404 logo and the wrong company on
+     every slide (Joe, 2026-08-20). */
+  const bk = brand || defaultBrandKey;
+  const LOGO = `${BASE}/brand/${bk}/logo.png`;
+  const html = useMemo(() => (data ? renderDeck(data, LOGO, (BRANDS[bk] || {}).name || "").join("") : ""), [data, LOGO]);
   // phone: shrink the 940px slides to the screen (the offscreen PDF pass never sees this zoom)
   const [zoom, setZoom] = useState(1);
   const [pdfMsg, setPdfMsg] = useState(null);
@@ -139,7 +146,7 @@ export default function DeckView({ data, onClose, brand = "blindcorner" }) {
                 const blob = await fetch(LOGO).then(r => (r.ok ? r.blob() : null));
                 if (blob) logoData = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).replace(/^data:/, "")); fr.readAsDataURL(blob); });
               } catch {}
-              const pres = await builder.deckToPptx(pgMod.default || pgMod, data, { snapLabel: data.dataThru, universe: brand === "torch" ? "Torch" : "Blind Corner", logoData });
+              const pres = await builder.deckToPptx(pgMod.default || pgMod, data, { snapLabel: data.dataThru, universe: brand === "torch" ? "Torch" : "Blind Corner", logoData });   // profile-literal-ok — passes the resolved brand name through, not a literal
               await pres.writeFile({ fileName: `${fileName}.pptx` });
             } catch (err) { console.error("pptx export failed", err); }
             btn.textContent = t0;

@@ -1,4 +1,4 @@
-const BP = process.env.NEXT_PUBLIC_BASE_PATH || "/blindcorner/mobile";
+const BP = process.env.NEXT_PUBLIC_BASE_PATH || "/blindcorner/mobile";   // profile-literal-ok — this app's own default; other clients set the env var
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -15,7 +15,7 @@ const nextConfig = {
       // The bare root goes to wherever THIS build lives. It was hardcoded to
       // /blindcorner/mobile, so a second client's mobile root 404'd (Joe, 2026-08-20).
       { source: "/", destination: BP, basePath: false, permanent: false },
-      { source: "/blindcorner", destination: "/blindcorner/mobile", basePath: false, permanent: false },
+      { source: "/blindcorner", destination: "/blindcorner/mobile", basePath: false, permanent: false },   // profile-literal-ok — this app's own default; other clients set the env var
     ];
   },
   // Reasonably-secret mode: open-by-link, invisible to search engines. No robots.txt

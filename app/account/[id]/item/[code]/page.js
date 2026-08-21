@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import Splash from "../../../../../components/Splash";
 import { greenBar } from "../../../../../lib/utils";
-import { profile } from "../../../../../lib/profile";
+import { profile, isBreweryShape } from "../../../../../lib/profile";
 import { SNAPSHOT } from "../../../../../lib/snapshot";   // window 0 "data thru" date
 
 
@@ -28,10 +28,10 @@ export default function ItemHistory() {
           supabase.from("depletions_window").select("window_index, cases")
             .eq("account_id", id).eq("product_key", code).lte("window_index", 11),
           // the brewery world names these item_market / account_list; the demo world uses products / accounts
-          profile.name === "brewery"
+          isBreweryShape
             ? supabase.from("item_market").select("item_name, package").eq("product_key", code).maybeSingle()
             : supabase.from("products").select("product, package").eq("product_key", code).maybeSingle(),
-          supabase.from(profile.name === "brewery" ? "account_list" : "accounts").select("account_name").eq("account_id", id).maybeSingle(),
+          supabase.from(isBreweryShape ? "account_list" : "accounts").select("account_name").eq("account_id", id).maybeSingle(),
         ]);
         if (winRes.error) throw winRes.error;
 

@@ -7,7 +7,7 @@ import { isOn, titleCase } from "../../lib/utils";
 import FilterSelect from "../../components/FilterSelect";
 import { parseScope, getScope, getLabel } from "../../lib/scope";
 import { withHealth } from "../../lib/health";
-import { profile } from "../../lib/profile";
+import { profile, isBreweryShape } from "../../lib/profile";
 
 // Wholesale Trends — over-time view. Same top filters as the book (minus "near me"),
 // plus Item. View toggle is 12 Month (12 x 30-day buckets) / Quarterly (4 x 90-day).
@@ -185,7 +185,10 @@ export default function WholesalePage() {
     const t = setTimeout(async () => {
       try {
         const sparams = {};                          // scope only (no product key)
-        const lbl = profile.name === "brewery" ? getLabel() : "";   // trends_* RPCs (brewery) all accept p_parent
+        // SHAPE, NOT NAME. This forced lbl="" for any client not literally called "brewery", so
+  // p_parent never reached the trends_* RPCs and every chart summed BOTH labels together --
+  // silently ~24% high on the demo, beside a correctly-scoped account count (Joe, 2026-08-20).
+  const lbl = isBreweryShape ? getLabel() : "";   // trends_* RPCs (brewery) all accept p_parent
         if (lbl) sparams.p_parent = lbl;
         if (stF !== "All") sparams.p_state = stF;
         if (cityF !== "All") sparams.p_city = cityF;

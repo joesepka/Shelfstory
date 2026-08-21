@@ -3,6 +3,7 @@
 // header, headline stats, the bucket-aware pre-call brief, the rolling-90 bars, on-the-shelf,
 // dropped, whitespace. One component, one methodology, both apps. ($ + news retired.)
 import { useEffect, useState } from "react";
+import { rules, HOUSE_PARENT, ALT_PARENT } from "../lib/profile";
 import { supabase } from "../lib/supabase";
 import TreeGlyph from "./TreeGlyph";
 import SellStory from "./SellStory";
@@ -61,11 +62,11 @@ function styleGroup(sp) {
   const s = String(sp || "").toUpperCase();
   if (s.includes("IPA")) return "IPA";
   if (s.includes("LAGER") || s.includes("ALE") || s.includes("PILS")) return "Lager / Ale";
-  if (s.includes("THC")) return "THC";
+  if (s.includes("THC")) return "THC";   // profile-literal-ok — style taxonomy / display grouping only — never decides a row's label
   if (s.includes("SELTZER") || s.includes("SPARKLING")) return "Seltzer";
   return titleCase(sp || "Other");
 }
-const STYLE_COL = { "IPA": "#2f9d63", "Lager / Ale": "#c79a2e", "Seltzer": "#5f97c4", "THC": "#7d6bc0" };
+const STYLE_COL = { "IPA": "#2f9d63", "Lager / Ale": "#c79a2e", "Seltzer": "#5f97c4", "THC": "#7d6bc0" };   // profile-literal-ok — style taxonomy / display grouping only — never decides a row's label
 
 function buildBriefing(acc, b, items, white, liveSet, mktAll) {
   const chan = titleCase(acc.channel), pct = acc.prior90_pct || 0;
@@ -127,7 +128,7 @@ function buildBriefing(acc, b, items, white, liveSet, mktAll) {
     const w0 = whiteOpen[0];
     // Rotating tiers (limited/seasonal/collab/...) pitch the GROUP — the specific liquid may be
     // discontinued, the slot is what's real. Core brands are evergreen: name them outright.
-    const TIERS = ["LIMITED", "SEASONAL", "COLLAB", "HOUSE", "SELTZER", "THC"];
+    const TIERS = ["LIMITED", "SEASONAL", "COLLAB", "HOUSE", "SELTZER", "THC"];   // profile-literal-ok — style taxonomy / display grouping only — never decides a row's label
     const slot = String(w0.slot_key || "");
     const isDraftSlot = slot.startsWith("DRAFT ");
     const parts = (isDraftSlot ? slot.slice(6) : slot).split(" ").filter(Boolean);
@@ -222,7 +223,16 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
         // LABEL FILTER (Joe 2026-08-11): when one label is selected the WHOLE card is that label — items, stats,
         // graph and status. One view, one truth; no more BC-slice health printed beside whole-account numbers.
         const single = parents && parents.length === 1 ? parents[0] : null;
-        const labOf = i => (String(i.parent || "").toUpperCase() === "TORCH" || String(i.style_parent || "").toUpperCase().includes("THC")) ? "TORCH" : "BLIND CORNER";
+        const ALT_STYLES = (rules.altParentStyles || []).map(x => String(x).toUpperCase());
+        /* TRUST THE ROW (Joe, 2026-08-20). This returned one of two hardcoded labels and was
+           then compared against the SELECTED label, so for any client whose labels are not
+           "BLIND CORNER"/"TORCH" it matched zero rows -- unconditionally, whatever the database
+           held. The card then filtered itself to nothing: empty item list, every depletion row
+           discarded, an 18-zero trend line, and acctHealth re-stamping the account "Lapsed"
+           with 0 cases. It never threw, so it read as missing data rather than a bug. */
+        const labOf = i => (ALT_STYLES.length && ALT_STYLES.some(t => String(i.style_parent || "").toUpperCase().includes(t)))
+          ? ALT_PARENT
+          : (String(i.parent || "").toUpperCase() || HOUSE_PARENT);
         const allItems = (itemRes.data || []).map(r => ({ ...r, item_name: cleanName(r.item_name) }));   // clean every name, always
         const items = single ? allItems.filter(i => labOf(i) === single) : allItems;
         const okPk = single ? new Set(items.map(i => i.product_key)) : null;
@@ -298,9 +308,9 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
           // never pitches one by name — it pitches the GROUP ("Hazy IPA Limited 4pk/16oz"), pooled
           // across every liquid in the slot. Core brands are evergreen and stay named. And a slot
           // this account already has live is never pitched at all, core or not.
-          const TIERW = ["LIMITED", "SEASONAL", "COLLAB", "HOUSE", "SELTZER", "THC"];
+          const TIERW = ["LIMITED", "SEASONAL", "COLLAB", "HOUSE", "SELTZER", "THC"];   // profile-literal-ok — style taxonomy / display grouping only — never decides a row's label
           const slotParts = (slot) => { const d = String(slot || "").startsWith("DRAFT "); const parts = String(slot || "").slice(d ? 6 : 0).split(" ").filter(Boolean); const ti = parts.findIndex(p => TIERW.includes(p)); return { d, parts, ti }; };
-          const fixCaps = t => titleCase(t).replace(/\bIpa\b/g, "IPA").replace(/\bDipa\b/g, "DIPA").replace(/\bTipa\b/g, "TIPA").replace(/\bThc\b/g, "THC");
+          const fixCaps = t => titleCase(t).replace(/\bIpa\b/g, "IPA").replace(/\bDipa\b/g, "DIPA").replace(/\bTipa\b/g, "TIPA").replace(/\bThc\b/g, "THC");   // profile-literal-ok — style taxonomy / display grouping only — never decides a row's label
           const slotLabel = (slot) => { const { d, parts, ti } = slotParts(slot); if (ti < 0) return null; const style = parts.slice(ti + 1).join(" "); const pack = d ? "draft" : parts.slice(0, ti).join(" ").toLowerCase().replace(/ /g, "/"); return `${fixCaps(style)} ${fixCaps(parts[ti])} ${pack}`; };
           const liveSlots = new Set(healed.filter(x => (x.l90 || 0) > 0).map(x => x.slot_key).filter(Boolean));
           const byProd = {}, bySlot = {}, byAcct = {}, carrying = new Set();
@@ -313,8 +323,10 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
           const acctProfits = Object.values(byAcct);
           areaAvgMoReal = acctProfits.length ? median(acctProfits) : null;
           const carriedSet = new Set(healed.map(i => i.product_key));
-          const coreCand = Object.entries(byProd).filter(([pk, o]) => !carriedSet.has(pk) && !(o.slot && liveSlots.has(o.slot))).map(([pk, o]) => { const vel = median(o.vals); const lab = (o.par === "TORCH" || o.sp.includes("THC")) ? "TORCH" : (o.par || "BLIND CORNER"); return { pk, name: cleanName(o.name), rep: o.name, pkg: o.pkg, par: lab, vel: Math.round(vel * 10) / 10, carriers: o.vals.length, dollars: vel * profitPerCase(o.name, 0.30), draft: isDraft(o.name), base: baseName(o.name) }; });
-          const grpCand = Object.entries(bySlot).filter(([slot]) => !liveSlots.has(slot)).map(([slot, g]) => { const perAcct = Object.values(g.sums); const vel = median(perAcct); const lab = (g.par === "TORCH" || g.sp.includes("THC")) ? "TORCH" : (g.par || "BLIND CORNER"); return { pk: slot, name: slotLabel(slot) || cleanName(g.rep), rep: g.rep, pkg: g.pkg, par: lab, vel: Math.round(vel * 10) / 10, carriers: perAcct.length, dollars: vel * profitPerCase(g.rep, 0.30), draft: String(slot).startsWith("DRAFT "), base: slot, group: true }; });
+          const coreCand = Object.entries(byProd).filter(([pk, o]) => !carriedSet.has(pk) && !(o.slot && liveSlots.has(o.slot))).map(([pk, o]) => { const vel = median(o.vals); const lab = (ALT_STYLES.length && ALT_STYLES.some(t => String(o.sp || "").toUpperCase().includes(t)))
+              ? ALT_PARENT : (String(o.par || "").toUpperCase() || HOUSE_PARENT); return { pk, name: cleanName(o.name), rep: o.name, pkg: o.pkg, par: lab, vel: Math.round(vel * 10) / 10, carriers: o.vals.length, dollars: vel * profitPerCase(o.name, 0.30), draft: isDraft(o.name), base: baseName(o.name) }; });
+          const grpCand = Object.entries(bySlot).filter(([slot]) => !liveSlots.has(slot)).map(([slot, g]) => { const perAcct = Object.values(g.sums); const vel = median(perAcct); const lab = (ALT_STYLES.length && ALT_STYLES.some(t => String(g.sp || "").toUpperCase().includes(t)))
+              ? ALT_PARENT : (String(g.par || "").toUpperCase() || HOUSE_PARENT); return { pk: slot, name: slotLabel(slot) || cleanName(g.rep), rep: g.rep, pkg: g.pkg, par: lab, vel: Math.round(vel * 10) / 10, carriers: perAcct.length, dollars: vel * profitPerCase(g.rep, 0.30), draft: String(slot).startsWith("DRAFT "), base: slot, group: true }; });
           const wsCand = [...coreCand, ...grpCand]
             .filter(w => onP || !w.draft)                                                            // off-premise drops kegs first
             .filter(w => !parents || !parents.length || parents.includes(w.par));                    // only recommend labels the user selected — THC-style items count as TORCH even where the item master says otherwise
@@ -465,7 +477,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
   // Rotating-tier liquids (Limited/Collab/Seasonal/House/Seltzer/THC) come and go by
   // design — two thirds of this brewery's volume rotates. Only CORE items are judged
   // as trends, and only core brands get named.
-  const TIER_RE = /LIMITED|SEASONAL|COLLAB|HOUSE|SELTZER|THC/i;
+  const TIER_RE = /LIMITED|SEASONAL|COLLAB|HOUSE|SELTZER|THC/i;   // profile-literal-ok — style taxonomy / display grouping only — never decides a row's label
   const isCoreItem = (k) => !(TIER_RE.test(String(k.slot_key || "")) || TIER_RE.test(String(k.style_parent || "")));
   // #1 account mix — Joe (2026-08-17): speak in real CORE brand names (Booter, Drop Ride…)
   // and collapse every rotating beer tier into one broad "limited" bucket — never
@@ -474,7 +486,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
     const agg = {}; for (const it of items) {
       const v = it.l90 || 0; if (v <= 0) continue;
       const sp = String(it.style_parent || "").toUpperCase();
-      const g = sp === "THC" ? "THC" : isCoreItem(it) ? titleCase(it.brand || "Core") : "limited";
+      const g = sp === "THC" ? "THC" : isCoreItem(it) ? titleCase(it.brand || "Core") : "limited";   // profile-literal-ok — style taxonomy / display grouping only — never decides a row's label
       agg[g] = (agg[g] || 0) + v;
     }
     const tot = Object.values(agg).reduce((s, v) => s + v, 0) || 1;

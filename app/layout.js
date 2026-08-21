@@ -1,4 +1,5 @@
 import "./globals.css";
+import { BASE } from "../lib/basePath";
 import { Inter_Tight, Inter, Plus_Jakarta_Sans } from "next/font/google";
 import TopChrome from "../components/TopChrome";
 import { ThemeProvider } from "../lib/theme";
@@ -15,7 +16,7 @@ export const metadata = {
   // app/icon.svg is served by Next with the basePath already applied. Declaring it
   // here as well means the icon is visible in code review — a missing tab logo is
   // otherwise the kind of thing nobody notices for weeks.
-  icons: { icon: "/blindcorner/mobile/icon.svg", shortcut: "/blindcorner/mobile/icon.svg", apple: "/blindcorner/mobile/icon.svg" },
+  icons: { icon: `${BASE}/icon.svg`, shortcut: `${BASE}/icon.svg`, apple: `${BASE}/icon.svg` },
 };
 export const viewport = { width: "device-width", initialScale: 1, maximumScale: 1 };
 

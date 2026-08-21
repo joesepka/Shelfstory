@@ -53,7 +53,7 @@ const onlyOn = (chosen, catalogue) => {
   return Array.isArray(chosen) ? chosen.filter(id => known.indexOf(id) >= 0) : known;
 };
   const LOGO = logoSrc || (BRANDS[defaultBrandKey] || {}).logo || null;   // never another client's mark
-const BRAND_NAME = brandName || "Blind Corner Brewery";
+const BRAND_NAME = brandName || (BRANDS[defaultBrandKey] || {}).name || "";
 const fmt=n=>Math.round(n).toLocaleString();
 const kf=v=>v>=1000?(v/1000).toFixed(1)+'k':String(Math.round(v));
 const arrow=p=>p==null?'':(p>0?'▲':p<0?'▼':'');

@@ -3,6 +3,7 @@
 // ledger. Same ledger language: trend-shaded 12-month bars, stat tiles, top accounts with
 // the fixed number grid. Scoped to the territory + label the home was on (lib/scope).
 import { useEffect, useMemo, useState, Suspense } from "react";
+import { parentLabelOf, parents, brandKeyOf } from "../../lib/profile";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import TreeGlyph from "../../components/TreeGlyph";
@@ -130,7 +131,7 @@ function Inner() {
 
   const name = type === "style" ? styleLabel(k) : (() => { const [b2, p2] = k.split("||"); return titleCase(b2) + (p2 ? ` · ${p2}` : ""); })();
   const scopeWord = scope.kind === "rep" ? titleCase(scope.value) : "All territories";
-  const labelWord = label === "" ? "All labels" : label === "TORCH" ? "Torch" : "Blind Corner";
+  const labelWord = label === "" ? "All labels" : parentLabelOf(label);
   const mShort = q => { const t = new Date(SNAPSHOT); t.setMonth(t.getMonth() + q); return t.toLocaleString("en-US", { month: "short" }).toUpperCase(); };
   const ramp = stat ? (stat.pct == null ? RAMP_N : stat.pct >= 5 ? RAMP_G : stat.pct <= -12 ? RAMP_R : stat.pct <= -2 ? RAMP_Y : RAMP_N) : RAMP_N;
   const mx = series && series.length ? Math.max(1, ...series) : 1;

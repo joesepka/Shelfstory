@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "lint:profile": "node scripts/check-profile-literals.mjs",
+    "prebuild": "node scripts/check-profile-literals.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",
