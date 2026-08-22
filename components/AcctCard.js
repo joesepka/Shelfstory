@@ -9,7 +9,7 @@ import TreeGlyph from "./TreeGlyph";
 import SellStory from "./SellStory";
 import { greenBar } from "../lib/utils";
 import { acctHealth } from "../lib/acctHealth";
-import { SNAPSHOT as SNAP } from "../lib/snapshot";
+import { SNAPSHOT as SNAP, windowEndLabel } from "../lib/snapshot";
 const profitPerCase = () => 1;   // $ retired on mobile — the dollar fields degrade to pure velocity ranking
 
 const SNAPSHOT = SNAP;
@@ -473,6 +473,23 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
   const skuY = v => 100 - (v / (skuMax * 1.05)) * 92;   // % from top
   const skuPts = skuLine.map((v, i) => `${((i + 0.5) / (skuLine.length || 1) * 100).toFixed(2)},${skuY(v).toFixed(2)}`).join(" ");
   const secDiv = { borderTop: "0.5px solid var(--border)", margin: "20px 0 0", paddingTop: 16 };
+  /* THE LAST ORDER, NOT THE AVERAGE PACE (Joe, 2026-08-21). Same read as the desktop card: the
+     invoice line is not in the data, so this walks the item's own 30-day windows back from now,
+     stops at the first one with anything in it, and reports that window's cases in pack units
+     plus the date it ended -- "what did they last take, and when". */
+  const lastOrderOf = (k) => {
+    const dots = (dep.byPk[k.product_key] && dep.byPk[k.product_key].dots) || [];
+    for (let i = dots.length - 1; i >= 0; i--) {
+      const c = Number(dots[i]) || 0;
+      if (c > 0) {
+        const back = dots.length - 1 - i;
+        const p = packMo(c * 3, k.package, true);
+        return { n: p.n, unit: p.unit, when: windowEndLabel(back), back };
+      }
+    }
+    return null;
+  };
+
   const packSpan = (k) => { const pk = packMo(k.l90, k.package); return <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700 }}>{pk.n.toLocaleString()}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> {pk.unit}/mo</span></span>; };
   // Rotating-tier liquids (Limited/Collab/Seasonal/House/Seltzer/THC) come and go by
   // design — two thirds of this brewery's volume rotates. Only CORE items are judged
@@ -655,8 +672,12 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
             {tg && <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: tg[1], background: tg[2], borderRadius: 5, padding: "1.5px 6px", flexShrink: 0 }}>{tg[0]}</span>}
             {k.is_new_item ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 7.5, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase", color: "#5b6bd0", background: "rgba(91,107,208,.12)", borderRadius: 5, padding: "1.5px 6px", flexShrink: 0 }}>New item</span> : null}
             <span style={{ flex: 1 }} />
-            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}>{packSpan(k)}</span>
-            <span style={{ width: 54, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 10, whiteSpace: "nowrap", color: due ? "#8a6a12" : "var(--text-3)", background: due ? "#fbf1c9" : "transparent", borderRadius: 5, padding: due ? "2px 5px" : "0" }}>{k.last_sale_w != null ? `${agoDays(k.last_sale_w)} ago` : "—"}</span></span>
+            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}>{(() => { const lo = lastOrderOf(k);
+              return lo ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>
+                {lo.n}<span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-3)" }}> {lo.unit}</span></span> : packSpan(k); })()}</span>
+            <span style={{ width: 54, textAlign: "right", flexShrink: 0 }}>{(() => { const lo = lastOrderOf(k);
+              return <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, whiteSpace: "nowrap",
+                color: lo && lo.back >= 3 ? "#8a6a12" : "var(--text-3)" }}>{lo ? lo.when : "—"}</span>; })()}</span>
           </div>
         ); })}
         {activeItems.length > 5 && (
@@ -668,8 +689,12 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
           <div key={"d" + i} onClick={() => setCardSku(k.product_key)} onMouseEnter={() => setHoverSku(k.product_key)} onMouseLeave={() => setHoverSku(null)} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 7px", borderRadius: 8, borderBottom: "0.5px solid #f4f3ee", cursor: "pointer", background: on ? "#fbeee9" : "transparent", opacity: 0.72 }}>
             <span style={{ color: "var(--pop-warm)", fontWeight: 700, fontSize: 11, width: 6, flexShrink: 0, textAlign: "center" }}>✕</span>
             <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 500, color: "#6b5b56", lineHeight: 1.25, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", textDecoration: "line-through", textDecorationColor: "#cbb8b2" }}>{k.item_name}</span>
-            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 8, fontWeight: 700, letterSpacing: 0.4, textTransform: "uppercase", color: "var(--pop-warm-deep)", background: "#f6e4e1", borderRadius: 5, padding: "1.5px 6px" }}>dropped</span></span>
-            <span style={{ width: 54, textAlign: "right", flexShrink: 0, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--pop-warm-deep)" }}>{k.last_sale_w != null ? `${agoDays(k.last_sale_w)} ago` : "—"}</span>
+            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}>{(() => { const lo = lastOrderOf(k);
+              return lo ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>
+                {lo.n}<span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-3)" }}> {lo.unit}</span></span> : packSpan(k); })()}</span>
+            <span style={{ width: 54, textAlign: "right", flexShrink: 0 }}>{(() => { const lo = lastOrderOf(k);
+              return <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, whiteSpace: "nowrap",
+                color: lo && lo.back >= 3 ? "#8a6a12" : "var(--text-3)" }}>{lo ? lo.when : "—"}</span>; })()}</span>
           </div>
         ); })}
       </div>
@@ -684,7 +709,9 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
             <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: w.hot ? "#5b6bd0" : "var(--text-3)", marginTop: 1 }}>{w.hot ? "🔥 " : "· "}{w.why}</div>
           </div>
-          <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "#3a4034" }}>~{w.packN.toLocaleString()}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> {w.packUnit}/mo</span></span></span>
+            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}>{(() => { const lo = lastOrderOf(k);
+              return lo ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>
+                {lo.n}<span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-3)" }}> {lo.unit}</span></span> : packSpan(k); })()}</span>
           <span style={{ width: 54, flexShrink: 0 }} />
         </div>))}
       </div>)}
