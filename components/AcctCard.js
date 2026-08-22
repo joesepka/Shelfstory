@@ -709,9 +709,7 @@ export default function AccountDetail({ accountId, skin = "classic", onBack, emb
             <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{w.name}</div>
             <div style={{ fontFamily: "var(--font-mono)", fontSize: 9.5, color: w.hot ? "#5b6bd0" : "var(--text-3)", marginTop: 1 }}>{w.hot ? "🔥 " : "· "}{w.why}</div>
           </div>
-            <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}>{(() => { const lo = lastOrderOf(k);
-              return lo ? <span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "var(--text)" }}>
-                {lo.n}<span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--text-3)" }}> {lo.unit}</span></span> : packSpan(k); })()}</span>
+          <span style={{ width: 78, textAlign: "right", flexShrink: 0 }}><span style={{ fontFamily: "var(--font-mono)", fontSize: 12.5, fontWeight: 700, color: "#3a4034" }}>~{w.packN.toLocaleString()}<span style={{ fontSize: 9, color: "var(--text-3)", fontWeight: 500 }}> {w.packUnit}/mo</span></span></span>
           <span style={{ width: 54, flexShrink: 0 }} />
         </div>))}
       </div>)}
